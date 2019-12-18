@@ -1,5 +1,6 @@
 #include "utils.h"
 #include "settings.h"
+#include "frames.h"
 
 #include <string>
 #include <vector>
@@ -8,43 +9,338 @@
 #include <dirent.h> // dir, opendir, readdir, closedir
 #include <math.h> // floorf, pow, sqrt, isnan, isinf, round
 #include <sstream> // stringstream
+#include <conio.h> // getch
+#include <windows.h>
+#include <cwchar>
 
 using namespace std;
 
 extern vector<string> slist;
 
+
+
+/* ===== CANVAS METHODS ===== */
+
+void canvas::CreateLine(float scale, vertex V1, vertex V2)
+{
+	bool dev = 0;
+	if (dev) cout << " Creating Line..." << V1 << V2 << endl;
+	if (scale!=1.0) { V1.scale(scale); V2.scale(scale); }
+	gvector Vec = GetVector(V1, V2);
+	if (round(Vec.x)!=round(Vec.y))
+	{
+		float VLen = Vec.len(); // 9.2
+		gvector HBase(1,0,0);
+		int Hres = ceil(GetAdjaLen(Vec, HBase))*2.0; // 5
+		if (Hres<0) Hres*=-1;
+		float SegLen = (VLen/Hres); // 0.92
+		gvector VLenDiv = Vec; VLenDiv.div(Hres);
+		if(dev) cout << " Vec " << Vec << " VLen " << VLen << " Hres " << Hres << " SegLen " << SegLen << " VLenDiv " << VLenDiv <<  endl;
+		gvector Off[Hres];
+		for (int i=0;i<Hres;i++) {
+			Off[i] = VLenDiv;
+			Off[i].mult(i+1);
+			if(dev) cout << " Offset #" << i << " " << Off[i] <<  endl;
+		}
+		vector<vertex> Line; Line.resize(Hres);
+		if(dev) cout << " Creating Line... HRes" << Hres << endl;
+		for (int i=0;i<Hres;i++) {
+			Line[i].x = floor(V1.x + Off[i].x);
+			Line[i].y = floor(V1.y + Off[i].y);
+			if(dev) cout << " Line V" << i << " X " << Line[i].x << " Y " << Line[i].y << endl;
+		}
+		if(dev) getch();
+		if (Hres>0) PasteLine(Line);
+	}
+	else
+	{
+		vector<vertex> Line;
+		Line.push_back(V1);
+		PasteLine(Line);
+	}
+}
+
+void canvas::PasteLine(vector<vertex>&Line)
+{
+	bool dev = 0;
+	if(dev) cout << " Pasting Line.." << endl;
+	for (int i=0; i<Line.size(); i++) {
+		if (Line[i].y<p_h && Line[i].y>=0 && Line[i].x<p_w && Line[i].x>=0)
+			if (i==0||i==Line.size()-1)
+				Pixels[Line[i].y][Line[i].x] = 'O';
+			else
+				Pixels[Line[i].y][Line[i].x] = 'X';
+	}
+}
+
+void canvas::Print()
+{
+	bool dev = 0;
+	cout << " Printing Canvas of Size " << p_h << " x " << p_w << endl;
+	
+	/*CONSOLE_FONT_INFOEX cfi;
+	cfi.cbSize = sizeof(cfi);
+	cfi.nFont = 0;
+	cfi.dwFontSize.X = 8;                   // Width of each character in the font
+	cfi.dwFontSize.Y = 8;                  // Height
+	cfi.FontFamily = FF_DONTCARE;
+	cfi.FontWeight = 100;
+	std::wcscpy(cfi.FaceName, L"Raster Fonts"); // Choose your font
+	SetCurrentConsoleFontEx(GetStdHandle(STD_OUTPUT_HANDLE), FALSE, &cfi);*/
+	
+	for (int i=p_h-1;i>=0; i--)
+		cout << Pixels[i];
+	cout << endl;
+}
+
+canvas::canvas(int w, int h)
+{
+	bool dev = 0;
+	if(dev) cout << " Creating Canvas... w"<< w<< " h " << h  << endl;
+	p_w = w; if(p_w>200) p_w=200;
+	p_h = h; if(p_h>400) p_h=400;
+	
+	Pixels.resize(p_h);
+	for (int i=0;i<p_h; i++) {
+		Pixels[i].replace(0,p_w,p_w,' ');
+		Pixels[i] += "\n";
+	}
+	if(dev) cout << " Canvas created! Height: " << Pixels.size() << " Width " << Pixels[0].size() << endl;
+	if(dev) getch();
+}
+
+
+
+
+
+
+/* ===== NUMBER LIST GENERATOR FUNCTIONS ===== */
+
+
+void CreateSlopeLinear(float step, int size, vector<float>&List)
+{
+	bool dev = 0;
+	if (dev) cout << " CreateSlopeLinear using step " << step << endl;
+	
+	List.resize(size+1);
+	for (int i=0; i<size+1; i++)
+		List[i] = step*i;
+	
+	/*ListRel.resize(res);
+	for (int i=0, j=0, gap=0; i<res; i++)
+	{
+		if(dev) cout << " List #" << i << "/"<<res<< " start-offset " << j << " Gap " << GapList[i] << endl;
+		List[i] = 0;
+		ListRel[i] = 0;
+		if (i>=start) {
+			if (!GapList[i]) {
+				List[i] = step*j;
+				ListRel[i] = step;
+				j++;
+			} else {
+				List[i] = step*(j-gap);
+				ListRel[i] = 0;
+			}
+		}
+	}*/
+	
+	if (dev) { cout << " FINAL height table:" << endl; for (int i = 0; i<List.size(); i++) cout << "   #" << i << " " << List[i] << endl; getch(); }
+}
+
+void CreateSlopeRandom(float step, int size, vector<float>&List)
+{
+	bool dev = 0;
+	if (dev) cout << " CreateSlopeRandom... size " << size << endl;
+	
+	if(step!=0)
+	{
+		List.resize(size);
+		for (int i = 0; i<List.size(); i++)
+			List[i] = GetRandInRange(0, step*size);
+		
+		/*for (int i=0, j=0; i<res; i++)
+		{
+			if(dev) cout << " List #" << i << "/"<<res<< " start-offset " << j << " Gap " << GapList[i] << endl;
+			List[i] = 0;
+			ListRel[i] = 0;
+			if (i>=start) {
+				if (!GapList[i]) {
+					List[i] = RandList[j];
+					ListRel[i] = RandList[j+1]-RandList[j];
+					j++;
+				} else {
+					List[i] = RandList[j];
+					ListRel[i] = 0;
+				}
+			}
+		}*/
+		
+		// create relative height (step) list
+		/*for (int i = 0; i<List.size()-1; i++)
+		{
+			//ListRel[i] = List[i+1] - List[i];
+			if (i==List.size()-2) ListRel[i+1] = List[0] - List[i+1];
+		}*/
+	}
+	else
+	{
+		List.resize(size);
+		fill (List.begin(), List.end(), 0);
+	}
+	
+	if (dev) { cout << " FINAL height table:" << endl; for (int i = 0; i<List.size(); i++) cout << "   #" << i << " " << List[i] << endl; getch(); }
+}
+
+
+void CreateSlopeSpline(path_set &Spline, int size, vector<float>&List, vector<float>&Steps)
+{
+	bool dev = 0;
+	if (Spline.t_corners>0)
+	{
+		if (dev) cout << " CreateSlopeSpline... Spline Knots: " << Spline.t_corners <<" List size " << size << endl;
+		List.resize(size); 
+		Steps.resize(size);
+		for (int i = 0; i<List.size(); i++) {
+			List[i]=0;
+			Steps[i]=0;
+		}
+		
+		int Secs = Spline.t_corners-1+Spline.Gaps;
+		
+		vector<float> SplineZList;
+		vector<float> SplineStepList;
+		SplineZList.resize(Secs);
+		SplineStepList.resize(Secs);
+		// extract height info of all corners first
+		for (int p=0, z=0; p<Spline.t_paths; p++)
+		{
+			path &Path = Spline.Paths[p];
+			for (int c = 0; c<Path.t_corners-1; c++)
+			{
+				path_corner &Corner = Path.Corners[c];
+				path_corner &CornerN = Path.Corners[c+1];
+				
+				SplineZList[z] = Corner.pos.z;
+				SplineStepList[z] = Corner.step;
+				if (dev) cout << "   Corner #" << z << " " << Corner.pos << "\tStep" << Corner.step << "\tNext is Gap 90/180 " << Corner.NextIsGap90 << "/" <<Corner.NextIsGap180 << endl;
+				if (Corner.NextIsGap90) {
+					SplineZList[z] = Corner.pos.z;
+					SplineZList[z+1] = CornerN.pos.z;
+					z+=2;
+				}
+				else if (Corner.NextIsGap180) {
+					SplineZList[z] = Corner.pos.z;
+					SplineZList[z+1] = CornerN.pos.z;
+					SplineZList[z+2] = CornerN.pos.z;
+					z+=3;
+				}
+				else
+				{
+					SplineZList[z] = Corner.pos.z;
+					z++;
+				}
+			}
+		}
+		
+		// now fill List with Z info from spline; repeat from start if spline too small
+		for (int i=0, j=0; i<List.size(); i++)
+		{
+			List[i] = round(SplineZList[j]); // round Z heights too
+			Steps[i] = round(SplineStepList[j]);
+			if (dev) cout << "  hTable #" << i << " " << List[i] << "\tSplineZList["<<j<<"] " << SplineZList[j] << endl;
+			j++;
+			if (j==SplineZList.size()) j=0;
+		}
+		
+		// create relative height (step) list
+		/*for (int i = 0; i<List.size(); i++)
+		{
+			ListRel[i] = List[i+1] - List[i];
+		}*/
+		
+		if (dev) { cout << " height table:" << endl; for (int i = 0; i<List.size(); i++) cout << "   #" << i << " " << List[i]<< endl; getch(); }
+	}
+	else { if (dev) cout << " No Spline loaded!" << endl; }
+}
+
+
+void CreateSlopeSmooth(float step, int size, vector<float>&List)
+{
+	bool dev = 0;
+	if (step!=0)
+	{
+		bool NegHeight = 0;
+		if (step<0) NegHeight = 1;
+		if (NegHeight) step= -step;
+		if (size<=1) size = 2;
+		if (dev) cout << " CreateSlopeSmooth... size " << size << endl;
+		//create source circle
+		// circle segment
+		float height_max = step * size;
+		float height_half = (step * size)/2;
+		float chord = 4*height_half;
+		float rad = (  (4*pow(height_half,2)) + pow(chord,2)  ) / (8 * height_half);
+		float x_step = step*2;
+		if (dev) cout << " height_max" << height_max << " height_half" << height_half << " chord " << chord << " rad" << rad << " x_step" << x_step << endl;
+		
+		List.resize(size);
+		for (int i = 0; i<size; i++)
+			List[i] = height_max;
+		
+		if (dev) cout << " Fill first Half..." << endl;
+		// Fill first Half of the Height Table
+		for (int i = 0; i<ceil(size/2.0); i++)
+		{
+			float x = 0, y = 0, y_fixed = 0;
+			x = (height_max/(size/2.0))*(i+1);
+			y = GetIsectCircleLine(rad, x);
+			y_fixed = rad - y;
+			List[i] = y_fixed;
+			if (dev) cout << "  i "<<i<< " x " << x << " isect " << y << " y_fixed " << y_fixed << endl;
+		}
+		if (dev) for (int i = 0; i<List.size(); i++) cout << " HALF height table #" << i << " y " << round(List[i]) << endl;
+		
+		if (dev) cout << " Fill second Half..." << endl;
+		// Fill second Half by subtracting the first Half from the max height
+		for (int i = 0, j = List.size()-2; i<ceil(size/2); i++)
+		{
+			float y = height_max - List[i];
+			if (dev) cout << " Height Table #" << i << " j " << j << " of range " << size/2 << " height " << y << " = height_max " << height_max << " - List[j] " << List[j] << endl;
+			List[j] = y;
+			j--;
+		}
+		List.insert(List.begin(),0);
+		
+		if (NegHeight) for(int i=0;i<List.size(); i++) List[i] = -List[i];
+		if (dev) { cout << " FINAL height table:" << endl; for (int i = 0; i<List.size(); i++) cout << "   #" << i << " " << List[i] << endl; getch(); }
+	}
+	else
+	{
+		List.resize(size);
+		for (int i = 0; i<size; i++)
+			List[i] = 0;
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 /* ===== FILE & STRING HANDLING FUNCTIONS ===== */
 
 bool ContainsInvalids(string Subject, string Valids)
 {
-	if (Subject.find_first_not_of(Valids))
+	if (Subject.find_first_not_of(Valids)==-1)
 	return 0;
 	else return 1;
-}
-
-bool CheckPhrase(string text, int pos)
-{
-	bool dev = 0;
-	//cout << "           Checking Validity of Phrase..." << endl;
-	if (pos==-1) return 0;
-	else if (pos==0) return 1;
-	else
-	{
-		if (dev) cout << " Checking if found phrase is commented out..." << endl;
-		// check if found phrase has anything but space or tabs in front of it (if it does, it is invalid!)
-		// check if found phrase is commented out
-		int newline = text.rfind("\n",pos); // new line
-		int comment = text.rfind("//",pos); // comment brackets
-		int dirt = text.find_last_not_of(" \t",pos-1);
-		if(dev) cout << "             pos " << pos << " newline " << newline << " comment " << comment << " dirt " << dirt << endl;
-		
-		if ((newline==-1&&comment==-1&&dirt==-1)||(comment<newline&&dirt<=newline)) // phrase is located in first line and/or not commented out
-			return 1;
-		else if (comment>newline||dirt>newline)
-			return 0;
-		else 
-			return 0;
-	}
 }
 
 void SplitString(string value,string delimiter, vector<string> &Target)
@@ -112,127 +408,6 @@ void WriteTextToFile(string L_FilePath, string Text)
 	L_File.close();
 }*/
 
-void GetSettings(string cfgstr, vector<string> &SettingList, vector<string> &lslist)
-{
-	cfgstr += "\n";
-	// count lines of config string
-	int found = 0;
-	int ctr = 0;
-	while(found!=cfgstr.npos) {
-		found = cfgstr.find_first_of("\n",found+1);
-		ctr++;
-	}
-	//ctr++;
-	
-	// copy line by line into new config string
-	bool cfg_scanned[ctr];
-	string cfg_lines[ctr];
-	int start = 0;
-	int end = 0;
-	for (int i = 0; i<ctr; i++) {
-		end = cfgstr.find_first_of("\n", end)+1;
-		//int end_pos = cfgstr.find_first_of("\n\r", end);
-		//end = end_pos+1;
-		//if (end_pos==-1) end = cfgstr.length();
-		cfg_lines[i] = cfgstr.substr(start,end-start);
-		start = end;
-		//cout << "cfg_lines["<<i<<"]" << cfg_lines[i] << endl;
-	}
-	// start searching for keywords line by line
-	string phrase = "";
-	// phrase loop
-	int phrase_counter = slist.size(); //(sizeof(slist)/sizeof(*slist));
-	for (int j = 0; j < phrase_counter; j++) {
-		phrase = slist[j];
-		int phrase_len = slist[j].length();
-		//cout << " current phrase " << phrase << endl;
-		// config lines loop
-		for (int i = 0; i<ctr; i++) { // search for phrase
-			if (!cfg_scanned[i])
-			{
-				int found_p = cfg_lines[i].find(phrase,0);
-				int found_p_space; if(found_p!=-1) found_p_space = cfg_lines[i].find_first_of(" \t",found_p);
-				int found_p_len = found_p_space-found_p;
-				if (found_p_len==phrase_len)
-				{
-					bool comment = false;
-					bool lookalike = false;
-					
-					// check if phrase is commented out
-					if(found_p!=-1) {
-						int found_comm = cfg_lines[i].find("//",0);
-						if ( found_comm!=-1 && found_comm<found_p )
-							comment = 1;
-					}
-					
-					// check if found phrase is really the phrase that is being looked for: tri!=transit_tri (is true if position in front of found is new line or spacer)
-					if(found_p!=-1&&!comment) {
-						char c = cfg_lines[i][found_p-1];
-						if ( found_p>0 &&
-							c!=' ' &&
-							c!='\t' )
-							lookalike = 1;
-					}
-					
-					//Phrase found, search for value
-					if(found_p!=-1&&!comment&&!lookalike) {
-						/*int phrase_end = found_p+phrase.length();
-						int phrase_spacecom = cfg_lines[i].find_first_of(" \t",phrase_end);
-						int found_val = cfg_lines[i].find_first_not_of(" \t\"", phrase_spacecom);
-						int value_len = 0;
-						if (cfg_lines[i][found_val-1]=='\"')
-							value_len = cfg_lines[i].find_first_of("\"\t\n",found_val)-found_val;
-						else
-							value_len = cfg_lines[i].find_first_of(" \t\n",found_val)-found_val;
-						
-						string str_f_value = cfg_lines[i].substr(found_val,value_len);
-						//cout << " config line "<<i<< " phrase " << phrase << " pos "<< found_p<< " value " << str_f_value << " pos " << found_val << " length " << value_len << endl;
-						*/
-						string str_f_value = GetValue(cfg_lines[i], found_p+phrase_len);
-						if(str_f_value!="ERR") {
-							SettingList.push_back(phrase);
-							SettingList.push_back(str_f_value);
-						}
-						cfg_scanned[i] = 1;
-					}
-				}
-			}
-		}
-	}
-
-	/*cout << "All found phrases and values:\n";
-	for (int i = 0; i < settings.size(); i+=2) {
-		cout << "Phrase: [" << settings[i] << "] has value [" << settings[i+1] << "]" << endl;
-	}*/
-}
-
-string GetCustomPhraseValue(string text, string phrase)
-{
-	// Check for custom source path in settings file
-
-	//string phrase = "source";
-	string value = "";
-	int f_pos = 0;
-	
-	while (f_pos!=-1)
-	{
-		//cout << "    f_pos: " << f_pos << " find phrase ";
-		f_pos = text.find(phrase, f_pos);
-		//cout << f_pos << endl;
-		
-		if (CheckPhrase(text, f_pos))
-		{
-			//cout << "      Phrase at pos " << f_pos << " is NOT commented out!" << endl;
-			value = GetValue(text, f_pos+phrase.length());
-			//cout << "      value " << value << " file exists " << CheckIfFileExists(value) <<  endl;
-			
-			return value;
-		}
-		f_pos = text.find(phrase, f_pos+1);
-	}
-	return "ERR";
-}
-
 bool CheckIfFileExists (string p) {
 	ifstream ifile(p.c_str());
 	return (bool)ifile;
@@ -277,42 +452,6 @@ int CheckFileType (string p)
 	else return 0;
 }
 
-string GetValue(string text, int start_pos)
-{
-	int f_pos_v = text.find_first_not_of(" \t", start_pos);
-	int f_pos_n = text.find("\n", start_pos);
-	int f_pos_c = text.find("//", start_pos);
-	//cout << "         Get Value - value pos " << f_pos_v << " newline pos " << f_pos_n << " comment pos " << f_pos_c << endl;
-	int f_pos_v_end = 0;
-	if (f_pos_v==-1||f_pos_v==f_pos_n||f_pos_v==f_pos_c)
-	{
-		//cout << "           Value not found OR Value is comment!" << endl;
-		return "ERR";
-	}
-	else if (f_pos_v!=-1&&(f_pos_v<f_pos_n||f_pos_n==-1)&&(f_pos_v<f_pos_c||f_pos_c==-1))
-	{
-		bool quotes = 0;
-		string value = "";
-		
-		//cout << "           Value found at " << f_pos_v;
-		if (text[f_pos_v]=='\"')
-		{
-			//cout << "Found quotes! ";
-			quotes = 1;
-			f_pos_v_end = text.find_first_of("\"\n\t", f_pos_v+1);
-			value = text.substr(f_pos_v+1, f_pos_v_end-f_pos_v-1);
-		}
-		else
-		{
-			//cout << "Didnt find quotes! ";
-			f_pos_v_end = text.find_first_of("\n \t", f_pos_v);
-			value = text.substr(f_pos_v, f_pos_v_end-f_pos_v);
-		}
-		//cout << " end " << f_pos_v_end << " final " << value << endl;
-		return value;
-	}
-}
-
 
 
 
@@ -321,11 +460,12 @@ string GetValue(string text, int start_pos)
 
 /* ===== SMALL MATH FUNCTIONS ===== */
 
+
 float RoundFloatToDeci(float N1, int deci)
 {
 	int d = pow(10, deci);
 	if (d==0) d=1;
-	return floorf(N1*d)/d;
+	return round(N1*d)/d;
 }
 
 float GetIsectCircleLine(float rad, float x)
@@ -363,6 +503,11 @@ int n_pow(int a, int expo)
 	return power;
 	}
 }
+
+
+
+
+
 
 
 

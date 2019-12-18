@@ -9,6 +9,8 @@
 
 using namespace std;
 
+struct brush;
+
 /* ===== FACE CLASS ===== */
 
 enum axis { X = 10, Y = 20, Z = 30 };
@@ -75,6 +77,7 @@ struct face
 	bool IsPlanar = 1;
 	bool IsNULL = 0;
 	int TentID = 0;
+	string name="";
 	
 	void GetNormal();
 	void CopyFace(face &Source, bool CopyVertices);
@@ -93,6 +96,8 @@ struct face
 	float GetLenVer(bool UseEdge);
 	void RefreshTent(face &Base);
 	void RotateVertices(float x, float y, float z);
+	void MiniShift();
+	void ConvertToSheared(bool IsWedge2, bool IsInside, bool Reverse, brush &Brush);
 	
 	face () {}
 	~face() {

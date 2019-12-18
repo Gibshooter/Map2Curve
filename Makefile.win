@@ -1,0 +1,72 @@
+# Project: Map2Curve
+# Makefile created by Dev-C++ 5.11
+
+CPP      = g++.exe
+CC       = gcc.exe
+WINDRES  = windres.exe
+RES      = Map2Curve_private.res
+OBJ      = Main.o header/WAD3.o header/utils.o header/gvector.o header/vertex.o header/face.o header/file.o header/settings.o header/brush.o header/entity.o header/group.o header/frames.o header/matrix.o header/dimensions.o $(RES)
+LINKOBJ  = Main.o header/WAD3.o header/utils.o header/gvector.o header/vertex.o header/face.o header/file.o header/settings.o header/brush.o header/entity.o header/group.o header/frames.o header/matrix.o header/dimensions.o $(RES)
+LIBS     = -L"C:/Program Files (x86)/Dev-Cpp/MinGW64/lib" -L"C:/Program Files (x86)/Dev-Cpp/MinGW64/x86_64-w64-mingw32/lib" -static-libgcc
+INCS     = -I"C:/Program Files (x86)/Dev-Cpp/MinGW64/include" -I"C:/Program Files (x86)/Dev-Cpp/MinGW64/x86_64-w64-mingw32/include" -I"C:/Program Files (x86)/Dev-Cpp/MinGW64/lib/gcc/x86_64-w64-mingw32/4.9.2/include"
+CXXINCS  = -I"C:/Program Files (x86)/Dev-Cpp/MinGW64/include" -I"C:/Program Files (x86)/Dev-Cpp/MinGW64/x86_64-w64-mingw32/include" -I"C:/Program Files (x86)/Dev-Cpp/MinGW64/lib/gcc/x86_64-w64-mingw32/4.9.2/include" -I"C:/Program Files (x86)/Dev-Cpp/MinGW64/lib/gcc/x86_64-w64-mingw32/4.9.2/include/c++"
+BIN      = ../Map2Curve.exe
+CXXFLAGS = $(CXXINCS) -std=gnu++11
+CFLAGS   = $(INCS) -std=gnu++11
+RM       = rm.exe -f
+
+.PHONY: all all-before all-after clean clean-custom
+
+all: all-before $(BIN) all-after
+
+clean: clean-custom
+	${RM} $(OBJ) $(BIN)
+
+$(BIN): $(OBJ)
+	$(CPP) $(LINKOBJ) -o $(BIN) $(LIBS)
+
+Main.o: Main.cpp
+	$(CPP) -c Main.cpp -o Main.o $(CXXFLAGS)
+
+header/WAD3.o: header/WAD3.cpp
+	$(CPP) -c header/WAD3.cpp -o header/WAD3.o $(CXXFLAGS)
+
+header/utils.o: header/utils.cpp
+	$(CPP) -c header/utils.cpp -o header/utils.o $(CXXFLAGS)
+
+header/gvector.o: header/gvector.cpp
+	$(CPP) -c header/gvector.cpp -o header/gvector.o $(CXXFLAGS)
+
+header/vertex.o: header/vertex.cpp
+	$(CPP) -c header/vertex.cpp -o header/vertex.o $(CXXFLAGS)
+
+header/face.o: header/face.cpp
+	$(CPP) -c header/face.cpp -o header/face.o $(CXXFLAGS)
+
+header/file.o: header/file.cpp
+	$(CPP) -c header/file.cpp -o header/file.o $(CXXFLAGS)
+
+header/settings.o: header/settings.cpp
+	$(CPP) -c header/settings.cpp -o header/settings.o $(CXXFLAGS)
+
+header/brush.o: header/brush.cpp
+	$(CPP) -c header/brush.cpp -o header/brush.o $(CXXFLAGS)
+
+header/entity.o: header/entity.cpp
+	$(CPP) -c header/entity.cpp -o header/entity.o $(CXXFLAGS)
+
+header/group.o: header/group.cpp
+	$(CPP) -c header/group.cpp -o header/group.o $(CXXFLAGS)
+
+header/frames.o: header/frames.cpp
+	$(CPP) -c header/frames.cpp -o header/frames.o $(CXXFLAGS)
+
+header/matrix.o: header/matrix.cpp
+	$(CPP) -c header/matrix.cpp -o header/matrix.o $(CXXFLAGS)
+
+header/dimensions.o: header/dimensions.cpp
+	$(CPP) -c header/dimensions.cpp -o header/dimensions.o $(CXXFLAGS)
+
+Map2Curve_private.res: Map2Curve_private.rc 
+	$(WINDRES) -i Map2Curve_private.rc --input-format=rc -o Map2Curve_private.res -O coff 
+

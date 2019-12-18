@@ -44,6 +44,8 @@ struct group {
 	vector<face*> hSourceFace;
 	vector<face*> hSourceFace2;
 	vector<float> heightTable;
+	vector<float> heightTableSteps;
+	vector<bool> GapList;
 	face **SecBaseFace = nullptr;
 	dimensions Dimensions; // bounding box
 	brush *Brushes = nullptr;
@@ -52,6 +54,9 @@ struct group {
 	vertex Origin;
 	bool valid = 1;
 	bool RCON = 0;
+	bool ValidMesh = 1;
+	bool ValidSpline = 1;
+	vector<bool> IsSecInside;
 	
 	float d_pos = -1;
 	int d_autopitch = -1;
@@ -67,8 +72,12 @@ struct group {
 	int d_skip = -1;
 	
 	void GetDimensions(bool Overwrite);
+	void Move(float x, float y, float z, bool LockBrushShifts);
+	void MoveSecs(vector<gvector> &Move, bool LockBrushShifts);
+	void RotOriginSecs(vector<float> &RotX, vector<float> &RotY, vector<float> &RotZ, vector<vertex> &Origin, bool LockBrushShifts);
 	void Copy(group &Source);
 	void CopyProps(group &Source);
+	
 	void GetOrigin();
 	void CheckBrushValidity();
 	void GetBrushFaceOrients();
@@ -76,12 +85,11 @@ struct group {
 	void CreateBrushGaps();
 	void ArrangeGaps();
 	void RoundBrushVertices(bool Override);
-	void CreateHeightTableSmooth();
 	void Build();
-	void AddBrushHeights();
 	void GetBrushBodyFaceLengths();
 	void GetHorLengths();
 	void RotateVectors();
+	void ShearVectors();
 	void GetGroupVertexList();
 	void ClearBrushVertexList();
 	void ExportGroupToMap(string p);
@@ -91,6 +99,11 @@ struct group {
 	void GetHeadVertices();
 	void GetTransitVertices();
 	void CheckNULLBrushes();
+	bool CheckForSlopes();
+	
+	void AddBrushHeights();
+	void CreateHeightTable();
+	void CreateGapList();
 	
 	void Reconstruct();
 	void ReconstructMap();
@@ -106,12 +119,15 @@ struct group {
 	void GetBrushFaceCentroids();
 	void GetBrushFaceCentroidsC();
 	void GetBrushTVecAligns();
+	void MarkInsideSecBrushes();
 	
 	group() {
 		boundBox = new brush(6,3);
 	}
 	~group() {delete[] Brushes; delete boundBox; delete[] Entities;}
 };
+
+ostream &operator<<(ostream &ostr, group &g);
 
 /* ===== GROUP SET CLASS ===== */
 

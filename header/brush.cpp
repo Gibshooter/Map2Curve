@@ -2,6 +2,7 @@
 #include "face.h"
 #include "settings.h"
 #include "vertex.h"
+#include "dimensions.h"
 
 #include <string>
 #include <conio.h> // getch
@@ -11,51 +12,11 @@ using namespace std;
 struct face;
 struct circleset;
 struct vertex;
+struct dimensions;
 
 extern ctable *cTable;
 extern float def_spikesize;
 extern string def_nulltex;
-
-/* ===== DIMENSIONS METHODS & FUNCTIONS ===== */
-
-void dimensions::set(float a, float b, float c)
-{
-	xs = a;
-	xb = a;
-	ys = b;
-	yb = b;
-	zs = c;
-	zb = c;
-}
-
-void dimensions::expand(int size)
-{
-	xs = (floor(xs/size)*size)-size;
-	xb = (ceil(xb/size)*size)+size;
-	ys = (floor(ys/size)*size)-size;
-	yb = (ceil(yb/size)*size)+size;
-	zs = (floor(zs/size)*size)-size;
-	zb = (ceil(zb/size)*size)+size;
-}
-
-dimensions DimensionCombine(dimensions D1, dimensions D2)
-{
-	dimensions D3;
-	
-	if (D1.xs < D2.xs) D3.xs = D1.xs; else D3.xs = D2.xs;
-	if (D1.xb > D2.xb) D3.xb = D1.xb; else D3.xb = D2.xb;
-	if (D1.ys < D2.ys) D3.ys = D1.ys; else D3.ys = D2.ys;
-	if (D1.yb > D2.yb) D3.yb = D1.yb; else D3.yb = D2.yb;
-	if (D1.zs < D2.zs) D3.zs = D1.zs; else D3.zs = D2.zs;
-	if (D1.zb > D2.zb) D3.zb = D1.zb; else D3.zb = D2.zb;
-	
-	return D3;
-}
-
-ostream &operator<<(ostream &ostr, dimensions &D)
-{
-	return ostr << "( XS " << D.xs << " XB " << D.xb << " YS " << D.ys << " YB " << D.yb << " ZS " << D.zs << " ZB " << D.zb << " )";
-}
 
 /* ===== BRUSH METHODS ===== */
 
@@ -85,11 +46,13 @@ brush::brush(int tf, int tv)
 void brush::Scale(float n)
 {
 	brush &Brush = *this;
+	if (n!=0)
 	for (int f = 0; f<Brush.t_faces; f++)
 	{
 		face &Face = Brush.Faces[f];
 		if (Face.draw)
 		{
+			if(n<0) Face.RevOrder(0);
 			for (int v = 0; v<Face.vcount; v++)
 			{
 				vertex &V = Face.Vertices[v];
@@ -100,6 +63,10 @@ void brush::Scale(float n)
 			}
 			Face.ScaleX *= n;
 			Face.ScaleY *= n;
+			/*if(n<0) {
+				Face.VecX.mult(-1);
+				Face.VecY.mult(-1);
+			}*/
 		}
 	}
 }
@@ -108,6 +75,7 @@ void brush::ScaleOrigin(float n, vertex Origin)
 {
 	this->Move(-Origin.x, -Origin.y, -Origin.z,1);
 	
+	if (n!=0)
 	for (int f = 0; f<t_faces; f++)
 	{
 		face &Face = Faces[f];
@@ -257,6 +225,7 @@ void brush::Copy(brush &Source)
 	draw 	= Source.draw;
 	IsWedge = Source.IsWedge;
 	DoSplit	= Source.DoSplit;
+	IsGap	= Source.IsGap;
 	step 	= Source.step;
 	pID 	= Source.pID;
 	Align	= Source.Align;
@@ -266,6 +235,7 @@ void brush::Copy(brush &Source)
 	gID		= Source.gID;
 	dID		= Source.dID;
 	entID 	= Source.entID;
+	bID		= Source.bID;
 	
 	vlist = new int[t_faces-2];
 	if (Source.vlist!=nullptr)
@@ -327,6 +297,9 @@ void brush::Copy(brush &Source)
 		Face.IsPlanar	= OFace.IsPlanar;
 		Face.IsNULL		= OFace.IsNULL;
 		Face.TentID		= OFace.TentID;
+		Face.name		= OFace.name;
+		Face.HSourceL	= OFace.HSourceL;
+		Face.HSourceS	= OFace.HSourceS;
 		
 		Face.BaseListX.resize(4);
 		Face.BaseListY.resize(4);
@@ -364,6 +337,7 @@ void brush::CopySimple(brush &Source)
 	RCON	= Source.RCON;
 	gID 	= Source.gID;
 	dID		= Source.dID;
+	bID		= Source.bID;
 	
 	for (int f = 0; f<t_faces; f++)
 	{
@@ -394,6 +368,9 @@ void brush::CopySimple(brush &Source)
 		Face.EdgeV 		= OFace.EdgeV;
 		Face.Hypo 		= OFace.Hypo;
 		Face.TentID		= OFace.TentID;
+		Face.HSourceL	= OFace.HSourceL;
+		Face.HSourceS	= OFace.HSourceS;
+		Face.name		= OFace.name;
 
 		for (int v = 0; v<Face.vcount; v++)
 		{
@@ -1335,7 +1312,7 @@ void brush::CheckNULLFaces()
 	for (int f = 0; f<Brush.t_faces; f++)
 	{
 		face &Face = Brush.Faces[f];
-		if (!Face.draw||Face.IsNULL||Face.Texture=="NULL"||Face.Texture==def_nulltex) {
+		if (!Face.draw||Face.IsNULL||Face.Texture=="NULL"||Face.Texture=="SOLIDHINT"||Face.Texture==def_nulltex) {
 			Ncount++;
 			if (dev) cout << "  Face is NULL Face! NUll Counter now " << Ncount << endl;
 		}
@@ -1715,6 +1692,11 @@ void brush::TriComplex()
 				Brush.Tri[v].MarkFaceVertices(Brush.Faces[1], 1, 1);
 				Brush.Tri[v+1].MarkFaceVertices(Brush.Faces[1], 1, 1);
 				
+				if(GetVecLen(Brush.Tri[v].Faces[0].EdgeH) < GetVecLen(Brush.Tri[v+1].Faces[0].EdgeH))
+				Brush.Tri[v+1].IsWedge2 = 1;
+				else
+				Brush.Tri[v].IsWedge2 = 1;
+				
 				delete Wedge1;
 				delete Wedge2;
 				
@@ -1722,6 +1704,29 @@ void brush::TriComplex()
 			}
 		}
 	}
+}
+
+void brush::GetSourceFaces()
+{
+	bool dev = 0;
+	brush &Brush = *this;
+	if (dev) cout << " Getting SOurce Faces of Brush " << Brush.name << endl;
+	for (int f=0,i=0; f<Brush.t_faces; f++)
+	{
+		face &Face = Brush.Faces[f];
+		if(Face.fID==2)
+		{
+			if (dev) cout << " Face "<<f<<" LenL " << Face.EdgeLenL<<" LenS " << Face.EdgeLenS << endl;
+			if(i==0) { Brush.HSourceL = &Face; Brush.HSourceS = &Face; i++; }
+			else
+			{
+				if(Face.EdgeLenL > Brush.HSourceL->EdgeLenL) { Brush.HSourceL = &Face; }
+				if(Face.EdgeLenS < Brush.HSourceS->EdgeLenS) { Brush.HSourceS = &Face; }
+			}
+		}
+	}
+	if (dev) cout << "  HSourceL " << Brush.HSourceL->EdgeLenL << endl;
+	if (dev) cout << "  HSourceS " << Brush.HSourceS->EdgeLenS << endl << endl;
 }
 
 void brush::GetFaceOrients()
@@ -1839,7 +1844,7 @@ bool brush::CheckValidity()
 	if (ctr_head!=1||ctr_base!=1||ctr_body!=Brush.t_faces-2||!Mirror)
 	{
 		Brush.valid = 0;
-		cout << "|  [WARNING] Brush ["<<Brush.SegID+1<<"] seems to have an invalid Mesh and won't be processed." << endl;
+		cout << "|  [WARNING] Brush ["<<Brush.bID<<"] of Entity ["<<Brush.entID<<"] seems to have an invalid mesh and won't be processed." << endl;
 		cout << "|" << endl;
 		return false;
 	}

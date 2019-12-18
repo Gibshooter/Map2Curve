@@ -1,35 +1,20 @@
 #ifndef __BRUSH_H_INCLUDED__
 #define __BRUSH_H_INCLUDED__
 
+#include "frames.h"
 #include "vertex.h"
 #include "face.h"
-#include "frames.h"
+//#include "utils.h"
+#include "dimensions.h"
 
 #include <math.h>
 #include <string>
 
 using namespace std;
 
-/* ===== DIMENSIONS CLASS ===== */
-
-struct dimensions
-{
-	float xs = 0;
-	float xb = 0;
-	float ys = 0;
-	float yb = 0;
-	float zs = 0;
-	float zb = 0;
-	
-	void set(float a, float b, float c);
-	void expand(int size);
-};
-
-dimensions DimensionCombine(dimensions D1, dimensions D2);
-
-ostream &operator<<(ostream &ostr, dimensions &D);
-
 /* ===== BRUSH CLASS ===== */
+
+struct circleset;
 
 struct brush
 {
@@ -54,6 +39,8 @@ struct brush
 	bool DoSplit	= 0;
 	bool IsWedge2	= 0; // this brush is the other half (upper right) of a triangulated Trapezoid
 	bool IsGap		= 0;
+	bool IsInside	= 0; // determins whether the brushes section is facing to the inside (longest edge is inside) or the outside (longest edge outside) - depends on where the first section is facing
+	bool IsCCW		= 0; // not used currently; added it for Face method "ConvertToSheared()" in combination with type 3 (spline extrusion)
 	float step 		= 0;
 	bool HasBack	= 0;
 	int pID = 0; // Path ID this brush will belong to
@@ -64,6 +51,11 @@ struct brush
 	bool RCON 		= 0;
 	int gID			= 0;
 	int dID 		= 0;
+	int bID			= 0;
+	float Yaw		= 0;
+	float Pitch		= 0;
+	face *HSourceL = nullptr;
+	face *HSourceS = nullptr;
 	
 	int* vlist 		= nullptr;
 	circleset *cset = nullptr;
@@ -96,6 +88,7 @@ struct brush
 	void CreateTent();
 	void Reconstruct();
 	
+	void GetSourceFaces();
 	void GetSimpleCentroid();
 	void GetFaceVertexSE();
 	void GetVertexListSE();

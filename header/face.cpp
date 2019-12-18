@@ -29,6 +29,38 @@ extern group *bGroup;
 
 /* ===== FACE METHODS ===== */
 
+void face::MiniShift()
+{
+	bool dev = 0;
+	if(dev) cout << " Minishift()..." << endl;
+	int tex_w = gFile->tTable_width[tID];
+	int tex_h = gFile->tTable_height[tID];
+	
+	for (int a=0; a<2; a++)
+	{
+		if ((a==0&&ShiftX!=0)||(a==1&&ShiftY!=0))
+		{
+			float *Shift;
+			if (a==0) Shift = &ShiftX;
+			else      Shift = &ShiftY;
+			
+			int TSize = 0;
+			if(a==0) TSize = tex_w;
+			else     TSize = tex_h;
+			
+			int m = *Shift / TSize;
+			if (dev) cout << " Shift " << *Shift << " TSize " << TSize << " m " << m;
+			if (*Shift < 0) *Shift += TSize*m;
+			if (*Shift >= TSize) *Shift -= TSize*m;
+			if (dev) cout << " Shift New " << *Shift << endl;
+			
+			/*while (*Shift < 0)      { if(dev) cout << " TSize "<< TSize <<" Mod " <<  <<" Shift<0: " << *Shift << endl; *Shift += TSize; }
+			while (*Shift >= TSize) { if(dev) cout << " TSize "<< TSize <<" Shift>=0: " << *Shift << endl; *Shift -= TSize;
+			if (*Shift==0) break; } */
+		}
+	}
+}
+
 void face::RoundVertices()
 {
 	for (int v = 0; v<vcount; v++)
@@ -177,6 +209,119 @@ void face::RefreshTent(face &Base)
 	}
 }
 
+void face::ConvertToSheared(bool IsLongEdge, bool IsInside, bool Reverse, brush &Brush)
+{
+	bool dev = 0;
+	face &Face = *this;
+	
+	// Determine whether this wedge is the long or the short one in the case of a reversed spline extrusion
+	if(Reverse) { if(IsLongEdge) IsLongEdge=0; else IsLongEdge=1; }
+	GetBaseEdges(Face);
+	GetBaseShift(Face,0,1,0);
+	Face.OffsetX = Face.HSourceL->OffsetX;
+	Face.RefreshEdges();
+	
+	if(dev) {cout << " Shearing Face " << Face.name << endl << " Tex " << Face.Texture << endl << " Orient " << Face.Orient << endl << " Offset ";
+	if (Face.VecX.IsHor) cout << OffsetX << endl; else cout << OffsetY << endl;
+	cout << " Shift "; 		if (Face.VecX.IsHor) cout << ShiftX << endl; else cout << ShiftY << endl;
+	cout << " BaseShift ";	if (Face.VecX.IsHor) cout << BaseShiftX << endl; else cout << BaseShiftY << endl;
+	if (IsLongEdge) cout << " LONG Wedge" << endl; else cout <<" SHORT Wedge" << endl;}
+	
+	//Face.Texture = Face.name;
+	
+	if(Face.Orient==2||Face.Orient==3)
+	{
+		// get new Face Vectors
+		gvector VecH_Old = *Face.VecH;
+		Face.GetNormal();
+		gvector Cross = Normalize( GetCross(Face.Normal, Face.EdgeV) );
+		Face.VecH->CopyCoords(Cross);
+		if(GetDot(*Face.VecH, VecH_Old)<0) Face.VecH->flip();
+		
+		// get old Hor Lengths
+		float HLenO = Face.HSourceL->EdgeLenL;
+		//if(IsInside) HLenO = Face.HSourceS->EdgeLenS;
+		
+		// get new lengths, texture, scale and shift
+		float HLenN=0;
+		//if(IsInside)
+		//	if(IsLongEdge) HLenN = GetAdjaLen(Brush.HSourceL->EdgeLenL, GetVecAng(Brush.HSourceS->EdgeH, *Face.VecH)); else HLenN = Face.GetLenHor(0); if(HLenN<0) HLenN=-HLenN;
+		//else
+		//	if(IsLongEdge) HLenN = Face.GetLenHor(0); else { HLenN = GetAdjaLen(Brush.HSourceS->EdgeLenS, GetVecAng(Brush.HSourceS->EdgeH, *Face.VecH)); if(HLenN<0) HLenN=-HLenN; } // necessary for spline extrusion ???
+		HLenN = Face.GetLenHor(0); if(HLenN<0) HLenN=-HLenN;
+		
+		float m = HLenO/HLenN;
+		if(Face.VecX.IsHor) {
+			Face.ScaleX /= m; } else {
+			Face.ScaleY /= m; }
+		GetBaseShift(Face,0,1,0);
+		if(Face.VecX.IsHor) {
+			Face.ShiftX = Face.BaseShiftX + Face.OffsetX;
+		} else {
+			Face.ShiftY = Face.BaseShiftY + Face.OffsetY;
+		}
+		
+		if(dev){
+			cout << " Hypo " << Hypo << " (Len " << GetVecLen(Hypo) << ")" << endl;
+			cout << " VecH " << *VecH << endl;
+			cout << " VecH_OLD " << VecH_Old << endl;
+			cout << " EdgeH " << EdgeH << " (Len " << GetVecLen(EdgeH) << ")" << endl;
+			cout << " HSourceL " << Face.HSourceL->EdgeH << " name " << Face.HSourceL->name <<" (Len " << Face.HSourceL->EdgeLenL << ")" << endl;
+			cout << " HSourceS " << Face.HSourceS->EdgeH << " name " << Face.HSourceS->name <<" (Len " << Face.HSourceS->EdgeLenS << ")" << endl;
+			cout << " HLenO " << HLenO << "(made of Face.HSourceL->EdgeLenL ("<<Face.HSourceL->EdgeLenL<<"))" << endl;
+			cout << " HLenN " << HLenN; if(IsLongEdge) cout << "(Face.GetLenHor(0))" << endl; else cout << "(made of Brush.HSourceS->EdgeLenS("<<Brush.HSourceS->EdgeLenS<<"))" << endl;
+			cout << " m " << m << endl;
+			cout << " Scale "; if(Face.VecX.IsHor) cout << ScaleX<<endl; else cout << ScaleY << endl;
+			cout << " BaseShift "; if(Face.VecX.IsHor) cout << BaseShiftX<<endl; else cout << BaseShiftY << endl;
+			cout << " Shift "; if(Face.VecX.IsHor) cout << ShiftX<<endl; else cout << ShiftY << endl;
+			cout << " Hor Vec? "; if(Face.VecX.IsHor) cout <<"X"<<endl; else cout << "Y" << endl;
+		}
+	}
+	else
+	{
+		// get old Hor Face Lengths
+		float HLenO = Face.HSourceL->EdgeLenL;
+		if(IsInside) HLenO = Face.HSourceS->EdgeLenS;
+		float HLenN = Face.GetLenHor(0);
+		float m = HLenO / HLenN; if(m<0) m=-m;
+		if(dev) cout << " HLenO " << HLenO << " HLenN " << HLenN << " m " << m << endl;
+		
+		//if(IsInside) Face.Texture += "_IN"; else Face.Texture += "_OUT";
+		//if(IsLongEdge) Face.Texture += "_L"; else Face.Texture += "_S";
+		// get new texture scale and shift
+		if(m!=1)
+		{
+			if(Face.VecX.IsHor) {
+				Face.ScaleX /= m; } else {
+				Face.ScaleY /= m;
+			}
+			GetBaseShift(Face,0,1,0);
+			if(!IsLongEdge) {
+				if(Face.VecX.IsHor)
+				Face.ShiftX = Face.BaseShiftX + Face.OffsetX;
+				else
+				Face.ShiftY = Face.BaseShiftY + Face.OffsetY;
+			}
+			/*if(IsInside&&Face.Orient==5&&IsLongEdge)
+			{
+				//Face.Texture = "RED";
+				if(Face.VecX.IsHor)
+				Face.ShiftX = Face.BaseShiftX + Face.OffsetX;
+				else
+				Face.ShiftY = Face.BaseShiftY + Face.OffsetY;
+			}*/
+			/*if(Face.VecX.IsHor) {
+				Face.ShiftX = Face.BaseShiftX + (Face.OffsetX / m); } else {
+				Face.ShiftY = Face.BaseShiftY + (Face.OffsetY / m); }*/
+			/*if(Face.VecX.IsHor) {
+				Face.ShiftX *= m; } else {
+				Face.ShiftY *= m; }*/
+		}
+	}
+	if(dev) getch();
+	if(dev) cout << endl;
+}
+
 void face::CreateRamp(int g, int b, int f, int SecID, bool IsWedge2, float Bstep)
 {
 	bool dev = 0;
@@ -184,7 +329,7 @@ void face::CreateRamp(int g, int b, int f, int SecID, bool IsWedge2, float Bstep
 	face &Face = *this;
 	if(dev) cout << " Creating Ramp from Face Tex " << Face.Texture << " Orient " << Face.Orient << " IsNull " << Face.IsNULL << " Wedge " << IsWedge2 << endl;
 	int sec = SecID;
-	if (Face.Texture=="NULL"||Face.Texture==def_nulltex) Face.IsNULL=1;
+	if (Face.Texture=="NULL"||Face.Texture=="SOLIDHINT"||Face.Texture==def_nulltex) Face.IsNULL=1;
 	
 	vertex *V0ptr=nullptr, *V1ptr=nullptr, *V2ptr=nullptr, *V3ptr=nullptr;
 	V0ptr = &Face.Vertices[0];
@@ -200,40 +345,15 @@ void face::CreateRamp(int g, int b, int f, int SecID, bool IsWedge2, float Bstep
 	if (dev) cout << " Height Tables..." << endl;
 	float step = 0;
 	float height = 0;
-	if (cTable[g].type!=2) // Path Extrusions (type 2) have their own height tables
-	{
-		step = cTable[g].height;
-		height = cTable[g].height * sec;
-		int start = bGroup[g].range_start;
-		//int end = bGroup[g].range_end-1;
-		//int range = end - start;
-		// steps for Grid Path Type (type 2)
-		if (cTable[g].ramp==2) {
-			if (sec-start>0)
-			step = bGroup[g].heightTable[sec-start]-bGroup[g].heightTable[sec-start-1];
-			else
-			step = bGroup[g].heightTable[sec-start];
-			
-			if (dev) cout << " step " << step << " start " << start << " sec " << sec << " height table " << bGroup[g].heightTable[sec-start] << " last " << bGroup[g].heightTable[sec-start-1] << endl;
-		}
+
+	step = cTable[g].height;
+	height = cTable[g].height * sec;
+	int start = bGroup[g].range_start;
+	if (cTable[g].heightmode>0) {
+		step = bGroup[g].heightTableSteps[sec];
+		
+		if (dev) cout << " step " << step << " start " << start << " sec " << sec << " height table " << bGroup[g].heightTable[sec-start] << " last " << bGroup[g].heightTable[sec-start-1] << endl;
 	}
-	else if (cTable[g].type==2)
-	{
-		step = Bstep; //bGroup[g].heightTable[h];
-		if (dev) cout << " current brush " << b << " section " << sec << " (of " << bGroup[g].sections << " secs) step height is " << Bstep << endl;
-		//if (dev) cout << " Brush " <<b<<" is no Gap. Adding " << step << " of height from heighttable #"<<h<<" (size "<<bGroup[g].heightTable.size()<<") to face " <<f<<" of section #" << sec << "(secs " << bGroup[g].sections << ")"<< endl;
-	}
-	
-	/*cout << " Brush " <<b<<" Face "<<f<<" Tex "<<Face.Texture << " Wedge ";
-	if (!Brush.IsWedge2) cout << "1";else cout << "2"; 
-	if (Face.Orient==0) {cout << " Orient BASE"; }
-	else if (Face.Orient==1) {cout << " Orient HEAD"; }
-	else if (Face.Orient==2) {cout << " Orient UP"; }
-	else if (Face.Orient==3) {cout << " Orient DN"; }
-	else if (Face.Orient==4) {cout << " Orient FT"; }
-	else if (Face.Orient==5) {cout << " Orient BK"; }
-	else if (Face.Orient==6) {cout << " Orient NULL"; }
-	cout << endl;*/
 	
 	if (step!=0&&Face.draw)
 	{
@@ -611,6 +731,9 @@ void face::CopyFace(face &Source, bool CopyVertices)
 	Centroid= Source.Centroid;
 	Normal	= Source.Normal;
 	TentID	= Source.TentID;
+	HSourceL = Source.HSourceL;
+	HSourceS = Source.HSourceS;
+	name 	= Source.name;
 	if (CopyVertices)
 	{
 		vcount = Source.vcount;
@@ -1095,7 +1218,7 @@ void GetBaseShift(face &Face, int axis = 0, bool longEdge = 1, bool C = 0)
 			
 			float m = 1.0 / *Scale; // Texture Scale Modifier, because Texture Shift depends on Texture Scale
 			*BaseShift = -((alpha * Hypo_Len)*m);
-			if (!IsValid(*BaseShift)) *BaseShift = 666.666;
+			if (!IsValid(*BaseShift)) *BaseShift = 0;
 		}
 	}
 	if (dev) cout << "  BaseShift X is " << Face.BaseShiftX << endl;
@@ -1282,7 +1405,7 @@ float GetFaceLen(face &Face) {
 	//cout << "Face Length: " << AlphaCos * GetVecLen(Vec1) << endl;
 	
 	float result = AlphaCos * GetVecLen(Vec1);
-	if (!IsValid(result)) result = 666.666;
+	if (!IsValid(result)) result = 0;
 	
 	return result;
 }

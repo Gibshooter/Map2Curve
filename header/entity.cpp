@@ -265,6 +265,7 @@ void entity::CreateBrushes()
 			Brush.entID = eID;
 			Brush.t_faces = btable[b];
 			Brush.Faces = new face[Brush.t_faces];
+			Brush.bID = b;
 			
 			if (dev) cout << "  Brush " << b << " Faces " << Brush.t_faces << " entID " << Brush.entID << " EntityID " << eID << endl;
 			
@@ -395,12 +396,15 @@ void entity::CopySimple(entity &Source)
 
 void entity::ScaleOrigin(float n, vertex SOrigin)
 {
-	Origin.move(-SOrigin.x,-SOrigin.y,-SOrigin.z);
-	
-	Origin.x *= n;
-	Origin.y *= n;
-	Origin.z *= n;
-	
-	Origin.move(SOrigin.x,SOrigin.y,SOrigin.z);
+	if(n!=0)
+	{
+		Origin.move(-SOrigin.x,-SOrigin.y,-SOrigin.z);
+		
+		Origin.x *= n;
+		Origin.y *= n;
+		Origin.z *= n;
+		
+		Origin.move(SOrigin.x,SOrigin.y,SOrigin.z);
+	}
 }
 

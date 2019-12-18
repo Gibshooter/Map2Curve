@@ -49,92 +49,100 @@ void vertex::Add(vertex V)
 
 void vertex::scale(float n) 
 {
-	x*=n;
-	y*=n;
-	z*=n;
+	if (n!=0) {
+		x*=n;
+		y*=n;
+		z*=n;
+	}
 }
 
 void vertex::rotate(float degx, float degy, float degz)
 {
-	// degree to rad
-	float radx = degx * PI / 180.0;
-	float rady = degy * PI / 180.0;
-	float radz = degz * PI / 180.0;
-	//cout << "rad [" << rad << "] deg (" << deg << ") ";
+	if(degx!=0||degy!=0||degz!=0)
+	{
+		// degree to rad
+		float radx = degx * PI / 180.0;
+		float rady = degy * PI / 180.0;
+		float radz = degz * PI / 180.0;
+		//cout << "rad [" << rad << "] deg (" << deg << ") ";
+		
+		if (degx!=0)
+		{
+			float newY = (y * cos(radx)) - (z * sin(radx));
+			float newZ = (y * sin(radx)) + (z * cos(radx));
+			y = newY;
+			z = newZ;
+		}
 	
-	if (degx!=0)
-	{
-		float newY = (y * cos(radx)) - (z * sin(radx));
-		float newZ = (y * sin(radx)) + (z * cos(radx));
-		y = newY;
-		z = newZ;
+		if (degy!=0)
+		{
+			float newX = (x * cos(rady)) + (z * sin(rady));
+			float newZ = (x * -sin(rady)) + (z * cos(rady));
+			x = newX;
+			z = newZ;
+		}
+	
+		if (degz!=0)
+		{
+			float newX = (x * cos(radz)) - (y * sin(radz));
+			float newY = (x * sin(radz)) + (y * cos(radz));
+			x = newX;
+			y = newY;
+		}
+		//cout << "X [" << newX << "]\t (" << x << ")\t Y [" << newY << "]\t (" << y << ")" << endl;
 	}
-
-	if (degy!=0)
-	{
-		float newX = (x * cos(rady)) + (z * sin(rady));
-		float newZ = (x * -sin(rady)) + (z * cos(rady));
-		x = newX;
-		z = newZ;
-	}
-
-	if (degz!=0)
-	{
-		float newX = (x * cos(radz)) - (y * sin(radz));
-		float newY = (x * sin(radz)) + (y * cos(radz));
-		x = newX;
-		y = newY;
-	}
-	//cout << "X [" << newX << "]\t (" << x << ")\t Y [" << newY << "]\t (" << y << ")" << endl;
 }
 
 void vertex::rotateOrigin(float degx, float degy, float degz, vertex orig)
 {
 	bool dev = 0;
 	if(dev) cout << " Rotating Vertex " << *this << "..." <<endl;
-	// subtract Origin first
-	x -= orig.x;
-	y -= orig.y;
-	z -= orig.z;
-	
-	// degree to rad
-	float radx = degx * PI / 180.0;
-	float rady = degy * PI / 180.0;
-	float radz = degz * PI / 180.0;
-	
-	if (degx!=0)
+	if(degx!=0||degy!=0||degz!=0)
 	{
-		float newY = (y * cos(radx)) - (z * sin(radx));
-		float newZ = (y * sin(radx)) + (z * cos(radx));
-		y = newY;
-		z = newZ;
+		// subtract Origin first
+		x -= orig.x;
+		y -= orig.y;
+		z -= orig.z;
+		
+		// degree to rad
+		float radx = degx * PI / 180.0;
+		float rady = degy * PI / 180.0;
+		float radz = degz * PI / 180.0;
+		
+		if (degx!=0)
+		{
+			float newY = (y * cos(radx)) - (z * sin(radx));
+			float newZ = (y * sin(radx)) + (z * cos(radx));
+			y = newY;
+			z = newZ;
+		}
+		if (degy!=0)
+		{
+			float newX = (x * cos(rady)) + (z * sin(rady));
+			float newZ = (x * -sin(rady)) + (z * cos(rady));
+			x = newX;
+			z = newZ;
+		}
+		if (degz!=0)
+		{
+			float newX = (x * cos(radz)) - (y * sin(radz));
+			float newY = (x * sin(radz)) + (y * cos(radz));
+			x = newX;
+			y = newY;
+		}
+		
+		if(dev) cout << "   New Vertex " << *this << endl;
+		x += orig.x;
+		y += orig.y;
+		z += orig.z;
 	}
-	if (degy!=0)
-	{
-		float newX = (x * cos(rady)) + (z * sin(rady));
-		float newZ = (x * -sin(rady)) + (z * cos(rady));
-		x = newX;
-		z = newZ;
-	}
-	if (degz!=0)
-	{
-		float newX = (x * cos(radz)) - (y * sin(radz));
-		float newY = (x * sin(radz)) + (y * cos(radz));
-		x = newX;
-		y = newY;
-	}
-	
-	if(dev) cout << "   New Vertex " << *this << endl;
-	x += orig.x;
-	y += orig.y;
-	z += orig.z;
 }
 
 void vertex::move(float moveX, float moveY, float moveZ)
 {
-	x += moveX;
-	y += moveY;
-	z += moveZ;
+	if(moveX!=0) x += moveX;
+	if(moveY!=0) y += moveY;
+	if(moveZ!=0) z += moveZ;
 }
 
 vertex::vertex (float a, float b, float c)

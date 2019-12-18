@@ -29,24 +29,24 @@ IncludeVersionInfo=1
 SupportXPThemes=0
 CompilerSet=0
 CompilerSettings=00000000g0000000000000000
-UnitCount=25
+UnitCount=27
 
 [VersionInfo]
 Major=0
-Minor=5
+Minor=6
 Release=0
-Build=76
+Build=1585
 LanguageID=1033
 CharsetID=1252
 CompanyName=
-FileVersion=0.5.0.76
+FileVersion=0.6.0.1585
 FileDescription=Developed using the Dev-C++ IDE
 InternalName=
 LegalCopyright=
 LegalTrademarks=
 OriginalFilename=
 ProductName=
-ProductVersion=0.5.0.76
+ProductVersion=0.6.0.1585
 AutoIncBuildNr=1
 SyncProduct=1
 
@@ -292,6 +292,26 @@ BuildCmd=
 
 [Unit25]
 FileName=header\matrix.h
+CompileCpp=1
+Folder=
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[Unit26]
+FileName=header\dimensions.cpp
+CompileCpp=1
+Folder=
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[Unit27]
+FileName=header\dimensions.h
 CompileCpp=1
 Folder=
 Compile=1

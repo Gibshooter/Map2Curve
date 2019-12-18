@@ -17,6 +17,9 @@ struct vertex
 	float x = 0.0;
 	float y = 0.0;
 	float z = 0.0;
+	float Yaw = 0;
+	float YawB = 0;
+	float Pitch = 0;
 	int bID = -1;
 	float angle = 0.0;
 	bool DoSplit = 0;
@@ -27,6 +30,8 @@ struct vertex
 	int Align = 0;
 	bool DoRound = 0;
 	bool DoAddHeight = 0;
+	bool DoTri = 0;
+	bool IsCCW = 0;
 	
 	/* ===== VERTEX METHODS ===== */
 	

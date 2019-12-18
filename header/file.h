@@ -51,30 +51,31 @@ struct file {
 	void createGroupBrush(int g);
 	void Triangulate(int g);
 	void createFramework(int g);
-	void createTableC();
-	void LoadMap();
-	void LoadMap_DetailObj();
-	void LoadMap_GetEntities();
-	void createGroupMap();
-	void LoadMap_GetTexInfo();
-	void LoadMap_GetTexInfoScanBrush(brush &Brush);
-	void LoadMap_ConvertWorld2Face();
 	void RampIt(int g);
 	void roundCoords(int g);
-	void LoadPaths(int g);
-	void analyzePath(path_set &List);
+	void LoadSpline(int g);
 	void CheckForCustomSource();
 	string GetMapEnts(string mapfile);
 	string GetMapWorld(string mapfile);
 	void TransformSource();
 	void TransformFinal(int g);
 	void createBounds(int g);
-	void createGroupSource();
-	void createDetailGroup();
-	void RotateDetailObj(int g);
+	void DetailObj_Transform(int g);
 	void GetInternalMapSettings();
 	void FixDetailPos();
 
+	void LoadMap();
+	void LoadMap_DetailObj();
+	void LoadMap_GetEntities();
+	void LoadMap_GetTexInfo();
+	void LoadMap_GetTexInfoScanBrush(brush &Brush);
+	void LoadMap_ConvertWorld2Face();
+	
+	void createGroupMap();
+	void createGroupSource();
+	void createDetailGroup(int g);
+	void createDetailGroupSource();
+	
 	file (string p)	{
 		fullpath = p;
 	}
@@ -82,10 +83,6 @@ struct file {
 };
 
 
-
-/* ===== FILE RELATED FUNCTIONS ===== */
-
-void interpretPathFile(string pFile, path_set &Path);
 
 
 

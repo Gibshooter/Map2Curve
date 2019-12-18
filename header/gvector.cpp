@@ -2,6 +2,7 @@
 #include "vertex.h"
 #include "utils.h"
 #include <math.h> // PI, sin, cos, pow, sqrt
+#include <conio.h>
 
 #define PI 3.14159265
 
@@ -9,7 +10,129 @@ using namespace std;
 
 struct vertex;
 
+/* ===== LINEAR EQUATION METHODS ===== */
+
+void equat::Multi(float M)
+{
+	for (int i=0;i<4;i++) R[i] *= M;
+}
+
+void equat::Subdiv(float M)
+{
+	for (int i=0;i<4;i++) R[i] /= M;
+}
+
+void equat::Set(float X[4])
+{
+	for (int i=0;i<4;i++) R[i] = X[i];
+}
+
+equat::equat(float X[4])
+{
+	for (int i=0;i<4;i++) R[i] = X[i];
+}
+
+equat::equat()
+{
+	for (int i=0;i<4;i++) R[i] = 0.0;
+}
+
+equat equat::operator+(equat L2)
+{
+	equat L3; for (int i=0;i<4;i++) L3.R[i] = R[i] + L2.R[i];
+	return L3;
+}
+
+equat equat::operator-(equat L2)
+{
+	equat L3; for (int i=0;i<4;i++) L3.R[i] = R[i] - L2.R[i];
+	return L3;
+}
+
+
+ostream &operator<<(ostream &ostr, equat &E)
+{
+	return ostr << "( " << E.R[0] << " " << E.R[1] << " " << E.R[2] << " " << E.R[3] << " )";
+}
+
+/* ===== LINEAR EQUATION SYSTEM METHODS ===== */
+
+void equatsys2::Fill(vertex V1, vertex V2, gvector Vec1, gvector Vec2)
+{
+	float X1[4] = {V1.x, Vec1.x, V2.x, Vec2.x};
+	float X2[4] = {V1.y, Vec1.y, V2.y, Vec2.y};
+	L[0].Set(X1);
+	L[1].Set(X2);
+}
+
+vertex equatsys2::Solve()
+{
+	bool dev = 0;
+	if (dev) cout << " Solving LSE. EQ: " << L[0] << L[1] << endl;
+	
+	equat ET1 = L[0];
+	equat ET2 = L[1];
+	float p = 0.0; // param
+	
+	// equalize X
+	if (dev) cout << " Equalize X " << L[0] << L[1] << endl;
+	float m1 = L[1].R[1], m2 = L[0].R[1];
+	ET1.Multi(m1); // I
+	ET2.Multi(m2); // II
+	if (dev) cout << "   = " << ET1 << ET2 << endl;
+	
+	// subtract II from I to get rid of X
+	equat M = ET1 - ET2;
+	if (dev) cout << " Subtract II from I: " << M << endl;
+	
+	// get Y
+	if (dev) cout << " M "<< M;
+	M.Subdiv(M.R[3]);
+	if (dev) cout << " Subdiv " << M.R[3] << M << endl;
+	M.R[0] -= M.R[2];
+	p = M.R[0];
+	if (dev) cout << " Param " << p << endl;
+	
+	/*
+	// get X
+	equat N = L[1];
+	N.R[3] *= Y;
+	
+	X = (N.R[2] + N.R[3] - N.R[0]) / N.R[1];
+	*/
+	
+	// get Intersection
+	I.x = L[0].R[2] + ( L[0].R[3] * p );
+	I.y = L[1].R[2] + ( L[1].R[3] * p );
+	if (dev) cout << " Intersection " << I << endl << endl;
+	if (dev) getch();
+	
+	return I;
+}
+
+equatsys2::equatsys2(vertex V1, vertex V2, gvector Vec1, gvector Vec2)
+{
+	float X1[4] = {V1.x, Vec1.x, V2.x, Vec2.x};
+	float X2[4] = {V1.y, Vec1.y, V2.y, Vec2.y};
+	L[0].Set(X1);
+	L[1].Set(X2);
+}
+
+
+
+
+
+
+
 /* ===== GVECTOR FUNCTIONS ===== */
+
+vertex GetLineIsect(vertex V1, vertex V2, gvector Vec1, gvector Vec2)
+{
+	equatsys2 LSE(V1, V2, Vec1, Vec2);
+	LSE.Solve();
+	
+	return LSE.I;
+}
 
 ostream &operator<<(ostream &ostr, gvector &v)
 {
@@ -34,7 +157,7 @@ float GetAdjaLen (gvector Hypo, gvector Vec)
 	//cout << " AlphaCos "<< AlphaCos << " HypoLen "<< HypoLen << " AdjaLen " << AlphaCos * HypoLen << endl;
 	
 	float result = AlphaCos * HypoLen;
-	if (!IsValid(result)) result = 666.666;
+	if (!IsValid(result)) result = 0;
 	
 	return result;
 }
@@ -45,7 +168,39 @@ float GetOppoLen (gvector Hypo, gvector Vec)
 	float HypoLen = GetVecLen (Hypo);
 	
 	float result = AlphaSin * HypoLen;
-	if (!IsValid(result)) result = 666.666;
+	if (!IsValid(result)) result = 0;
+	
+	return result;
+}
+
+float GetAdjaLen (gvector Hypo, float Alpha)
+{
+	float AlphaCos = cos(Alpha*(PI/180.0));
+	float HypoLen = GetVecLen (Hypo);
+	
+	float result = AlphaCos * HypoLen;
+	if (!IsValid(result)) result = 0;
+	
+	return result;
+}
+
+float GetAdjaLen (float HypoLen, float Alpha)
+{
+	float AlphaCos = cos(Alpha*(PI/180.0));
+	
+	float result = AlphaCos * HypoLen;
+	if (!IsValid(result)) result = 0;
+	
+	return result;
+}
+
+float GetOppoLen (gvector Hypo, float Alpha)
+{
+	float AlphaSin = sin(Alpha*(PI/180.0));
+	float HypoLen = GetVecLen (Hypo);
+	
+	float result = AlphaSin * HypoLen;
+	if (!IsValid(result)) result = 0;
 	
 	return result;
 }
@@ -81,7 +236,7 @@ float GetVecAlign (gvector Vector, int mode = 0) {
 		
 		yaw = acos(GetAngleCos(VecYaw, Base)) * 180.0 / PI;
 		if (VecYaw.y <= 0) yaw = 360 - yaw;
-		if (yaw==360||yaw==NAN) yaw = 0;
+		if (yaw==360||!IsValid(yaw)) yaw = 0;
 		
 		if (mode == 0) return yaw;
 	}
@@ -208,6 +363,13 @@ float GetVecAng(gvector Vec1, gvector Vec2) {
 
 /* ===== GVECTOR METHODS ===== */
 
+void gvector::gVecRoundN(int n)
+{
+	x = RoundFloatToDeci(x,n);
+	y = RoundFloatToDeci(y,n);
+	z = RoundFloatToDeci(z,n);
+}
+
 void gvector::mult(float n)
 {
 	x *= n;
@@ -301,5 +463,12 @@ void gvector::AddVec(gvector AVec)
 	x += AVec.x;
 	y += AVec.y;
 	z += AVec.z;
+}
+
+gvector::gvector (vertex p1, vertex p2)
+{
+	x = p2.x - p1.x;
+	y = p2.y - p1.y;
+	z = p2.z - p1.z;
 }
 

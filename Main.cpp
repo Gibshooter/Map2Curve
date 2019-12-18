@@ -1,8 +1,8 @@
-#include "header\WAD3.h"
-#include "header\utils.h"
-#include "header\group.h"
-#include "header\settings.h"
 #include "header\file.h"
+#include "header\group.h"
+#include "header\WAD3.h"
+#include "header\settings.h"
+#include "header\utils.h"
 #include "header\vertex.h"
 
 #include <iostream>
@@ -30,22 +30,23 @@ using namespace std;
 		for the Half-Life modding community.
 		
 		Most functions are written more or less inefficiently but were left as there
-		are because of various reasons.
+		are because of various reasons (time, motivation, you get the idea).
 	
 		Now one might wonder, apart from a programming language, what do you
-		need to learn if you were to write a map generator?
+		need to know if you were to write a map generator?
 		
 		Here are a few important items:
 	
 		- Trigonometry (sin, cos, tan, Pi)
 		- Geometry / Analytic geometry (Vertices, Lines, Planes)
 		- Linear Algebra (Vectors, Dot product, Cross product)
-		- Matrix (especially Rotation Matrices), Euler Angles
+		- Matrices (especially Rotation Matrices), Euler Angles
 	
 	====== RESOURCES ======
 	
 		- Euler Angles: https://www.geometrictools.com/Documentation/EulerAngles.pdf
-	
+		- WAD 3 format: http://www.j0e.io
+		
 	====== C++ Info ====== 
 	
 		Based on GNU C++ 11
@@ -62,12 +63,12 @@ using namespace std;
 */
 
 
-// command list // 0 = bool, 1 = int, 2 = float, 3 = string
-vector<string> slist    { "rad", "offset", "res", "type", "obj", "shift", "target", "append", "tri", "round", "height", "ramp", "p_cornerfix", "p_reverse", "ramptex", "p_split", "path", "scale", "rot", "move", "scale_src", "rot_src", "bounds", "range_start", "range_end", "transit_tri", "transit_round", "gaps", "gaplen", "skipnull", "d_enable", "d_autoyaw", "d_autopitch", "d_pos", "nulltex", "spike_height", "d_separate", "d_autoname", "d_pos_rand", "d_rotz_rand", "d_movey_rand", "d_draw", "d_draw_rand", "d_skip" };
+// command list // 0 = bool, 1 = int, 2 = float, 3 = string, 4 = tform
+vector<string> slist    { "rad", "offset", "res", "type", "obj", "shift", "target", "append", "tri", "round", "height", "ramp", "p_cornerfix", "p_reverse", "ramptex", "p_split", "splinefile", "scale", "rot", "move", "scale_src", "rot_src", "bounds", "range_start", "range_end", "transit_tri", "transit_round", "gaps", "gaplen", "skipnull", "d_enable", "d_autoyaw", "d_autopitch", "d_pos", "nulltex", "spike_height", "d_separate", "d_autoname", "d_pos_rand", "d_rotz_rand", "d_movey_rand", "d_draw", "d_draw_rand", "d_skip", "heightmode", "p_scale", "p_expand", "p_evenout", "map", "c_enable", "texmode" };
 vector<int> slist_id; 
-vector<int> slist_type  {  2,     2,        1,     1,      0,     1,       3,        0,        0,     0,       2,        1,      0,             0,           0,         0,         3,      4,       4,     4,      4,           4,         0,        2,             2,           0,             0,               0,      2,        0,          0,          0,           0,             2,       3,         2,              0,            0,            4,            4,             4,              1,        0,             1 };
-vector<int> slist_min   { -131072,-131072,  0,     0,      0,     0,       0,        0,        0,     0,       0,        0,      0,             0,           0,         0,         0,      0,       0,     0,      0,           0,         0,        0,             0,           0,             0,               0,      0,        0,          0,          0,           0,             0,       0,         0,              0,            0,            0,            0,             0,              0,        0,             0 };
-vector<int> slist_max   { 131072, 131072,   384,   2,      1,     5,       255,      1,        1,     1,       131072,   2,      1,             1,           1,         1,         255,    30,      30,    30,     30,          1,         1,        100,           100,         1,             1,               1,      131072,   1,          1,          1,           1,             1,       15,        131072,         1,            1,            30,           30,            30,             384,      1,             384};
+vector<int> slist_type  {  2,     2,        1,     1,      0,     1,       3,        0,        0,     0,       2,        0,      0,             0,           0,         0,         3,            4,       4,     4,      4,           4,         0,        2,             2,           0,             0,               0,      2,        0,          0,          0,           0,             2,       3,         2,              0,            0,            4,            4,             4,              1,        0,             1,        1,            4,         2,          0,           0,     0,          1};
+vector<int> slist_min   { -131072,-131072,  0,     0,      0,     0,       0,        0,        0,     0,       -131072,  0,      0,             0,           0,         0,         0,            0,       0,     0,      0,           0,         0,        0,             0,           0,             0,               0,      0,        0,          0,          0,           0,             0,       0,         0,              0,            0,            0,            0,             0,              0,        0,             0,        0,            0,         -131072,    0,           0,     0,          0};
+vector<int> slist_max   { 131072, 131072,   384,   3,      1,     5,       255,      1,        1,     1,       131072,   1,      1,             1,           1,         1,         255,          30,      30,    30,     30,          1,         1,        100,           100,         1,             1,               1,      131072,   1,          1,          1,           1,             1,       15,        131072,         1,            1,            30,           30,            30,             384,      1,             384,      5,            30,         131072,    1,           1,     1,          1};
 
 
 // Global Objects
@@ -76,21 +77,22 @@ vector<int> slist_max   { 131072, 131072,   384,   2,      1,     5,       255, 
 	
 	file *gFile = nullptr; // global pointer for current file
 	
-	ctable *cTable = nullptr;
+	ctable *cTable = nullptr; // final construction Table
 	ctable *sTable = nullptr; // original imported settings storage
 	ctable *mTable = nullptr;
 	
 	bool ValidDefaults = 1;
-	ctable *dTable = nullptr;
+	ctable *dTable = nullptr; // Defaults construction Table
 	
 	group *mGroup = nullptr; 	// imported map source object
-	group *sGroup = nullptr; 	// modified map source objects (1 for each curve object)
+	group *sGroup = nullptr; 	// Transformed map source objects (1 for each curve object)
 	group *bGroup = nullptr; 	// generated curve object
 	
-	group *dmGroup = nullptr;	// original detail objects
-	group_set *dSet = nullptr; // final detail objects
+	group *mDetailGroup = nullptr;	// original detail objects
+	group_set *sDetailSet = nullptr; // copied detail objects for each individual curve object
+	group_set *DetailSet = nullptr; // final detail objects
 	
-	string def_nulltex = "NULL";
+	string def_nulltex = "SOLIDHINT";
 	float def_spikesize = 4;
 	
 	bool G_LOG = 0;
@@ -99,6 +101,7 @@ vector<int> slist_max   { 131072, 131072,   384,   2,      1,     5,       255, 
 	
 	string ROOT = "";
 	
+	int ErrorCode = 1;
 
 int main(int argc, char *argv[])
 {
@@ -130,9 +133,9 @@ int main(int argc, char *argv[])
 		
 		// check for valid files
 		cout << "++---------------------++\n";
-		cout << "||   Map2Curve v0.5    ||\n";
+		cout << "||   Map2Curve v0.6    ||\n";
 		cout << "||      by ToTac       ||\n";
-		cout << "||   Oct 22th, 2019    ||\n";
+		cout << "||   Dec 16th, 2019    ||\n";
 		cout << "++---------------------++\n\n";
 		
 		int vcount = 0; // valid files counter
@@ -186,6 +189,7 @@ int main(int argc, char *argv[])
 			else				cout<< "            Not found or empty. Using internal Defaults!" << endl;
 		}
 		
+		int t_valids = 0;
 		// Process Files
 		for (int i = 0; i < Filelist.size(); i++)
 		{
@@ -207,7 +211,7 @@ int main(int argc, char *argv[])
 			if (mGroup->valid)
 			{
 				cout << "|  Creating Source Objects..." << endl;
-				cFile.createGroupSource();
+				cFile.createGroupSource(); // copy map brushes for each curve object in case there are individual transformations
 				
 				cout << "|  Creating Construction Tables..." << endl;
 				if ( (cFile.type==1 && cFile.valid_cfg) || (cFile.type==2 && !cFile.InternalMapSettings ) ) {
@@ -232,7 +236,7 @@ int main(int argc, char *argv[])
 					sTable[g].Print();
 					getch();}}
 				
-				cFile.createTableC(); // create final construction tables
+				createTableC(); // create final construction tables
 				
 				if(dev||G_DEV)
 				for (int g = 0; g<mGroup->t_arcs; g++) {
@@ -241,20 +245,22 @@ int main(int argc, char *argv[])
 					cTable[g].Print();
 					getch();}}
 				
-				cFile.createDetailGroup();
+				cout << "|  Creating Detail Objects..." << endl;
+				cFile.createDetailGroupSource();
 				
-				bool IsSetSTforms = 0, IsSetObj = 0;
+				bool IsSetSTforms = 0, IsSetMap = 0, IsSetObj = 0;
 				for (int g = 0; g<mGroup->t_arcs; g++)
 				{
 					if (cTable[g].scale_src.IsSet || cTable[g].rot_src.IsSet) IsSetSTforms = 1;
-					if (cTable[g].obj) IsSetObj = 1;
+					if (cTable[g].map>0) IsSetMap = 1;
+					if (cTable[g].obj>0) IsSetObj = 1;
 				}
 				
 				if (IsSetSTforms)
 				{
 					cout << "|  Applying Source Transformations..." << endl;
 					cFile.TransformSource();
-					cFile.createTableC();
+					createTableC();
 				}
 				cout << "|" << endl;
 				cFile.FixDetailPos(); // fix x position of detail objects after eventual source transformation
@@ -264,95 +270,123 @@ int main(int argc, char *argv[])
 				{
 					group &Group = sGroup[g];
 					
+					cout << "|" << endl << "|  Generating Curve #"<<g+1<<"..." << endl;
+					
+					//check for paths
+					if (  cTable[g].type==3 || cTable[g].type==2  || cTable[g].heightmode==2  ) {
+						cout << "|    Loading Spline File..." << endl;
+						cFile.LoadSpline(g);
+						if (!Group.valid) { validGroups--; } //!cFile.PathList[g].valid
+					}
+					
 					if (Group.valid)
 					{
-						//if (cTable[g].nulltex!="UNSET")
+						cFile.createDetailGroup(g);
+						
 						def_nulltex = cTable[g].nulltex;
 						for (int i=0;i<def_nulltex.length();i++) def_nulltex[i] = toupper(def_nulltex[i]);
 						def_spikesize = cTable[g].spike_height;
-						bool IsSetPaths = 0, IsSetTri = 0, IsSetRamps = 0, IsSetFinTforms = 0, IsSetRound = 0, IsSetBounds = 0;
-						if (cTable[g].type==2) 	{ IsSetPaths = 1; }
-						if ((cTable[g].ramp>0 && cTable[g].height>0) || cTable[g].type==2) 	{ IsSetRamps = 1; }
-						if (cTable[g].scale.IsSet||cTable[g].move.IsSet||cTable[g].rot.IsSet) { IsSetFinTforms = 1; }
-						if (cTable[g].round>0||cTable[g].transit_round>0) 	{ IsSetRound = 1; }
-						if (cTable[g].bound>0) 	{ IsSetBounds = 1; }
-						if (cTable[g].tri>0||cTable[g].transit_tri>0||cTable[g].round>0||cTable[g].transit_round>0) 		{ IsSetTri = 1; }
 						
-						cout << "|  Generating Curve #"<<g+1<<"..." << endl;
 						int t = cTable[g].type;
-						cout << "|    Type:\t"; if (t==0) cout << "Pi Circle" << endl; else if (t==1) cout << "Grid Circle" << endl; else if (t==2) cout << "Simple Path Extrusion" << endl;
-						cout << "|    Radius:\t"<< cTable[g].rad << endl;
-						cout << "|    Sides:\t"<< cTable[g].res << endl;
-						cout << "|    Range:\tSection " << floor(cTable[g].res*(cTable[g].range_start/100.0))+1 << " - " << floor(cTable[g].res*(cTable[g].range_end/100.0)) << " of total " << cTable[g].res << endl; //
-						
-						//check for paths
-						if (IsSetPaths) {
-						cout << "|    Loading Path Files..." << endl;
-						cFile.LoadPaths(g); }
+						int hm = cTable[g].heightmode;
+						cout << "|    Type:       "; if (t==0) cout << "Pi Circle" << endl; else if (t==1) cout << "Grid Circle" << endl; else if (t==2) cout << "Simple Spline Extrusion" << endl; else if (t==3) cout << "Intersecting Spline Extrusion" << endl;
+						cout << "|    Radius:     "<< cTable[g].rad << endl;
+						cout << "|    Depth:      "<< sGroup[g].SizeY << endl;
+						cout << "|    Sides:      "<< cTable[g].res << endl;
+						cout << "|    Height:     "<< cTable[g].height << endl;
+						cout << "|    Max Height: "<< cTable[g].height * cTable[g].res << endl;
+						cout << "|    Heightmode: "; if (hm==0) cout << "Linear Slope" << endl; else if (hm==1) cout << "Smooth Slope" << endl; else if (hm==2) cout << "Spline" << endl; else if (hm==3) cout << "Random Jagged" << endl;
+						cout << "|    Transform:  "<< " move " <<cTable[g].move << " rotate " << cTable[g].rot << " scale " <<cTable[g].scale << endl;
+						cout << "|    Range:      Section " << floor(cTable[g].res*(cTable[g].range_start/100.0))+1 << " - " << floor(cTable[g].res*(cTable[g].range_end/100.0)) << " of total " << cTable[g].res << endl; //
+						cout << "|" << endl;
 						
 						cout << "|    Creating Construction Framework..." << endl;
 						cFile.createFramework(g);
 						
-						cout << "|    Creating Objects..." << endl;
+						cout << "|    Creating Curve Objects..." << endl;
 						cFile.createGroupBrush(g);
 						
-						cout << "|    Building Brushes..." << endl;
+						cout << "|    Building Curve Brushes..." << endl;
 						cFile.buildArcs(g);
 						
 						cout << "|    Texturing..." << endl;
 						cFile.texturize(g);
 						
-						if (IsSetTri) {
+						if (  ( cTable[g].tri>0 || cTable[g].ramp>0 || cTable[g].transit_tri>0 || cTable[g].round>0 || cTable[g].transit_round>0 ) && cTable[g].type!=2  ) {
 						cout << "|    Triangulating..." << endl;
 						cFile.Triangulate(g); }
 						
-						if (IsSetRamps) {
-						cout << "|    Creating a Ramp (Retry if this gets stuck!)..." << endl;
+						if ( cTable[g].texmode==1 &&cTable[g].tri>0 && ( cTable[g].ramp==0||(cTable[g].ramp>0&&cTable[g].height==0) ) && (cTable[g].type==0||cTable[g].type==1) ) {
+						cout << "|    Seamless Texture Mapping..." << endl;
+						bGroup[g].ShearVectors(); }
+						
+						if (  cTable[g].ramp>0 ) {
+						cout << "|    Creating a Ramp..." << endl;
 						cFile.RampIt(g); }
 						
-						if (IsSetFinTforms) {
+						if (  cTable[g].scale.IsSet || cTable[g].move.IsSet || cTable[g].rot.IsSet  ) {
 						cout << "|    Applying Final Transformations..." << endl;
 						cFile.TransformFinal(g); }
 						
-						if (IsSetRound) {
+						if (  cTable[g].round>0 || cTable[g].transit_round>0  ) {
 						cout << "|    Rounding Vertices..." << endl;
 						cFile.roundCoords(g); }
 						
-						if (IsSetBounds) {
+						if (  cTable[g].bound>0  ) {
 						cout << "|    Creating Bounding Boxes..." << endl;
 						cFile.createBounds(g); }
 						
 						cout << "|" << endl;
+						
+						if(cTable[g].map==0 && cTable[g].obj==0)
+						{
+							cout << "|    [ERROR] No output format set! Either <map> or <obj> format"<< endl;
+							cout << "|            has to be set, for generated data to be exported!"<< endl;
+						}
 					}
 					else
 					{
-						cout << "|  Generating Curve #"<<g+1<<"..." << endl;
-						cout << "|    [ERROR] The custom source transformations caused"<< endl;
-						cout << "|            the source brush to become invalid! Aborting..." << endl;
-						cout << "|            Transformations were:" << endl;
-						cout << "|            - rot_src   " << cTable[g].rot_src << endl;
-						cout << "|            - scale_src " << cTable[g].scale_src << endl;
-						cout << "|            For more information about valid source Brushes" << endl;
-						cout << "|            see the Online documentation." << endl;
-						cout << "|" << endl;
+						if (!Group.ValidMesh) {
+							cout << "|    [ERROR] The source transformations caused the"<< endl;
+							cout << "|            original mesh to become invalid! Aborting..." << endl;
+							cout << "|            Transformations were:" << endl;
+							cout << "|            - rot_src   " << cTable[g].rot_src << endl;
+							cout << "|            - scale_src " << cTable[g].scale_src << endl;
+							cout << "|            For more information about valid source Brushes" << endl;
+							cout << "|            see the Online documentation." << endl;
+							cout << "|" << endl;
+						}
+						if (!Group.ValidSpline) {
+							cout << "|    [ERROR] Spline file invalid! Aborting..."<< endl;
+						}
 						validGroups--;
 					}
-					
 				}
+
+				// print all detail objects
+				if(dev)
+				for (int d = 0; d<DetailSet->t_groups; d++)
+				{
+					group &dGroup = DetailSet->Groups[d];
+					cout << dGroup;
+				}
+				if(dev) getch();
 				
 				if (validGroups>0) {
-				//cout << "|" << endl;
-				cout << "|  Exporting all curves to map file \""; //\""<<cFile.name<<"_arc.map\"..." << endl;
+				if (IsSetMap) {
+				cout << "|  Exporting selected data to map file \""; //\""<<cFile.name<<"_arc.map\"..." << endl;
 				cFile.ExportToMap();
-				cout << "\"..." << endl;
+				cout << "\"..." << endl; }
 				
 				if (IsSetObj) {
-				cout << "|  Exporting individual curves to obj file(s)..." << endl;
+				cout << "|  Exporting selected data to obj file(s)..." << endl;
 				cFile.ExportToObj(); }
 				}
 				
 				cout << "|" << endl;
 				cout <<	"+-----------------------------------------------------+" << endl << endl;
+				
+				t_valids = validGroups;
 			}
 			else {
 				cout << "|  [ERROR] Map File doesn't seem to contain valid"<< endl;
@@ -363,6 +397,7 @@ int main(int argc, char *argv[])
 				cout << "|" << endl;
 				cout <<	"+-----------------------------------------------------+" << endl << endl;
 			}
+			if (mGroup->valid&&t_valids>0) ErrorCode = 0;
 			if (mGroup!=nullptr) {delete mGroup;   mGroup = nullptr; }
 			if (bGroup!=nullptr) {delete[] bGroup; bGroup = nullptr; }
 			if (sGroup!=nullptr) {delete[] sGroup; sGroup = nullptr; }
@@ -370,15 +405,18 @@ int main(int argc, char *argv[])
 			if (sTable!=nullptr) {delete[] sTable; sTable = nullptr; }
 			if (mTable!=nullptr) {delete[] mTable; mTable = nullptr; }
 			
-			if (dmGroup!=nullptr) {delete[] dmGroup; dmGroup = nullptr; }
-			if (dSet!=nullptr) {delete[] dSet; dSet = nullptr; }
+			if (mDetailGroup!=nullptr) {delete[] mDetailGroup; mDetailGroup = nullptr; }
+			if (sDetailSet!=nullptr) {delete[] sDetailSet; sDetailSet = nullptr; }
+			if (DetailSet!=nullptr) {delete[] DetailSet; DetailSet = nullptr; }
 		}
 		
 		if (dTable!=nullptr) {delete[] dTable; dTable = nullptr; }
+		if(G_DEV) cout << " ############## ErrorCode " << ErrorCode << "  ############## " <<endl;
 		cout << "\n\nPRESS ANY BUTTON TO EXIT..." << endl;
 		if (!G_AUTOCLOSE) getch();
 		//if (G_LOG) WriteTextToFile("LOG.txt", cout);
-		return 0;
+		
+		return ErrorCode;
 	}
 	else // argc == 1
 	{
@@ -386,7 +424,9 @@ int main(int argc, char *argv[])
 		cout << "Files can be Goldsource-Map (*.map) and Map2Curve Settings-File (*.txt).";
 		cout << "\n\nPRESS ANY BUTTON TO EXIT..." << endl;
 		getch();
+		return 0;
 	}
+	
 	return 0;
 	system("PAUSE");
 }

@@ -21,11 +21,12 @@ using namespace std;
 extern ctable *cTable;
 extern ctable *sTable;
 extern ctable *dTable;
-extern group *bGroup;
 extern group *mGroup;
-extern group *dmGroup;
 extern group *sGroup;
-extern group_set *dSet;
+extern group *bGroup;
+extern group *mDetailGroup;
+extern group_set *sDetailSet;
+extern group_set *DetailSet;
 extern vector<WADFile> WADFiles;
 extern vertex Zero;
 
@@ -69,7 +70,7 @@ void file::ExportToMap()
 	for (int g = 0; g < mGroup->t_arcs; g++)
 	{
 		group &Group = bGroup[g];
-		if (cTable[g].skipnull>0)
+		if (cTable[g].skipnull>0 && cTable[g].map>0)
 		Group.CheckNULLBrushes();
 	}
 	
@@ -87,70 +88,73 @@ void file::ExportToMap()
 	if (dev) cout << " Writing all world brushes first (all arcs)..." << endl;
 	for (int g = 0; g < mGroup->t_arcs; g++)
 	{
-		// arc settings
-		int secs = bGroup[g].sections;
-		
-		// Iterate Brushes
-		for (int b = 0; b < bGroup[g].t_brushes; b++)
+		if(cTable[g].map>0 && cTable[g].c_enable>0)
 		{
-			brush &Brush = bGroup[g].Brushes[b];
-			int sec = Brush.SecID;
+			// arc settings
+			int secs = bGroup[g].sections;
 			
-			if (Brush.entID==0 && sec<bGroup[g].range_end && sec>=bGroup[g].range_start && Brush.draw)  // custom range (e.g. 0 to 100%) determined by range_start/end command
+			// Iterate Brushes
+			for (int b = 0; b < bGroup[g].t_brushes; b++)
 			{
-				if (dev) cout << "  Writing Brush " << b << "..." << endl;
-				if (Brush.Tri==nullptr)
+				brush &Brush = bGroup[g].Brushes[b];
+				int sec = Brush.SecID;
+				
+				if (Brush.entID==0 && sec<bGroup[g].range_end && sec>=bGroup[g].range_start && Brush.draw)  // custom range (e.g. 0 to 100%) determined by range_start/end command
 				{
-					mapfile << "{" << endl;
-					
-					// Iterate Faces
-					for (int f = 0; f < Brush.t_faces; f++)
+					if (dev) cout << "  Writing Brush " << b << "..." << endl;
+					if (Brush.Tri==nullptr)
 					{
-						face &Face = Brush.Faces[f];
+						mapfile << "{" << endl;
 						
-						if (Face.draw)
-						mapfile << Face;
-					}
-					
-					mapfile << "}" << endl;
-				}
-				else
-				{
-					for (int bt=0; bt<Brush.t_tri; bt++)
-					{
-						brush &TriBrush = Brush.Tri[bt];
-						if (TriBrush.draw)
+						// Iterate Faces
+						for (int f = 0; f < Brush.t_faces; f++)
 						{
-							mapfile << "{" << endl;
+							face &Face = Brush.Faces[f];
 							
-							// Iterate Faces
-							for (int f = 0; f < TriBrush.t_faces; f++)
+							if (Face.draw)
+							mapfile << Face;
+						}
+						
+						mapfile << "}" << endl;
+					}
+					else
+					{
+						for (int bt=0; bt<Brush.t_tri; bt++)
+						{
+							brush &TriBrush = Brush.Tri[bt];
+							if (TriBrush.draw)
 							{
-								face &FaceTB = TriBrush.Faces[f];
+								mapfile << "{" << endl;
 								
-								if (FaceTB.draw)
-								mapfile << FaceTB;
+								// Iterate Faces
+								for (int f = 0; f < TriBrush.t_faces; f++)
+								{
+									face &FaceTB = TriBrush.Faces[f];
+									
+									if (FaceTB.draw)
+									mapfile << FaceTB;
+								}
+								
+								mapfile << "}" << endl;
 							}
-							
-							mapfile << "}" << endl;
 						}
 					}
-				}
-				
-				// Gap of current Brush
-				if (cTable[g].gaps>0&&Brush.Gap!=nullptr)
-				{
-					if (dev) cout << "   Writing Gap Brush..." << endl;
-					brush &Gap = *Brush.Gap;
-					mapfile << "{" << endl;
-					for (int f = 0; f < Gap.t_faces; f++)
+					
+					// Gap of current Brush
+					if (cTable[g].gaps>0&&Brush.Gap!=nullptr)
 					{
-						face &GFace = Gap.Faces[f];
-						
-						if (GFace.draw)
-						mapfile << GFace;
+						if (dev) cout << "   Writing Gap Brush..." << endl;
+						brush &Gap = *Brush.Gap;
+						mapfile << "{" << endl;
+						for (int f = 0; f < Gap.t_faces; f++)
+						{
+							face &GFace = Gap.Faces[f];
+							
+							if (GFace.draw)
+							mapfile << GFace;
+						}
+						mapfile << "}" << endl;
 					}
-					mapfile << "}" << endl;
 				}
 			}
 		}
@@ -164,7 +168,7 @@ void file::ExportToMap()
 	if (dev) cout << " Writing solid entities..." << endl;
 	for (int g = 0; g < mGroup->t_arcs; g++)
 	{
-		if (cTable[g].type!=2)
+		if (cTable[g].type!=2&&cTable[g].type!=3 && cTable[g].map>0 && cTable[g].c_enable>0)
 		for (int e = 0; e < EntityList.size(); e++) // entity loop
 		{
 			entity &Entity = EntityList[e];
@@ -252,7 +256,7 @@ void file::ExportToMap()
 				mapfile << "}" << endl; // finish current solid entity
 			}
 		}
-		else if (cTable[g].type==2)
+		else if ( (cTable[g].type==2||cTable[g].type==3) && cTable[g].map>0 && cTable[g].c_enable>0)
 		{
 			int t_orients 	= 1;
 			int t_paths 	= PathList[g].t_paths;
@@ -291,6 +295,7 @@ void file::ExportToMap()
 			//cout << " total ents " << EntityList.size() << endl;
 			//getch();
 			
+			// write spline brushes
 			for (int o = 0; o < t_orients; o++) // orientation loop
 			for (int p = 0; p < t_paths; p++) // paths loop
 			for (int e = 0; e < EntityList.size(); e++) // entity loop
@@ -308,7 +313,7 @@ void file::ExportToMap()
 						brush &Brush = bGroup[g].Brushes[b];
 						int sec = Brush.SecID;
 						//cout << "  Brush "<<b<<" Exp"; if (Brush.exported) cout << " YES"; else cout <<" NO ";
-						//cout << " eID " << Brush.entID << " pID " << Brush.pID << " oID " << Brush.oID << " Draw " << Brush.draw << endl;
+						if(dev)cout << " eID " << Brush.entID << " pID " << Brush.pID << " oID " << Brush.oID << " Draw " << Brush.draw << endl;
 						
 						if (!Brush.exported && Brush.entID==e && ((cTable[g].psplit==1&&Brush.oID==o)||(cTable[g].psplit==0)) && Brush.pID==p && sec<bGroup[g].range_end && sec>=bGroup[g].range_start && Brush.draw)
 						{
@@ -319,17 +324,54 @@ void file::ExportToMap()
 								//cout << "    Wrote Head!"<< endl;
 							}
 							
-							mapfile << "{" << endl;
-							
+							//mapfile << "{" << endl;
+							if (Brush.Tri==nullptr)
+							{
+								mapfile << "{" << endl;
+								
+								// Iterate Faces
+								for (int f = 0; f < Brush.t_faces; f++)
+								{
+									face &Face = Brush.Faces[f];
+									
+									if (Face.draw)
+									mapfile << Face;
+								}
+								
+								mapfile << "}" << endl;
+							}
+							else
+							{
+								for (int bt=0; bt<Brush.t_tri; bt++)
+								{
+									brush &TriBrush = Brush.Tri[bt];
+									if (TriBrush.draw)
+									{
+										mapfile << "{" << endl;
+										
+										// Iterate Faces
+										for (int f = 0; f < TriBrush.t_faces; f++)
+										{
+											face &FaceTB = TriBrush.Faces[f];
+											
+											if (FaceTB.draw)
+											mapfile << FaceTB;
+										}
+										
+										mapfile << "}" << endl;
+									}
+								}
+							}
+
 							// Iterate Faces
-							for (int f = 0; f < Brush.t_faces; f++)
+							/*for (int f = 0; f < Brush.t_faces; f++)
 							{
 								face &Face = Brush.Faces[f];
 								
 								if (Face.draw)
 								mapfile << Face;
 							}
-							mapfile << "}" << endl;
+							mapfile << "}" << endl;*/
 							
 							Brush.exported = 1;
 							//cout << "    Wrote Brush #"<<b<<"!"<< endl;
@@ -351,7 +393,7 @@ void file::ExportToMap()
 	if (dev) cout << " Bounding Boxes..." << endl;
 	for (int g = 0; g < mGroup->t_arcs; g++)
 	{
-		if (cTable[g].bound)
+		if (cTable[g].bound && cTable[g].map>0)
 		{
 			brush &Box = *bGroup[g].boundBox;
 			mapfile << "{\n\"classname\" \"func_detail\"\n\"zhlt_detaillevel\" \"1\"\n\"zhlt_clipnodedetaillevel\" \"1\"\n";
@@ -370,9 +412,9 @@ void file::ExportToMap()
 	if (dev) cout << " Detail Objects..." << endl;
 	for (int g = 0; g < mGroup->t_arcs; g++)
 	{
-		group_set &Set = dSet[g];
+		group_set &Set = DetailSet[g];
 		
-		if ( cTable[g].type==0 && cTable[g].d_enable )
+		if ( cTable[g].d_enable && cTable[g].map>0 )
 		for (int dg = 0; dg < Set.t_groups; dg++)
 		{
 			group &dGroup = Set.Groups[dg];
@@ -892,6 +934,7 @@ void file::texturize(int g)
 					
 					//if (Face.VecX.IsHor) 	Face.ShiftX += Face.OffsetX;
 					//else 				 	Face.ShiftY += Face.OffsetY;
+					if(dev&&(sec==55||sec==5)&&f==3) cout << " s " << sec << " b " << b << " \tBF " << Face.HSourceL << " \tBS " << Temp_BaseShift << " \tEL " << Temp_EdgeLen << " \tHSL " << LBrush->Faces[f].HShiftL << " * msh "<< msh <<" \tSX " << Face.ShiftX << " \tSY " << Face.ShiftY << endl;
 				}
 			}
 			
@@ -913,7 +956,10 @@ void file::texturize(int g)
 			/*if (Face.fID==2)
 				if (Face.VecX.IsHor) 	Face.ShiftX = Face.BaseShiftX;// + Face.OffsetX;
 				else 					Face.ShiftY = Face.BaseShiftY;// + Face.OffsetY;*/
+			
+			Face.MiniShift();
 		}
+		if(dev&&sec==55) cout << endl;
 	}
 	
 	// fix Gap Textures
@@ -938,24 +984,24 @@ void file::texturize(int g)
 void file::createBounds(int g)
 {
 	// copy ranges to detail group
-	for(int d = 0; d<dSet[g].t_groups; d++) {
-		dSet[g].Groups[d].range_end = bGroup[g].range_end;
-		dSet[g].Groups[d].range_start = bGroup[g].range_start;
+	for(int d = 0; d<DetailSet[g].t_groups; d++) {
+		DetailSet[g].Groups[d].range_end = bGroup[g].range_end;
+		DetailSet[g].Groups[d].range_start = bGroup[g].range_start;
 	}
 	
 	// get total dimensions of this arc and create a bounding box afterwards
 	bGroup[g].GetDimensions(0); // brush group
-	dSet[g].GetDimensions(0); // detail group
+	DetailSet[g].GetDimensions(0); // detail group
 	
 	//cout << " bGroup #"<<g<<" Dimensions " << bGroup[g].Dimensions << endl;
-	//cout << " dGroup #"<<g<<" Dimensions " << dSet[g].Dimensions << endl;
+	//cout << " dGroup #"<<g<<" Dimensions " << DetailSet[g].Dimensions << endl;
 	
 	dimensions AllCombined;
-	if (t_dgroups>0) AllCombined = DimensionCombine(bGroup[g].Dimensions, dSet[g].Dimensions);
+	if (t_dgroups>0) AllCombined = DimensionCombine(bGroup[g].Dimensions, DetailSet[g].Dimensions);
 	else AllCombined = bGroup[g].Dimensions;
 	
 	AllCombined.expand(64);
-	bGroup[g].boundBox->MakeCuboid(AllCombined, "NULL");
+	bGroup[g].boundBox->MakeCuboid(AllCombined, "SKIP");
 }
 
 void file::buildArcs(int g)
@@ -964,8 +1010,8 @@ void file::buildArcs(int g)
 	if (dev)cout << "Constructing Arcs..."  << endl;
 	
 	// smooth ramps need special height table
-	if (dev)cout << "  Smooth ramps height table..."  << endl;
-	bGroup[g].CreateHeightTableSmooth();
+	if (dev)cout << "  Creating Height table..."  << endl;
+	bGroup[g].CreateHeightTable();
 	
 	// build the curve object from previously created construction framework
 	if (dev)cout << "  Building curve object from previously created construction framework..."  << endl;
@@ -977,7 +1023,7 @@ void file::buildArcs(int g)
 		brush &Brush = bGroup[g].Brushes[b];
 
 		// check for Brushes with less than 3 valid faces (minimum valid brush is a wedge with 4 faces)
-		// this occurs because of the path generation process
+		// this occurs because of the spline generation process
 		for (int f = 0, inv=0; f<Brush.t_faces; f++)
 		{
 			face &Face = Brush.Faces[f];
@@ -1027,6 +1073,7 @@ void file::buildArcs(int g)
 	// Rotate the Texture Vectors of all Brush Faces
 	if(dev) cout << "  Rotating Tex Vectors..." << endl;
 	bGroup[g].RotateVectors();
+	//bGroup[g].ShearVectors();
 	
 	// GetBaseEdges, Face Normals and Baseshift
 	if(dev) cout << "  Getting Base Edges and Shifts..." << endl;
@@ -1043,7 +1090,8 @@ void file::buildArcs(int g)
 	}
 	
 	// Rotate and Move Detail Group Objects
-	RotateDetailObj(g);
+	if(dev) cout << "  Rotate and Move Detail Group Objects..." << endl;
+	DetailObj_Transform(g);
 	
 	// Print updated Section Base Faces
 	/*for (int g = 0; g < mGroup->t_arcs; g++)
@@ -1098,7 +1146,7 @@ void file::FixDetailPos()
 		for (int i = 0; i<t_dgroups; i++)
 		{
 			if (dev) cout << " Fixing X-axis Pos of detail group " << i << " of arc " << g << endl;
-			group &Group = dSet[g].Groups[i];
+			group &Group = sDetailSet[g].Groups[i];
 			// get offset, if X position of objects origin is not 0
 			if (Group.Origin.x!=0)
 			{
@@ -1125,21 +1173,14 @@ void file::FixDetailPos()
 }
 
 
-// Move and Rotate Detail Objects
-void file::RotateDetailObj(int g)
+// Transform Detail Objects
+void file::DetailObj_Transform(int g)
 {
 	bool dev = 0;
-	if (dev) cout << " Move and Rotate Detail Objects..." << endl;
-	if (cTable[g].type==0 && cTable[g].d_enable>0)
+	if (dev) cout << " Transform Detail Objects..." << endl;
+	if (cTable[g].d_enable>0)
 	{
-		group_set &Set = dSet[g];
-		float step = 360.0/cTable[g].res;
-		int res = cTable[g].res;
-		float offset = cTable[g].offset_NO; // difference (offset) between new and old (N/O) curve radius (original map position and generated one from rad+offset setting)
-		float dangle[res], init_degZ[res], multi[res], degY = 0;
-		vertex IndiOrigin[res];
-		int start = bGroup[g].range_start;
-		int end = bGroup[g].range_end;
+		group_set &Set = DetailSet[g];
 		
 		bool G_YAW   = 1; if (cTable[g].d_autoyaw!=1)     G_YAW = 0;
 		bool G_PITCH = 1; if (cTable[g].d_autopitch!=1) G_PITCH = 0;
@@ -1149,7 +1190,6 @@ void file::RotateDetailObj(int g)
 		bool G_MY_RAND = 1; if (!cTable[g].d_movey_rand.IsSet||cTable[g].d_movey_rand.x==0)  G_MY_RAND = 0;
 		
 		if (dev) cout << " G_YAW " << G_YAW << " G_PITCH " << G_PITCH << " G_ENABLE " << G_ENABLE << " G_ANGLE " << cTable[g].d_pos << endl; 
-		if (dev) cout << " Step " << step << " offset " << offset << endl;
 		for (int d = 0; d<Set.t_groups; d++)
 		{
 			group &dGroup = Set.Groups[d];
@@ -1163,369 +1203,171 @@ void file::RotateDetailObj(int g)
 			if (dev) cout << " L_YAW " << L_YAW << " L_PITCH " << L_PITCH << " L_ENABLE " << L_ENABLE << " L_angle " << dGroup.d_pos << endl;
 			if (L_ENABLE)
 			{
+				int res = cTable[g].res;
+				float offset = cTable[g].offset_NO; // difference (offset) between new and old (N/O) curve radius (original map position and generated one from rad+offset setting)
+				vertex &Origin = dGroup.Origin;
+				vector<vertex> OriginN (res);
+				vector<float> T_Pos (res);
+				vector<float> T_MoveYR (res); // random MoveY
+				vector<float> T_Pitch (res);
+				vector<float> T_Yaw (res);
+				vector<float> T_YawR (res); // random Yaw
+				vector<float> T_YawC (res); // Yaw + Random Yaw combined
+				vector<gvector> T_Move (res);
+				vector<float> Dummy (res); // list of "0" for Rotation
+				
 				dGroup.GetDimensions(1);
-				if (dev) cout << "  Detail Group " << d << " Origin " << dGroup.Origin << endl;
+				if (dev) cout << " ============================================= Detail Group " << d << " of curve " << g <<" Origin " << dGroup.Origin << " ============================================= " << endl;
 				
-				// create individual Origins for all subgroups
-				for(int i=0;i<res;i++)
-				IndiOrigin[i] = dGroup.Origin;
-				
-				// initial Z angle calculation per detail group
-				if (G_POS_RAND||L_POS_RAND) {
-					if (G_POS_RAND&&!L_POS_RAND) {
-						for(int i=0;i<res;i++) {
-							dangle[i] = GetRandInRange(cTable[g].d_pos_rand.y,cTable[g].d_pos_rand.z);
-							if (dev)cout << " global d_pos #" << i << " - " << dangle[i] << " min " << cTable[g].d_pos_rand.y << " max " << cTable[g].d_pos_rand.z << endl; } }
-					else {
-						for(int i=0;i<res;i++) {
-							dangle[i] = GetRandInRange(dGroup.d_pos_rand.y,dGroup.d_pos_rand.z);
-							if (dev)cout << " local d_pos #" << i << " - " << dangle[i] << " min " << dGroup.d_pos_rand.y << " max " << dGroup.d_pos_rand.z << endl; } }
-				} else {
-					if ( dGroup.d_pos!=-1 )	for(int i=0;i<res;i++) dangle[i] = dGroup.d_pos;
-					else						for(int i=0;i<res;i++) dangle[i] = cTable[g].d_pos;
+				// spline from which to get position vector (xyz location) for this detail group
+				circle Spline;
+				if (dev) cout << " Creating circle for this DGroup..." << endl;
+				float OriginOffY = dGroup.Origin.y + offset;
+				if (dev) cout << " dGroup.SizeY " << dGroup.SizeY << " dGroup.Origin " << dGroup.Origin << " offset " << offset << " OriginOffY " << OriginOffY << endl;
+				if (cTable[g].type==0) {
+					Spline.build_circlePi(res, OriginOffY, Origin.z);
+					Spline.tverts = res;
+				} else if (cTable[g].type==1) {
+					Spline.build_circleGrid(res, OriginOffY, Origin.z);
+					Spline.tverts = res;
+				} else if (cTable[g].type==2) {
+					Spline.build_pathGrid(g, OriginOffY, Origin.z, PathList[g]);
+				} else if (cTable[g].type==3) {
+					Spline.build_pathIntersect(g, OriginOffY, Origin.z, PathList[g]);
 				}
 				
-				for(int i=0;i<res;i++) init_degZ[i] = step*dangle[i];
-				for(int i=0;i<res;i++) multi[i] = init_degZ[i]/step;
+				Spline.AddHeight(g, PathList);
+				if (cTable[g].type==0||cTable[g].type==1)
+				Spline.ConvertToSpline(g);
+				Spline.GetAngles(g);
 				
-				if (dev) for(int i=0;i<res;i++) cout << " init_degZ " << init_degZ[i] << " multi " << multi[i] << " dangle " << dangle[i] << endl;
+				if (dev) { cout << "   Generated Spline - type " << cTable[g].type << " res " << cTable[g].res << " secs " << bGroup[g].sections << endl;
+				for (int v=0;v<Spline.tverts;v++) cout << "     v " << v<< Spline.Vertices[v] <<endl; }
 				
-				// calculate Y axis compensation of objects, that have an initial z rotation greater than 0
-				float CompenY[res];
-				for(int i=0;i<res;i++)
-				if (dangle[i]>0&&dangle[i]<1)
-				{
-					if (dev) cout << " Calculating Y axis distance compensation..." << endl;
-					vertex OriginOffset;
-					OriginOffset.y = dGroup.Origin.y + offset;
+				// ================ TRANSFORMATION CALCULATION ================
+				
+					// create individual Origins for each section
+					for(int i=0;i<res;i++)
+						OriginN[i] = dGroup.Origin;
 					
-					vertex OriginRotStep = OriginOffset;
-					OriginRotStep.rotate(0,0,-step);
-					gvector VecStep(OriginRotStep.x,OriginRotStep.y,OriginRotStep.z);
-					
-					gvector VecSpan = GetVector(OriginOffset, OriginRotStep);
-					VecSpan.flip();
-					gvector Hypo(0,dGroup.Origin.y+offset,0);
-					
-					float alpha, beta, gamma;
-					alpha = GetVecAng(Hypo, VecSpan);
-					beta  = init_degZ[i];
-					gamma = 180-alpha-beta;
-					alpha *= PI / 180; beta *= PI / 180; gamma *= PI / 180;
-					
-					CompenY[i] = OriginOffset.y - ( Hypo.y / sin(gamma) ) * sin(alpha);
-					if (dev) cout << " OriginOffset " << OriginOffset << "  \n VecStep " << VecStep << "  \n VecSpan " << VecSpan << "  \n Hypo " << Hypo << "  \n alpha " << alpha/PI*180 <<"  \n beta " << beta/PI*180 <<"  \n gamma " << gamma/PI*180 << "  \n CompenY " << CompenY << endl << endl;
-				}
-				// circle from which to get elevation
-				circle CircElev;
-				if ( cTable[g].height>0 && cTable[g].ramp>0 && cTable[g].type!=2)
-				{
-					if (dev) cout << " Creating circle from which to get elevation... " << endl;
-					vertex OriginOff = dGroup.Origin;
-					OriginOff.y += offset; //+(dGroup.SizeY/2)
-					if (dev) cout << " dGroup.SizeY " << dGroup.SizeY << " dGroup.Origin " << dGroup.Origin << " offset " << offset << " OriginOff.y " << OriginOff.y << endl;
-					CircElev.build_circlePi(cTable[g].res,OriginOff.y,0);
-					CircElev.tverts = cTable[g].res;
-					
-					if (cTable[g].ramp==1)
-					{
-						CircElev.Vertices[1].z += cTable[g].height;
-						gvector VecElev = GetVector(CircElev.Vertices[0],CircElev.Vertices[1]);
-						gvector VecBase = VecElev;
-						VecBase.z = 0;
-						degY = GetVecAng(VecElev, VecBase);
-					}
-					else if (cTable[g].ramp==2)
-					{
-						for (int i = 0; i<cTable[g].res+1; i++)
-						{
-							if (i>=start && i<end)
-							{
-								int j = i+1;
-								float height = bGroup[g].heightTable[i-start];
-								//cout << " height = bGroup[g "<<g<<"].heightTable[i-start "<< i-start <<"]" << bGroup[g].heightTable[i-start] << endl;
-								//if (dev) cout << "        i["<<i<<"] Increasing Z of ElevCircle #["<<j<<"] by [" << height <<  "] (htable["<<i-start<<"]: "<<bGroup[g].heightTable[i-start]<<") from CircElev.V["<<j<<"].Z " << CircElev.Vertices[j].z << " to [" << CircElev.Vertices[j].z+height << "]" << endl;
-								CircElev.Vertices[j].z += height;
-								if (i==cTable[g].res-start)
-								CircElev.Vertices[j].z = CircElev.Vertices[1].z + CircElev.Vertices[j-1].z;
-								//cout << " height = bGroup[g "<<g<<"].heightTable[i-start "<< i-start <<"]" << bGroup[g].heightTable[i-start] << endl;
-							}
+					// get initial position along section axis (equal to x movement)
+					if (G_POS_RAND||L_POS_RAND) {
+						if (G_POS_RAND&&!L_POS_RAND) {
+							for(int i=0;i<res;i++) { T_Pos[i] = GetRandInRange(cTable[g].d_pos_rand.y,cTable[g].d_pos_rand.z); }
+						} else {
+							for(int i=0;i<res;i++) { T_Pos[i] = GetRandInRange(dGroup.d_pos_rand.y,dGroup.d_pos_rand.z); }
 						}
-					}
-					
-					if (dev) cout << "   Generated PI Circle for height calculation: HEIGHT/BASE..." << endl;
-					if (dev)
-					for (int v=0;v<CircElev.tverts+1;v++) cout << "     v " << v<< CircElev.Vertices[v] <<endl;
-					//for (int v=0;v<CircElevBase.tverts;v++) cout << "     v " << v<< CircElevBase.Vertices[v] <<endl;
-				}
-				// fixing offset N/O (Y axis)
-				if (cTable[g].offset_NO!=0)
-				{
-					if (dev) cout << " Fixing offset N/O (Y axis)..." << endl;
-					for (int b = 0; b<dGroup.t_brushes; b++) // Brushes
-					{
-						brush &Brush = dGroup.Brushes[b];
-						Brush.Move(0,cTable[g].offset_NO,0,1);
-					}
-					for (int e = 0; e<dGroup.t_ents; e++) // Entities
-					{
-						entity &Entity = dGroup.Entities[e];
-						Entity.Origin.y += cTable[g].offset_NO;
-					}
-					if (dev) cout << "   Moved Brushes and Entities by "<<cTable[g].offset_NO<<" along Y axis!" << endl;
-					
-					for(int i=0;i<res;i++)
-						IndiOrigin[i].y += cTable[g].offset_NO;
-				}
-				
-				float OffsetY_rand[res];
-				for(int i=0;i<res;i++)
-					OffsetY_rand[i] = 0;
-				// for each subgroup generate random offset on Y axis within given limits
-				if (G_MY_RAND||L_MY_RAND)
-				for(int i=0;i<res;i++)
-				{
-					if (G_MY_RAND&&!L_MY_RAND)
-						OffsetY_rand[i] = GetRandInRange(cTable[g].d_movey_rand.y,cTable[g].d_movey_rand.z);
-					else
-						OffsetY_rand[i] = GetRandInRange(dGroup.d_movey_rand.y,dGroup.d_movey_rand.z);
-				}
-				
-				// add additional Y offset if initial Z angle is not equal to step
-				//if (dangle[i]>0&&dangle[i]<1)
-				//{
-					if (dev) cout << " Adding additional Y offset to compensate low circle resolutions..." << endl;
-					for (int b = 0; b<dGroup.t_brushes; b++) // Brushes
-					{
-						brush &Brush = dGroup.Brushes[b];
-						int sec = Brush.SecID;
-						if (dangle[sec]>0&&dangle[sec]<1)
-						Brush.Move(0,-CompenY[sec]+OffsetY_rand[sec],0,1);
-					}
-					for (int e = 0; e<dGroup.t_ents; e++) // Entities
-					{
-						entity &Entity = dGroup.Entities[e];
-						int sec = Entity.SecID;
-						if (dangle[sec]>0&&dangle[sec]<1)
-						Entity.Origin.y += -CompenY[sec]+OffsetY_rand[sec];
-					}
-					for(int i=0;i<res;i++)
-					if (dangle[i]>0&&dangle[i]<1)
-						IndiOrigin[i].move(0,-CompenY[i]+OffsetY_rand[i],0);
-					//dGroup.Origin.move(0,-CompenY,0);
-				//}
-				
-				
-				// Rotate randomly around Z axis BEFORE Y Rotation (Pitch) is applied!
-				if (L_RZ_RAND||G_RZ_RAND)
-				{
-					float min = 0, max = 0;
-					if (G_RZ_RAND&&!L_RZ_RAND) {
-						min = cTable[g].d_rotz_rand.y;
-						max = cTable[g].d_rotz_rand.z;
 					} else {
-						min = dGroup.d_rotz_rand.y;
-						max = dGroup.d_rotz_rand.z;
+						if ( dGroup.d_pos!=-1 )	for(int i=0;i<res;i++) T_Pos[i] = dGroup.d_pos;
+						else					for(int i=0;i<res;i++) T_Pos[i] = cTable[g].d_pos;
 					}
-					float degZR[res];
-					for(int i=0;i<res;i++) degZR[i] = GetRandInRange(min, max);
+					if (dev) for(int i=0;i<res;i++) cout << " T_Pos " << T_Pos[i] << endl;
 					
-					for (int b = 0; b<dGroup.t_brushes; b++) // Brushes
+					// get random offset on Y axis within given limits
+					for(int i=0;i<res;i++)
+						T_MoveYR[i] = 0;
+					if (G_MY_RAND||L_MY_RAND)
+					for(int i=0;i<res;i++)
 					{
-						brush &Brush = dGroup.Brushes[b];
-						int sec = Brush.SecID;
-						Brush.RotOrigin(0,0,degZR[sec],IndiOrigin[sec]);
+						if (G_MY_RAND&&!L_MY_RAND)
+							T_MoveYR[i] = GetRandInRange(cTable[g].d_movey_rand.y,cTable[g].d_movey_rand.z);
+						else
+							T_MoveYR[i] = GetRandInRange(dGroup.d_movey_rand.y,dGroup.d_movey_rand.z);
 					}
-					for (int e = 0; e<dGroup.t_ents; e++) // Entities
-					{
-						entity &Entity = dGroup.Entities[e];
-						int sec = Entity.SecID;
-						Euler RotAngles(0,0,degZR[sec]);
-						Entity.RotateEntity(RotAngles,1);
-						Entity.RotateOrigin(0,0,degZR[sec], IndiOrigin[sec]);
-					}
-				}
-				
-				// Rotate around Y (PITCH)
-				if ( cTable[g].height>0 && cTable[g].ramp>0 && cTable[g].type!=2 && ( (G_PITCH&&L_PITCH) || (!G_PITCH&&L_PITCH) ) )
-				{
-					if (dev) cout << " Rotate around Y, d_autopitch is " << dGroup.d_autopitch << endl;
-					// Brushes
-					for (int b = 0; b<dGroup.t_brushes; b++)
-					{
-						brush &Brush = dGroup.Brushes[b];
-						int sec = Brush.SecID;
-						if (dev) cout << "      B " << b << " Sec " << sec << " start " << start << endl;
-						
-						if (dev) cout << "      Creating Ramp!" << endl;
-						int secb = sec+1;
-						if (cTable[g].ramp==2)
-						{
-							gvector VecElev = GetVector(CircElev.Vertices[sec],CircElev.Vertices[secb]);
-							gvector VecBase = VecElev;
-							VecBase.z = 0;
-							if (dev) cout << "        Creating Vector from Vertices "<<sec << CircElev.Vertices[sec] <<" and " << secb << CircElev.Vertices[secb] << " = " << VecElev << endl;
-							degY = GetVecAng(VecElev, VecBase);
-							if (dev) cout << "        Getting Elevation from 2 Vectors VecElev "<< VecElev <<" and VecBase " << VecBase << " = " << -degY << endl;
-							if (dev) cout << "        Pitch of Elev Vector:" << -(degY) << endl;
-						}
-						
-						if ( degY!=0 )
-						{
-							Brush.RotOrigin(0,-(degY),0,IndiOrigin[sec]);//dGroup.Origin
-							if (dev) cout << "        Previously rotating around Y axis and Origin ("<<dGroup.Origin<<") by " << -(degY)  << " degrees!" << endl;
-						}
-					}
-					// Point Entities
-					for (int e = 0; e<dGroup.t_ents; e++)
-					{
-						entity &Entity = dGroup.Entities[e];
-						int sec = Entity.SecID;
-						int secb = sec+1;
-						if (cTable[g].ramp==2)
-						{
-							gvector VecElev = GetVector(CircElev.Vertices[sec],CircElev.Vertices[secb]);
-							gvector VecBase = VecElev;
-							VecBase.z = 0;
-							degY = GetVecAng(VecElev, VecBase);
-						}
-						if ( degY!=0 )
-						{
-							if (d==0&&dev) cout << " DGroup " << d << " t_ents " << dGroup.t_ents << " sec " << sec << " Rot around Y by " << degY  << " deg! Old Euler " << Entity.Angles;
-							Entity.Origin.rotateOrigin(0,-(degY),0,IndiOrigin[sec]);//dGroup.Origin
-							Euler RotAngles(0,-degY,0);
-							Entity.RotateEntity(RotAngles,1);
-							if (d==0&&dev) cout << "New Euler " << Entity.Angles << endl;
-							if (sec==bGroup[g].sections-1&&dev) cout << endl;
-							if (dev) cout << "        Rotating Entity Euler around Y axis and Origin ("<<dGroup.Origin<<") by " << -(degY)  << " degrees! Euler now " << Entity.Angles << endl;
-						}
-					}
-				}
-				
-				// update dgroup origin if N/O Offset is not 0
-				if (offset!=0) {
-					dGroup.GetDimensions(1);
-				}
-				
-				// Rotate around Z axis
-				if (dev) cout << " DGroup " << d << " Rotate around Z, d_autoyaw is " << dGroup.d_autoyaw << " start angle is " << dGroup.d_pos << endl;
-				float OffsetX, OffsetY;
-				for (int b = 0; b<dGroup.t_brushes; b++) // Brushes
-				{
-					brush &Brush = dGroup.Brushes[b];
-					int sec = Brush.SecID;
-					float deg = (step*sec)+init_degZ[sec];
-					vertex OrigBAK = IndiOrigin[sec]; //dGroup.Origin;
-					OrigBAK.rotate(0,0,-deg);
-					OffsetX = OrigBAK.x - IndiOrigin[sec].x; //dGroup.Origin.x;
-					OffsetY = OrigBAK.y - IndiOrigin[sec].y; //dGroup.Origin.y;
-					Brush.Move(OffsetX,OffsetY,0,1);
-					float degB;
-					//cout << " global yaw " << G_YAW << " from cTable " << cTable[g].d_autoyaw << " local yaw " << L_YAW << " from dGroup " << dGroup.d_autoyaw << endl;
+					if (dev) for(int i=0;i<res;i++) cout << " T_MoveYR " << T_MoveYR[i] << endl;
+					
+					// get yaw
 					if ( (G_YAW&&L_YAW) || (!G_YAW&&L_YAW) ) {
-						if (dangle[sec]==0)		degB = -(step*sec);
-						else if (dangle[sec]==1)	degB = -(step*(sec+1));
-						else				degB = -(step*(sec+1)-(step/2));
-						Brush.RotOrigin(0,0,degB,OrigBAK);
-					}
-					if (dev) cout << "      Brush Z Rot (sec "<<Brush.SecID<<" * step "<<step<<") by X " << OffsetX << " Y " << OffsetY << " OrigBAK " << OrigBAK << " degB " << degB  << "  dGroup.Origin " << dGroup.Origin << endl;
-				}
-				for (int e = 0; e<dGroup.t_ents; e++) // Entities
-				{
-					entity &Entity = dGroup.Entities[e];
-					int sec = Entity.SecID;
-					float deg = (step*sec)+init_degZ[sec];
-					vertex OrigBAK = IndiOrigin[sec]; //dGroup.Origin;
-					OrigBAK.rotate(0,0,-deg);
-					OffsetX = OrigBAK.x - IndiOrigin[sec].x; //dGroup.Origin.x;
-					OffsetY = OrigBAK.y - IndiOrigin[sec].y; //dGroup.Origin.y;
-					Entity.Origin.move(OffsetX,OffsetY,0);
-					float degB;
-					if ( (G_YAW&&L_YAW) || (!G_YAW&&L_YAW) ) { // || (G_YAW&&!L_YAW)  //if (cTable[g].d_autoyaw>0 && dGroup.d_autoyaw>0) {
-						if (dangle[sec]==0)		degB = -(step*sec);
-						else if (dangle[sec]==1)	degB = -(step*(sec+1));
-						else				degB = -(step*(sec+1)-(step/2));
-						Entity.Origin.rotateOrigin(0,0,degB,OrigBAK);
-						Euler RotAngles(0,0,degB);
-						Entity.RotateEntity(RotAngles,1);
-					}
-					if (dev) cout << "      Entity Z Rot (sec "<<Entity.SecID<<" * step "<<step<<") by X " << OffsetX << " Y " << OffsetY << " OrigBAK " << OrigBAK << " degB " << degB  << " New Origin " << Entity.Origin << " Euler " << Entity.Angles << endl;
-				}
-				
-				/*dev = 1;
-				if (dev) {
-					cout << " height table of curve #"<<g<<" (adress "<< &bGroup[g].heightTable <<"): " << endl;
-					for (int i = 0; i<bGroup[g].heightTable.size(); i++)
-						cout << "  #" << i << " (adress "<<&bGroup[g].heightTable[i]<<")" << bGroup[g].heightTable[i]<<endl;
-				}*/
-				
-				// Add Z Height
-				for (int b = 0; b<dGroup.t_brushes; b++) // Brushes
-				{
-					brush &Brush = dGroup.Brushes[b];
-					int sec = Brush.SecID;
-					
-					// height (ramp or steps)
-					if ( cTable[g].height>0 && cTable[g].type!=2 )
-					{
-						float height = cTable[g].height * sec;
-						if (dev) cout << " DGroup [" << d << "/"<< Set.t_groups<<"] Brush [" << b << "/" << dGroup.t_brushes <<"] sec " << sec << " start " << start << " sec-start " << sec-start << " end " << end << endl;
-						if (dev) getch();
-						if ( cTable[g].ramp==2 && sec>=start && sec<end )
+						for(int i=0, v=0;i<res;i++)
 						{
-							float height_step = 0;
-							if (dev) cout << " sec " << sec << " htable size " << bGroup[g].heightTable.size() <<endl;
-							if (sec-start>0)	{
-								//if (dev) cout << " AAA heightTable[sec-start] " << bGroup[g].heightTable[sec-start] << " heightTable[sec-start-1] " << bGroup[g].heightTable[sec-start-1] << endl;
-								height_step = bGroup[g].heightTable[sec-start] - bGroup[g].heightTable[sec-start-1];
-							}
+							vertex &V = Spline.Vertices[v];
+							if (T_Pos[i]!=0&&T_Pos[i]!=1)
+								T_Yaw[i] = V.Yaw;
 							else {
-								//if (dev) cout << " BBB height_step = heightTable[sec-start("<<sec-start<<")] " << bGroup[g].heightTable[sec-start] << endl;
-								height_step = bGroup[g].heightTable[sec-start];
+								T_Yaw[i] = V.YawB;
 							}
-							
-							if (sec-start>0) {
-								//if (dev) cout << " CCC height " << height << " = heightTable[sec-start-1("<<sec-start-1<<")] " << bGroup[g].heightTable[sec-start-1] << " + height_step * multi " << height_step * multi << endl;
-								height = bGroup[g].heightTable[sec-start-1] + (height_step * multi[sec]);
-							}
-							else {
-								//if (dev) cout << " DDD height " << height << " = height_step * multi " << height_step * multi << endl;
-								height = height_step * multi[sec];
-							}
-							
-							//if (sec>0&&dev) cout << " height: " << height << " heightTable["<<sec-start<<"] " << bGroup[g].heightTable[sec-start-1] << " + (height_step " << height_step << " * multi " << multi << ")" << endl;
-						} else if (cTable[g].ramp==1 && sec>=start) {
-							height = (cTable[g].height * sec) + (cTable[g].height * multi[sec]);
+							v+=2;
 						}
-						Brush.Move(0,0,height,1);
-						if (dev) cout << "        Adding height to Detail Brush:" << height << endl;
 					}
-				}
-				for (int e = 0; e<dGroup.t_ents; e++) // Entities
-				{
-					entity &Entity = dGroup.Entities[e];
-					int sec = Entity.SecID;
+					if (dev) for(int i=0;i<res;i++) cout << " T_Yaw " << T_Yaw[i] << endl;
 					
-					if ( cTable[g].height>0 && cTable[g].type!=2 )
-					{
-						float height = cTable[g].height * sec;
-						if ( cTable[g].ramp==2 && sec>=start && sec<end )
-						{
-							float height_step = 0;
-							if (sec-start>0)	height_step = bGroup[g].heightTable[sec-start] - bGroup[g].heightTable[sec-start-1];
-							else		height_step = bGroup[g].heightTable[sec-start];
-							if (sec-start>0)
-								height = bGroup[g].heightTable[sec-start-1] + (height_step * multi[sec]);
-							else 
-								height = height_step * multi[sec];
-						} else if (cTable[g].ramp==1 && sec>=start) {
-							height = (cTable[g].height * sec) + (cTable[g].height * multi[sec]);
+					// get random Z axis rotation (offset)
+					if (L_RZ_RAND||G_RZ_RAND) {
+						float min = 0, max = 0;
+						if (G_RZ_RAND&&!L_RZ_RAND) {
+							min = cTable[g].d_rotz_rand.y;
+							max = cTable[g].d_rotz_rand.z;
+						} else {
+							min = dGroup.d_rotz_rand.y;
+							max = dGroup.d_rotz_rand.z;
 						}
-						Entity.Origin.z += height;
+						for(int i=0;i<res;i++) T_YawR[i] = GetRandInRange(min, max);
 					}
-				}
+					if (dev) for(int i=0;i<res;i++) cout << " T_YawR " << T_YawR[i] << endl;
+					
+					// combine Yaw and Random Yaw
+					for(int i=0;i<res;i++)
+						T_YawC[i] = T_Yaw[i] + T_YawR[i];
+					
+					// get pitch
+					if ( ( ( cTable[g].height!=0 && cTable[g].ramp>0 ) || cTable[g].type==2 || cTable[g].type==3) && ( (G_PITCH&&L_PITCH) || (!G_PITCH&&L_PITCH) ) ){
+						for(int i=0, v=0;i<res;i++)
+						{
+							vertex &V = Spline.Vertices[v];
+							T_Pitch[i] = V.Pitch;
+							v+=2; // if (cTable[g].type==2||cTable[g].type==3) v+=2; else v++;
+						}
+					}
+					if (dev) for(int i=0;i<res;i++) cout << " T_Pitch " << T_Pitch[i] << endl;
+					
+					if (dev) cout << " Spline res " << Spline.tverts << " res " << res << endl;
+					// Get new location (XYZ)
+					for(int sec=0,v=0; sec<res; sec++)
+					{
+						float m = T_Pos[sec];
+						vertex &PosA = Spline.Vertices[v];
+						vertex &PosB = Spline.Vertices[v+1];
+						gvector VecOA = GetVector(Origin, PosA);
+						gvector VecAB = GetVector(PosA,PosB);
+						gvector VecAC; 
+						VecAC = VecAB; VecAC.mult(m); if(cTable[g].ramp==0) VecAC.z = 0;
+						gvector VecYR; if(T_Pos[sec]==0.0) VecYR = Spline.InVec[sec]; else if (T_Pos[sec]==1.0&&sec<res-1) VecYR = Spline.InVec[sec+1]; else { VecYR = Normalize(VecAB); VecYR.rotate(0,0,90); }
+						if(T_MoveYR[sec]!=0) VecYR.mult(T_MoveYR[sec]);
+						if (dev) cout << " sec" << sec << " PosA " << PosA << " PosB " << PosB << " VecOA " << VecOA << " VecAB " << VecAB << " VecAC " << VecAC << " VecYR " << VecYR << endl;
+						OriginN[sec] = Add(  Add(  Add(Origin,VecOA), VecAC  ), VecYR  );
+						T_Move[sec] = VecAdd ( VecAdd(VecOA, VecAC), VecYR );
+						v+=2;
+					}
+					if (dev) for(int i=0;i<res;i++) cout << " T_Move " << T_Move[i] << " OriginN " << OriginN[i] << endl;
+				
+				// ================ END ================
+				
+				// move to new Location
+				if (dev) cout << " Moving to new Location..." << endl;
+				dGroup.MoveSecs(T_Move, 1);
+				
+				// Add Yaw R
+				if (dev) cout << " Adding Yaw Random..." << endl;
+				dGroup.RotOriginSecs(Dummy, Dummy, T_YawR, OriginN, 1);
+				
+				// Add Pitch
+				if (dev) cout << " Adding Pitch..." << endl;
+				dGroup.RotOriginSecs(Dummy, T_Pitch, Dummy, OriginN, 1);
+				
+				// Add Yaw
+				if (dev) cout << " Adding Yaw..." << endl;
+				dGroup.RotOriginSecs(Dummy, Dummy, T_Yaw, OriginN, 1);
 			}
 		}
+		
+		// print all
+		if(dev)
+		for (int d = 0; d<Set.t_groups; d++)
+		{
+			group &dGroup = Set.Groups[d];
+			cout << dGroup;
+		}
+		if(dev) getch();
 	}
 }
 
@@ -1602,6 +1444,7 @@ void file::createGroupBrush(int g)
 							Face.fID=2;
 							if (dev) cout << "        Created " << Face.vcount << " new vertices for this face. Face is BODY." << endl;
 						}
+						Face.name = "F"+to_string(f)+"_B"+to_string(b)+"_ID"+to_string(Face.fID)+"_s"+to_string(o)+"/"+to_string(Group.t_brushes-1)+"_S"+to_string(r)+"/"+to_string(cTable[g].res-1);
 					}
 					b++;
 				}
@@ -1609,9 +1452,10 @@ void file::createGroupBrush(int g)
 			}
 		}
 	}
+	if (dev) getch();
 }
 
-void file::LoadPaths(int g)
+void file::LoadSpline(int g)
 {
 	bool dev = 0;
 	int &t_arcs = mGroup->t_arcs;
@@ -1620,9 +1464,9 @@ void file::LoadPaths(int g)
 	
 	if (dev) cout << "Loading Path #"<<g+1<<"..." << endl; if (dev) getch();
 	
-	if (cTable[g].type==2)
+	//if (cTable[g].type==2||cTable[g].type==3)
 	{
-		if (dev) cout << "  Scanning map dir for valid path files ("<<cTable[g].path<<")..." << endl;
+		if (dev) cout << "  Scanning map dir for valid path file ("<<cTable[g].path<<")..." << endl;
 		// scan map dir for valid path files
 		// path file convention: mapfilename_path1.map
 		string filename;
@@ -1636,436 +1480,63 @@ void file::LoadPaths(int g)
 			}
 		}
 		else
-			filename = p_path + name + "_path" + to_string(g+1) +".map";
+		{
+			filename = p_path + name + "_spline" + to_string(g+1) +".map";
+			if(!CheckIfFileExists(filename)&&g>0&&cTable[0].path!="UNSET")
+			filename = cTable[0].path;
+		}
 		
-		if (dev) cout << "  Path-File " << filename << endl;
-		
+		if (dev) cout << "  Spline-File " << filename << " is Valid? ";
 		str_path = LoadTextFile(filename);
+		if (dev) if(str_path=="ERR") cout << " NO!" << endl; else cout << " YES!" << endl; 
 		
 		if (str_path!="ERR")
 		{
-			if (dev) cout << "  Pathfile " << filename << " exists and is now being interpreted..." << endl;
+			cTable[g].path = filename;
+			if (dev) cout << "  Spline file " << filename << " exists and is now being interpreted..." << endl;
 			
-			interpretPathFile(str_path, PathList[g]);
+			ParseCornerFile(str_path, PathList[g]);
+			PathList[g].gID = g;
 			PathList[g].preverse = cTable[g].preverse;
 			PathList[g].cornerFix = cTable[g].cornerfix;
 			PathList[g].type = cTable[g].type;
-			analyzePath(PathList[g]);
+			if (cTable[g].p_scale.IsSet)
+			PathList[g].Scale(cTable[g].p_scale);
+			PathList[g].Analyze();
 			
 			if (PathList[g].valid) {
-				cout << "|    [INFO] Path #"<<g+1<<" ("<<filename<<") successfully loaded!"<< endl;
-				cTable[g].res = PathList[g].t_corners-PathList[g].t_paths+PathList[g].Gaps;
-				if (dev) cout << " Path res now " << cTable[g].res << " (total corners "<<PathList[g].t_corners<< " - total paths "<<PathList[g].t_paths<<" + Gaps "<<PathList[g].Gaps<<")" << endl;if (dev)  getch();
+				cout << "|    [INFO] Spline file #"<<g+1<<" ("<<filename<<") successfully loaded!"<< endl;
+				if (cTable[g].type==2)
+				{
+					cTable[g].res = PathList[g].t_corners-PathList[g].t_paths+PathList[g].Gaps;
+				}
+				else if  (cTable[g].type==3)
+				{
+					cTable[g].res = PathList[g].CountSections();
+				}
+				if (dev) cout << " Path res now " << cTable[g].res << " (if type==2: total corners "<<PathList[g].t_corners<< " - total paths "<<PathList[g].t_paths<<" + Gaps "<<PathList[g].Gaps<<")" << endl;if (dev)  getch();
 			} else {
-				cout << "|    [ERROR] Pathfile " << filename << " does NOT seem to contain path_corner entities!"<< endl;
-				cTable[g].type = 0;
-				cTable[g].res = 12;
-				if (cTable[g].ramp>0&&cTable[g].height>0) cTable[g].tri = 1;
+				cout << "|    [ERROR] Spline file #"<<g+1<<" ("<<filename<<") contains invalid information!"<< endl;
+				PathList[g].valid = 0;
+				sGroup[g].ValidSpline = 0;
+				cTable[g].heightmode = 0;
+				if (  cTable[g].type==3 || cTable[g].type==2  )
+				sGroup[g].valid = 0;
 			}
 		}
 		else
 		{
+			cout << "|    [ERROR] Spline file #"<<g+1<<" ("<<filename<<") does NOT exist!" << endl;
 			PathList[g].valid = 0;
-			cTable[g].type = 0;
-			cTable[g].res = 12;
-			if (cTable[g].ramp>0&&cTable[g].height>0) cTable[g].tri = 1;
-			cout << "|    [ERROR] Pathfile " << filename << " does NOT exist!" << endl;
+			sGroup[g].ValidSpline = 0;
+			cTable[g].heightmode = 0;
+			if (  cTable[g].type==3 || cTable[g].type==2  )
+			sGroup[g].valid = 0;
 		}
 	}
+	if(dev)getch();
 }
 
-void interpretPathFile(string pFile, path_set &PathList)
-{
-	bool dev = 0;
-	//circleset PathList;
-	string p_corner = "\"classname\" \"path_corner\"";
-	string str_origin = "\"origin\""; // +10
-	string str_name = "\"targetname\""; // +14
-	string str_target = "\"target\""; // +10
-	string number = "-0123456789";
-	string spacer = " ";
-	string newline = "\n";
-	string qmark = "\"";
-	
-	if (pFile.length()>0&&pFile.find(p_corner)!=-1)
-	{
-		// count path_corner
-		if(dev) cout << "count path_corner..." << endl;
-		int pcount=0;
-		int find = 0, last = 0;
-		while (find!=-1)
-		{
-			find = pFile.find(p_corner, last);
-			if (find!=-1) {pcount++; last = find+1;}
-			else break;
-			//cout << "    find " << find << endl;
-		}
-		path_corner pCorner[pcount];
-		
-		if(dev) cout << "total path_corner: " << pcount << endl;
-		PathList.t_corners = pcount;
-		if(dev) getch();
-		
-		// extract path_corner properties
-		if(dev) cout << "extract path_corner properties..." << endl;
-		for (int i = 0, s=0,e=0,l=0; i<pcount; i++)
-		{
-			string str_x,str_y,str_z;
-			int x_start,x_end,y_start,y_end,z_start,z_end,name_start,name_end,tar_start,tar_end;
-			s = pFile.find(p_corner,l);
-			e = pFile.find("}",s);
-			
-			x_start = pFile.find(str_origin, s)+10;
-			x_end = pFile.find(spacer,x_start);
-			str_x = pFile.substr(x_start,x_end-x_start);
-			
-			y_start = x_end+1;
-			y_end = pFile.find(spacer,y_start);
-			str_y = pFile.substr(y_start,y_end-y_start);
-			
-			z_start = y_end+1;
-			z_end = pFile.find(qmark,z_start);
-			str_z = pFile.substr(z_start,z_end-z_start);
-			
-			pCorner[i].pos.x = stof(str_x);
-			pCorner[i].pos.y = stof(str_y);
-			pCorner[i].pos.z = stof(str_z);
-			
-			name_start = pFile.find(str_name, s)+14;
-			name_end = pFile.find(qmark, name_start);
-			pCorner[i].name = pFile.substr(name_start,name_end-name_start);
-			
-			tar_start = pFile.find(str_target, l)+14;
-			tar_end = pFile.find(qmark, tar_start);
-			if (tar_start<e)
-			pCorner[i].target = pFile.substr(tar_start,tar_end-tar_start);
-			
-			if(dev) cout << "   path "<<i<<" name " << pCorner[i].name << " coords" << pCorner[i].pos << " target " << pCorner[i].target << endl;
-			
-			l = e+1;
-		}
-		if(dev) getch();
-		
-		// assign path ID to paths, if there is more than one path (first pathname without counter (01) identifies a new path)
-		if(dev) cout << "assign path ID to paths..." << endl;
-		string c_phrase = pCorner[0].name;
-		int c_phrase_len = pCorner[0].name.length();
-		int c_pID = 0;
-		for (int i = 0; i<pcount; i++)
-		{
-			int c_name_len = pCorner[i].name.length();
-			int c_phrase_pos = pCorner[i].name.find(c_phrase); // current phrase found pos
-			
-			// looking for "path1" (could find it in path11, path1101, path11101, etc.)
-			if (c_phrase_pos==-1 || (c_phrase_pos==0&&c_name_len==c_phrase_len+1) )
-			// if current search phrase (path1) wasnt found (path2) OR it was found, but current name is 1 digit longer than search phrase (e.g. path11), this is probably a new path
-			{
-				c_phrase = pCorner[i].name;
-				c_phrase_len = pCorner[i].name.length();
-				c_pID++;
-				pCorner[i].pID = c_pID;
-			}
-			// result belongs to e.g. path1 if result is at least 2 digits longer than path1, e.g. path101 (1. point), path1102 (102. points), etc.
-			else if (c_phrase_pos==0 && c_name_len>=c_phrase_len+2 ) // if current phrase (e.g. "path1") is found at Pos0 and its length is at least 2 digits longer than current phrase (e.g. "path101")
-			{
-				pCorner[i].pID = c_pID;
-			}
-			if(dev) cout << "    path " << i << " name " << pCorner[i].name << " ID " << pCorner[i].pID << endl;
-		}
-		if(dev) getch();
-		
-		int tpaths = c_pID+1;
-		int vcount[tpaths]; for (int i = 0; i<tpaths; i++) vcount[i] = 0;
-		// count vertices of each path ID
-		if(dev) cout << "count vertices of each path ID..." << endl;
-		for (int i = 0; i<pcount; i++)
-		{
-			vcount[pCorner[i].pID]++;
-			if(dev) cout << "    current vertex counter " << vcount[pCorner[i].pID] << endl;
-		}
-		
-		if(dev)
-		for (int i = 0; i<c_pID+1; i++) {
-			if(dev) cout << "    path " << i << " vertex amount " << vcount[i] << endl; }
-		if(dev) getch();
-		
-		// finally fill the path corners into the files circleset
-		if(dev) cout << "finally fill the path corners into the files circleset..." << endl;
-		PathList.t_paths = c_pID+1;
-		PathList.Paths = new path[c_pID+1];
-		for (int s = 0, p=0; s<PathList.t_paths; s++) // circle loop
-		{
-			path &Path = PathList.Paths[s];
-			Path.t_corners = vcount[s];
-			Path.Corners = new path_corner[vcount[s]];
-			for (int v = 0; v<Path.t_corners; v++)
-			{
-				Path.Corners[v] = pCorner[p];
-				p++;
-			}
-		}
-		
-		// get height of all corners and create a height table from it
-		for (int s = 0, h=0; s<PathList.t_paths; s++) // path loop
-		{
-			path &Path = PathList.Paths[s];
-			for (int v = 0; v<Path.t_corners; v++) // corner loop
-			{
-				path_corner &Corner = Path.Corners[v];
-				if (v==0) 	PathList.heightTable.push_back(Corner.pos.z);
-				else		PathList.heightTable.push_back(Corner.pos.z-Path.Corners[v-1].pos.z);
-				if(dev) cout << " Path #" << s << " Corner#" << v << " relative height: " << PathList.heightTable[h] << endl;
-				h++;
-			}
-		}
-		PathList.valid = 1;
-		
-		if(dev) getch();
-		//return true;
-	}
-	else PathList.valid = 0;
-	//else return false;
-}
-
-
-void file::analyzePath(path_set &List)
-{
-	//cout << " Analyzing Path Set with " << List.t_paths<< " paths in it... " << endl;
-	for (int p = 0; p<List.t_paths; p++) // path loop
-	{
-		path &Path = List.Paths[p];
-		
-		// determine starting direction of this path (not needed ATM)
-		//float StartAngle = GetVecAlign( GetVector(Path.Corners[0].pos, Path.Corners[1].pos) ,0);
-		//if ( StartAngle>90&&StartAngle<270) {Path.direct = 0;} //cout << " Path direction is backwards!" << endl;}
-		//else cout << " Path direction is forwards! " << endl;
-		
-		if (List.preverse) {Path.reverse();}// cout << " Path IS being reversed! " << endl; } else cout << " Path NOT reversed! " << endl;
-		
-		// determine angle of all sections
-		for (int c = 0; c<Path.t_corners; c++) // corner loop
-		{
-			if (c<Path.t_corners-1)
-			{
-				path_corner &Corner1 = Path.Corners[c];
-				path_corner &Corner2 = Path.Corners[c+1];
-				
-				// Angle
-				gvector Edge = GetVector(Corner1.pos, Corner2.pos);
-				Corner1.Yaw = GetVecAlign(Edge, 0);
-				//cout << " Corner #"<<c<< " Name " << Corner1.name << " Yaw " << Corner1.Yaw << endl;
-				
-				// relative Height
-				Corner1.step = Corner2.pos.z-Corner1.pos.z;
-				//cout << " Path " << p << " Corner " << c << " of "<<Path.t_corners<<" step " << Corner1.step << " (Corner2.z "<<Corner2.pos.z<<" - Corner1.z "<<Corner1.pos.z<<")" << endl;
-				
-				if (c<Path.t_corners-2)
-				{
-					path_corner &Corner3 = Path.Corners[c+2];
-					gvector Edge2 = GetVector(Corner2.pos, Corner3.pos);
-					//cout << " Edge Angle " << GetVecAng(Edge, Edge2) << endl;
-					
-					// Determine whether next section is heading left or right
-					gvector Vec_Yaw = Edge2;
-					Vec_Yaw.rotate(0,0,-(Corner1.Yaw));
-					float Check_Yaw = GetVecAlign(Vec_Yaw,0);
-					if (Check_Yaw>180) Corner1.NextIsCW = 1;
-					//cout << "    Check_Yaw " <<Check_Yaw; if (Corner1.NextIsCW) cout << " Clockwise! " << endl; else cout << " Counter Clockwise! " << endl;
-				}
-			}
-		}
-		
-		// determine section-align (0,90,180,270)
-		if (List.type==2)
-		for (int c = 0; c<Path.t_corners; c++) // corner loop
-		{
-			// 45-315	0	UP
-			// 225-315	270	RIGHT
-			// 135-225	180 DOWN
-			// 45-135	90	LEFT
-			path_corner &Corner = Path.Corners[c];
-			int CornerYaw = round(Corner.Yaw);
-			if 		(CornerYaw>=315||CornerYaw<45)  /*UP*/    {Corner.Align = 0;}
-			else if (CornerYaw>=225&&CornerYaw<315) /*RIGHT*/ {Corner.rot1 = 270; Corner.rot2 = 270; Corner.Align = 1;}
-			else if (CornerYaw>=135&&CornerYaw<225) /*DOWN*/  {Corner.rot1 = 180; Corner.rot2 = 180; Corner.Align = 2;}
-			else if (CornerYaw>=45 &&CornerYaw<135) /*LEFT*/  {Corner.rot1 = 90;  Corner.rot2 = 90;  Corner.Align = 3;}
-		}
-		
-		// get worldalign of each section - changes if aligns of 2 sections differ by 90 or 180 degree
-		//cout << "Fix cutting edge rotations and mark gaps..." << endl;
-		if (List.type==2)
-		for (int c = 0; c<Path.t_corners-2; c++) // corner loop
-		{
-			path_corner &Corner = Path.Corners[c];
-			path_corner &CornerN = Path.Corners[c+1];
-			path_corner &CornerN2 = Path.Corners[c+2];
-			int CornerYaw = round(Corner.Yaw);
-			int CornerNYaw = round(CornerN.Yaw);
-			
-			bool AngleIs45 = 0;  if (CornerYaw==45||CornerYaw==135||CornerYaw==225||CornerYaw==315) AngleIs45=1;
-			bool AngleNIs45 = 0; if (CornerNYaw==45||CornerNYaw==135||CornerNYaw==225||CornerNYaw==315) AngleNIs45=1;
-			//cout << " Section #"<<c+1<<" has "; if (!AngleNIs45) cout <<"NO "; cout<<" 45 degree Angle! ("<< CornerNYaw <<")" << endl;
-			
-			float YawDiff = CornerYaw-CornerNYaw; if (YawDiff<0) YawDiff*=-1;
-			bool YawDiffIsClean = 0; if (YawDiff==90||YawDiff==270||YawDiff==45) YawDiffIsClean = 1;
-			int Diff = CornerN.Align-Corner.Align; Diff = sqrt(pow(Diff,2)); // difference in world align
-			
-			// Hor Length between these two Corners (must be bigger than mesh size for clean 45 degree Corner)
-			vertex FlatPos 		= Corner.pos; FlatPos.z = 0;
-			vertex FlatPosN 	= CornerN.pos; FlatPosN.z = 0;
-			vertex FlatPosN2 	= CornerN2.pos; FlatPosN2.z = 0;
-			float CornerDist  	= GetVecLen(GetVector( FlatPos, FlatPosN ));
-			float CornerNDist 	= GetVecLen(GetVector( FlatPosN, FlatPosN2 ));
-			float size = mGroup->SizeY;
-			bool CornerDistIsValid  = 0; if (pow(CornerDist,2)/2>=pow(size,2)) CornerDistIsValid = 1;
-			bool CornerNDistIsValid = 0; if (pow(CornerNDist,2)/2>=pow(size,2)) CornerNDistIsValid = 1;
-			bool Plain = 0; if (Corner.pos.z==CornerN.pos.z) Plain = 1;
-			bool PlainN = 0; if (CornerN.pos.z==CornerN2.pos.z) PlainN = 1;
-			//cout << "    Size: " << size << " CornerDist " << CornerDist << "( " << FlatPos << ", " << FlatPosN << ")" << " CornerDistIsValid " << CornerDistIsValid << " ( "<<pow(CornerDist,2)/2<< " >= " << pow(size,2)<<")" << endl;
-			//cout << "  Corner #" << c << " Align " << Corner.Align <<" Angle " << static_cast<int>(Corner.Yaw)<< " Align Next "<<CornerN.Align<<" Angle Next "<<CornerN.Yaw<<" Difference "<< Diff <<" rot1 " << Corner.rot1 << " rot2 " << Corner.rot2;
-			//cout << "  Corner #" << c << " Yaw "<< static_cast<int>(Corner.Yaw);
-			//cout << " #"<<c<<" YawDiff " << static_cast<int>(YawDiff) << " Yaw " << static_cast<int>(Corner.Yaw) << " AngleIs45 " << AngleIs45 << " YawN " << static_cast<int>(CornerN.Yaw) << " AngleNIs45 " << AngleNIs45 << endl;
-			//cout << "    Section #"<<c<< " Name " << Corner.name << " Diff " << Diff << " ("<<CornerN.Align<<"-"<<Corner.Align<<") " << " has "; if (!AngleIs45) cout <<"NO "; cout<<" 45 degree Angle! ("<< CornerYaw <<") Next is "; if (Corner.NextIsCW) cout<< " CLOCKWISE! " << endl; else cout <<" NOT CLOCKWISE!" << endl;
-			if (Diff==1||Diff==3)
-			{
-				/*
-				if (AngleIs45&&AngleNIs45&&YawDiffIsClean)
-				{
-					if (!Corner.NextIsCW)
-					CornerN.rot1 -= 90;
-					else
-					Corner.rot2 -= 90;
-				}
-				else if (!AngleIs45&&AngleNIs45&&!Corner.NextIsCW)
-				{
-					CornerN.rot1 -= 90;
-				}
-				//else if (!AngleIs45&&AngleNIs45&&Corner.NextIsCW)
-				//{
-				//	CornerN.rot1 += 90;
-				//}
-				else if (AngleIs45&&!AngleNIs45&&Corner.NextIsCW)
-				{
-					Corner.rot2 -= 90;
-				}
-				else if (!AngleIs45&&!AngleNIs45)
-				{
-					if (List.cornerFix || (!List.cornerFix&&Corner.NextIsCW))
-					{
-						// if world align of 2 sections differs by 90 degree
-						Corner.NextIsGap90 = 1;
-						List.Gaps++;
-						//cout << "  Corner #"<<c<<" Diff 90 deg, ADDING GAP! Gaps now: " << List.Gaps << " cornerfix" << List.cornerFix << endl;
-					}
-				}
-				else
-				{
-					if (List.cornerFix || (!List.cornerFix&&Corner.NextIsCW))
-					{
-						Corner.NextIsGap90 = 1;
-						List.Gaps++;
-						//cout << "  Corner #"<<c<<" Diff 90 deg, ADDING GAP! Gaps now: " << List.Gaps << " cornerfix" << List.cornerFix << endl;
-					}
-				}*/
-				
-				if (AngleIs45&&AngleNIs45&&CornerDistIsValid&&Plain&&PlainN)
-				{
-					if (Corner.NextIsCW)
-					{
-						//cout << "    C45 N45 CW" << endl;
-						Corner.rot2  -= 90;
-					}
-					else 
-					{
-						//cout << "    C45 N45 CCW" << endl;
-						CornerN.rot1 -= 90;
-					}
-				}
-				else if (!AngleIs45&&AngleNIs45&&!Corner.NextIsCW&&CornerNDistIsValid&&PlainN)
-				{
-					/*if (Corner.NextIsCW)
-					{
-						cout << "    N45 CW" << endl;
-						CornerN.rot1 += 90;
-					}
-					else*/
-					{
-						//cout << "    N45 CCW CornerNDist " << CornerNDist << " size " << size <<  endl;
-						CornerN.rot1 -= 90;
-					}
-				}
-				else if (AngleIs45&&!AngleNIs45&&CornerDistIsValid&&Plain&&Corner.NextIsCW)
-				{
-					//if (Corner.NextIsCW)
-					{
-						//cout << "    C45 CW" << endl;
-						Corner.rot2 -= 90;
-					}
-					/*else 
-					{
-						cout << "    C45 CCW" << endl;
-						Corner.rot1 += 90;
-					}*/
-				}
-				else if (List.cornerFix || (!List.cornerFix&&Corner.NextIsCW))
-				{
-					Corner.NextIsGap90 = 1;
-					List.Gaps++;
-					//cout << "    Gap 90" << endl;
-				}
-				//else cout << "    Rule 90 - NO RULE applied!!!" << endl;
-			}
-			else if (Diff==2)
-			{
-				if (AngleIs45&&AngleNIs45&&Plain&&PlainN&&CornerDistIsValid)
-				{
-					if (Corner.NextIsCW)
-					{
-						//cout << "    Rule 180 - C45 N45 CW" << endl;
-						Corner.rot2  -= 90;
-					}
-					else 
-					{
-						//cout << "    Rule 180 - C45 N45 CCW" << endl;
-						Corner.rot2  += 90;
-						CornerN.rot1 -= 90;
-					}
-				}
-				else if (AngleIs45&&!AngleNIs45&&Plain&&CornerDistIsValid&&Corner.NextIsCW)
-				{
-					//if (Corner.NextIsCW)
-					{
-						//cout << "    Rule 180 - C45 CW" << endl;
-						Corner.NextIsGap90 = 1;
-						List.Gaps++;
-						Corner.rot2  -= 90;
-					}
-					/*else 
-					{
-						cout << "    Rule 180 - C45 CCW" << endl;
-						Corner.rot2  += 90;
-						CornerN.rot1 -= 90;
-					}*/
-				}
-				// if world align of 2 sections differs by 180 degree
-				else if (List.cornerFix || (!List.cornerFix&&Corner.NextIsCW))
-				{
-					Corner.NextIsGap180 = 1;
-					List.Gaps+=2;
-					//cout << "  Corner #"<<c<<" Diff 180 deg, ADDING GAP! Gaps now: " << List.Gaps << " cornerfix" << List.cornerFix << endl;
-				}
-				//else cout << "    Rule 180 - NO Rule applied!" << endl;
-			}
-			//else cout << endl;
-		}
-		//cout << endl;
-	}
-}
-
-void path::reverse() {
-	for (int i = 0; i<t_corners/2; i++)
-		swap(Corners[i],Corners[t_corners-1-i]);
-}
 
 void file::roundCoords(int g)
 {
@@ -2081,13 +1552,16 @@ void file::RampIt(int g)
 {
 	bool dev = 0;
 	
-	if ((cTable[g].ramp>0&&cTable[g].height>0)||cTable[g].type==2)
+	if (  cTable[g].ramp>0 && ( cTable[g].height!=0 || cTable[g].heightmode==2 )  )
 	for (int b=0; b<bGroup[g].t_brushes; b++)
 	{
 		brush &Brush = bGroup[g].Brushes[b];
-		if (dev) cout << " creating Ramp of arc " << g << " brush " << b << " type " << cTable[g].type << " height " << cTable[g].height << " ramp " << cTable[g].ramp << endl;
+		int sec = Brush.SecID;
+		int start = bGroup[g].range_start;
+		int end = bGroup[g].range_end;
+		if (dev) cout << " creating Ramp of arc " << g << " brush " << b << "/"<<bGroup[g].t_brushes<<" type " << cTable[g].type << " height " << cTable[g].height << " ramp " << cTable[g].ramp << " step "<< Brush.step << endl;
 		
-		if (Brush.valid&&Brush.draw)
+		if (Brush.valid&&Brush.draw&&!Brush.IsGap&&sec>=start&&sec<end)
 		if (Brush.Tri==nullptr)
 		{
 			if (dev) cout << "  Triangulation inactive!" << endl;
@@ -2118,6 +1592,7 @@ void file::RampIt(int g)
 			}
 		}
 	}
+	if (dev) cout << " Ramp Created!" << endl;
 }
 
 void file::Triangulate(int g)
@@ -2130,410 +1605,78 @@ void file::createFramework(int g)
 {
 	bool dev = 0;
 	if (dev) cout << "Creating Construction Framework..."<<endl;
-	//for (int a = 0; a<mGroup->t_arcs; a++) // arc/circleset loop
+	group &Group = sGroup[g];
+	for (int b = 0; b<Group.t_brushes; b++) // brush loop
 	{
-		group &Group = sGroup[g];
-		for (int b = 0; b<Group.t_brushes; b++) // brush loop
-		{
-			brush &Brush = Group.Brushes[b];
-			if (Brush.valid)
-			{
-				Brush.cset = new circleset; // this set of circles will contain one circle per brush body face
-				
-				int tcircs = Brush.t_faces-2;
-				int res = cTable[g].res;
-				float rad = cTable[g].rad;
-				int type = cTable[g].type;
-				if(dev) cout << "Circle Set #" << g << ", total arcs " << mGroup->t_arcs << ", rad: " << cTable[g].rad << ", res: " << cTable[g].res << ", type: " << cTable[g].type << endl;
-				
-				// Every set of circle gets x circles (x=brushfaces-2)
-				if(dev) cout << "   Creating " << tcircs << " circles for Brush " << b << endl;
-				Brush.cset->c = new circle[tcircs];
-				circleset &Set = *Brush.cset;
-				Set.tcircs = tcircs;
-				
-				if(dev) cout << "   Creating Circle Vertices..." << endl;
-				for (int c = 0; c<tcircs; c++) // circle loop
-				{
-					if (dev) cout << "     basevertID " << Brush.vlist[c] << endl;
-					if (dev) cout << "     smallest Angle " << Brush.Faces[Brush.vlist[c]].vAngle_s << endl;
-					
-					circle &Circle = Set.c[c];
-					Circle.tverts = res;
-					vertex basevert = Brush.Faces[Brush.vlist[c]].Vertices[ Brush.Faces[Brush.vlist[c]].vAngle_s ];
-					Circle.SrcFace = Brush.vlist[c];
-					float yb = Group.Dimensions.yb;
-					float ys = Group.Dimensions.ys;
-					
-					// Every Circle gets x vertices (x=resolution of current arc)
-					float indrad = 0.0; // individual rad, based on basevert y pos and new rad
-					
-					if (rad == yb)
-						indrad = basevert.y; // individual rad, based on basevert y pos and new rad
-					else
-						indrad = basevert.y + (rad - yb); // individual rad, based on basevert y pos and new rad
-					
-					float height = basevert.z;
-					if(dev) cout << "circle-loop #" << c  << ", res: " << res<< ", basevert: " << Brush.Faces[ Brush.vlist[c] ].Vertices[ Brush.Faces[Brush.vlist[c]].vAngle_s ] << ", yb: " << yb <<  endl;
-					
-					// generate Circles
-					if (type==0)
-						Circle.build_circlePi(res,indrad,height);
-					else if (type==1)
-					{
-						//cout << "Attempting to build Grid Circle... (res,rad,height)" << res << "," << indrad << "," << height << endl;
-						Circle.build_circleGrid(res,indrad,height);
-					}
-					else if (type==2)
-					{
-						//cout << " building grid path of arc #" << a << " path " << c << endl;
-						path_set &PSet = PathList[g];
-						Circle.build_pathGrid(g, indrad, height, PSet); // 08.05.2019 changed basevert.y to indrad
-					}
-					if(dev) cout << " Circle " << Circle << endl;
-			}
-			}
-		}
-	}
-	
-	/*
-	for (int b = 0; b<mGroup->t_brushes; b++) // brush loop
-	{
-		brush &Brush = mGroup->Brushes[b];
+		brush &Brush = Group.Brushes[b];
 		if (Brush.valid)
 		{
-			// every Brush gets x sets of circles (x=total arcs)
-			Brush.cset = new circleset[mGroup->t_arcs];
+			Brush.cset = new circleset; // this set of circles will contain one circle per brush body face
 			
-			for (int a = 0; a<mGroup->t_arcs; a++) // arc/circleset loop
+			int tcircs = Brush.t_faces-2;
+			int res = cTable[g].res;
+			float rad = cTable[g].rad;
+			int type = cTable[g].type;
+			if(dev) cout << "Circle Set #" << g << ", total arcs " << mGroup->t_arcs << ", rad: " << cTable[g].rad << ", res: " << cTable[g].res << ", type: " << cTable[g].type << endl;
+			
+			// Every set of circle gets x circles (x=brushfaces-2)
+			if(dev) cout << "   Creating " << tcircs << " circles for Brush " << b << endl;
+			Brush.cset->c = new circle[tcircs];
+			circleset &Set = *Brush.cset;
+			Set.tcircs = tcircs;
+			
+			if(dev) cout << "   Creating Circle Vertices..." << endl;
+			for (int c = 0; c<tcircs; c++) // circle loop
 			{
-				int tcircs = Brush.t_faces-2;
-				int res = cTable[a].res;
-				float rad = cTable[a].rad;
-				int type = cTable[a].type;
-				//cout << "Circle Set #" << a << ", total arcs " << mGroup->t_arcs << ", rad: " << cTable[a].rad << ", res: " << cTable[a].res << ", type: " << cTable[a].type << endl;
+				if (dev) cout << "     basevertID " << Brush.vlist[c] << endl;
+				if (dev) cout << "     smallest Angle " << Brush.Faces[Brush.vlist[c]].vAngle_s << endl;
 				
-				// Every set of circle gets x circles (x=brushfaces-2)
-				Brush.cset[a].c = new circle[tcircs];
-				circleset &Set = Brush.cset[a];
-				Set.tcircs = tcircs;
+				circle &Circle = Set.c[c];
+				Circle.tverts = res;
+				vertex basevert = Brush.Faces[Brush.vlist[c]].Vertices[ Brush.Faces[Brush.vlist[c]].vAngle_s ];
+				Circle.SrcFace = Brush.vlist[c];
+				float yb = Group.Dimensions.yb;
+				float ys = Group.Dimensions.ys;
 				
-				for (int c = 0; c<tcircs; c++) { // circle loop
-					
-					circle &Circle = Set.c[c];
-					Circle.tverts = res;
-					vertex basevert = Brush.Faces[Brush.vlist[c]].Vertices[ Brush.Faces[Brush.vlist[c]].vAngle_s ];
-					Circle.SrcFace = Brush.vlist[c];
-					float biggesty = mGroup->biggestY;
-					float smallesty = mGroup->smallestY;
-					
-					// Every Circle gets x vertices (x=resolution of current arc)
-					float indrad = 0.0; // individual rad, based on basevert y pos and new rad
-					
-					if (rad == biggesty)
-						indrad = basevert.y; // individual rad, based on basevert y pos and new rad
-					else
-						indrad = basevert.y + (rad - biggesty); // individual rad, based on basevert y pos and new rad
-					
-					float height = basevert.z;
-					//if (cTable[a].type==2) height+= 
-					//cout << "circle-loop #" << c  << ", res: " << res<< ", basevert: " << Brush.Faces[ Brush.vlist[c] ].Vertices[ Brush.Faces[Brush.vlist[c]].vAngle_s ] << ", biggesty: " << biggesty <<  endl;
-					
-					// generate Circles
-					if (type==0)
-						Circle.build_circlePi(res,indrad,height);
-					else if (type==1)
-					{
-						//cout << "Attempting to build Grid Circle... (res,rad,height)" << res << "," << indrad << "," << height << endl;
-						Circle.build_circleGrid(res,indrad,height);
-					}
-					else if (type==2)
-					{
-						//cout << " building grid path of arc #" << a << " path " << c << endl;
-						path_set &PSet = PathList[a];
-						Circle.build_pathGrid(indrad, height, PSet); // 08.05.2019 changed basevert.y to indrad
-					}
-					//if (Circle.Vertices[0].x == 0 && Circle.Vertices[0].y == 0) Set.IsTriang = 1;
-					
-					// Check final Circle for Decimal Places
-					/*
-					int &Dplaces = cTable[a].DeciPlaces;
-					int NewDeci = GetDeciPlaces(height);
-					if (NewDeci > Dplaces) Dplaces = NewDeci;
-					for (int j = 0; j<res; j++)
-					{
-						NewDeci = GetDeciPlaces(Circle.Vertices[j].x);
-						
-						if (NewDeci > Dplaces)
-							Dplaces = NewDeci;
-					}*/
-					
-					//cout << "Deciplaces now: " << Dplaces << endl;
-					//cout << "[New Circle] Brush #" << b << ", Arc #" << a << ", Circle #" << c << ", res: " << res << ", rad: " << rad << ", indrad: " << indrad << ", height: " << height << endl;
-					//for (int i = 0; i < res; i++) cout << "#" << i << Circle.Vertices[i] << endl;
-					//cout << endl;
-					//cout << "Circle Done!" << endl;
-				/*
+				// Every Circle gets x vertices (x=resolution of current arc)
+				float indrad = 0.0; // individual rad, based on basevert y pos and new rad
+				
+				if (rad == yb)
+					indrad = basevert.y; // individual rad, based on basevert y pos and new rad
+				else
+					indrad = basevert.y + (rad - yb); // individual rad, based on basevert y pos and new rad
+				
+				float height = basevert.z;
+				if(dev) cout << "circle-loop #" << c  << ", res: " << res<< ", basevert: " << Brush.Faces[ Brush.vlist[c] ].Vertices[ Brush.Faces[Brush.vlist[c]].vAngle_s ] << ", yb: " << yb <<  endl;
+				
+				// generate Circles
+				if (type==0)
+					Circle.build_circlePi(res,indrad,height);
+				else if (type==1)
+				{
+					//cout << "Attempting to build Grid Circle... (res,rad,height)" << res << "," << indrad << "," << height << endl;
+					Circle.build_circleGrid(res,indrad,height);
 				}
-			}
-		}
-	}
-	*/
-}
-
-// calculate the resulting settings for each arc
-void file::createTableC()
-{
-	bool dev = 0;
-	if (dev) cout << "Creating " << mGroup->t_arcs << " Construction Tables..." << endl;
-	
-	// Create construction Tables
-	int &t_arcs = mGroup->t_arcs;
-	if (cTable!=nullptr) {delete[] cTable; if (dev) cout << " Deleting existing cTable, containing " << t_arcs << " objects and creating a new one..." << endl; }
-	cTable = new ctable[t_arcs];
-	
-	// Fill Construction Tables with previously loaded Settings
-	if (dev) cout << "   Filling " << t_arcs << " Construction Tables with previously loaded Settings..." << endl;
-	for (int a = 0; a<t_arcs; a++) {
-		cTable[a] = sTable[a];
-		if (dev) cout << "     Arc " << a << " rad: " << sTable[a].rad << "\t offset: " << sTable[a].offset << "\t type: " << sTable[a].type << "\t res: " << sTable[a].res << "\t shift: " << sTable[a].shift << "\t height: " << sTable[a].height << endl;
-	}
-	
-	// export settings
-	if (cTable[0].target!="UNSET") target = cTable[0].target; else target = dTable[0].target;
-	if (cTable[0].append!=-1) append = cTable[0].append; else append = dTable[0].append;
-	
-	if (dev) cout << "   Evaluate settings..." << endl;
-	// Evaluate settings
-	for (int a = 0; a<t_arcs; a++) // arc loop
-	{
-		// path
-		if 		(a>0&&cTable[a].path=="UNSET") 		cTable[a].path = cTable[a-1].path;
-		
-		// type
-		if 		(a==0&&cTable[0].type<0) 	cTable[0].type = dTable[0].type;	// if first type is 0, set to PI
-		else if (a>0&&cTable[a].type<0) 	cTable[a].type = cTable[a-1].type; // if x-th type is 0, type is same as previous type
-		
-		// obj
-		if 		(a==0&&cTable[0].obj<0) 	cTable[0].obj = dTable[0].obj;	// if first type is 0, set to PI
-		else if (a>0&&cTable[a].obj<0) 		cTable[a].obj = cTable[a-1].obj; // if x-th type is 0, type is same as previous type
-		
-		// rad & offset
-		if 		(cTable[a].rad==0) 			cTable[a].rad = sGroup[a].Dimensions.yb+cTable[a].offset;	// if first rad is 0, set rad to biggest map-y coord + offset
-		else 								cTable[a].rad += cTable[a].offset;
-		float size = sGroup[a].Dimensions.yb - sGroup[a].Dimensions.ys;
-		
-		// if (cTable[a].type<2) // prevent arc radius smaller than 0 or object size if arc type is PI or GRID Circle (paths can have negative source-object coordinates)
-		if ( cTable[a].rad-size <= 0) cTable[a].rad = size; //+cTable[a].offset
-		if ( cTable[a].type==2 )
-		{
-			cTable[a].rad = size+cTable[a].offset;
-			//cout << " FIXING Radius of Grid Path Type source map... Rad currently " << cTable[a].rad << " map Y size " << size << " offset " << cTable[a].offset << endl;
-			if ( cTable[a].rad < size) { cTable[a].rad = size; } //cout << "   Rad bigger than size+offset ("<<size+cTable[a].offset<<") Rad now " << cTable[a].rad << endl; }
-		}
-		sGroup[a].SizeY = size;
-		
-		// original radius offset
-		cTable[a].offset_NO = (cTable[a].rad-(sGroup[a].SizeY/2)) - (mGroup->Dimensions.yb-(mGroup->SizeY/2));   //cTable[a].rad - (sGroup[a].SizeY/2); //mGroup->Dimensions.yb; // sGroup[a].Origin.y
-		
-		//res
-		if (cTable[a].type==0) { // PI Circle Type
-			if 		(a==0&&cTable[0].res<=0) cTable[0].res = dTable[0].res;	// if first res is 0, set to minimum of 8
-			else if (a>0&&cTable[a].res<=0) {
-				float m = cTable[a].rad/cTable[a-1].rad; //cout << "multiplier: " << m << endl;
-				int temp = (m*cTable[a-1].res)/4.0; //cout << "temp (last res/4): " << m << endl;
-				int temp2 = temp*4; //cout << "temp2 (temp*4): " << m << endl;
-				cTable[a].res = temp2; // if x-th res is 0, set it to value based on the current and last radius+offset
-			} else if (a==0&&cTable[0].res>0) {
-				int temp = cTable[a].res/4.0;
-				cTable[a].res = temp*4;
-			}
-			if (cTable[a].res <= 4) cTable[a].res = 4; // always set res to a minimum of 4
-		}
-		else if (cTable[a].type==1) { // grid Circle Type
-		
-			if (a==0&&cTable[a].res<=0)
-				cTable[a].res = 12;							// if first res is 0, set to minimum of 12
-
-			//else if (a>0&&cTable[a].res==-1) cTable[a].res = cTable[a-1].res;
-				
-			else if (a>0&&cTable[a].res<=0)					// if x-th res is 0, get res based on previous res
-			{
-				float m = cTable[a].rad/cTable[a-1].rad;
-				int temp = ((m/2)*cTable[a-1].res);
-				CheckFixRes(temp, 2);
-				cTable[a].res = temp;						// if x-th res is 0, set it to value based on the current and last radius+offset
-			}
-			else if (cTable[a].res>0&&cTable[a].res<7) 		// res 1..6 (12..384)
-			{
-				if (cTable[a].res>1) {						// res 2..6 (24..384)
-					int m = 12;
-					for (int i = 0; i<cTable[a].res-1; i++) {
-						m *= 2;
-					}
-					cTable[a].res = m;
+				else if (type==2)
+				{
+					if(dev)cout << " building simple spline (type 2) of arc #" << g << " spline " << c << endl;
+					if(dev)getch();
+					path_set &PSet = PathList[g];
+					Circle.build_pathGrid(g, indrad, height, PSet);
+					if(dev)cout << Circle << endl;
 				}
-				else cTable[a].res = 12;						// res 1 (12)
-				
+				else if (type==3)
+				{
+					if(dev)cout << " building intersect spline (type 3) of arc #" << g << " spline " << c << endl;
+					if(dev)getch();
+					path_set &PSet = PathList[g];
+					Circle.build_pathIntersect(g, indrad, height, PSet);
+				}
+				if(dev) cout << " Circle " << Circle << endl;
 			}
-			else if (cTable[a].res>=7&&cTable[a].res<=384)		// res 12..384
-				CheckFixRes(cTable[a].res, 2);
 		}
-		
-		// bound
-		if 		(a==0&&cTable[0].bound<0) 	cTable[0].bound = dTable[0].bound;
-		else if (a>0&&cTable[a].bound<0) 	cTable[a].bound = cTable[a-1].bound;
-		
-		// skipnull
-		if 		(a==0&&cTable[0].skipnull<0) 	cTable[0].skipnull = dTable[0].skipnull;
-		else if (a>0&&cTable[a].skipnull<0) 	cTable[a].skipnull = cTable[a-1].skipnull;
-		
-		//shift
-		if 		(a==0&&cTable[0].shift<0) 	cTable[0].shift = dTable[0].shift;
-		else if (a>0&&cTable[a].shift<0) 	cTable[a].shift = cTable[a-1].shift;
-		
-		//ramp
-		if 		(a==0&&cTable[0].ramp<0) 	cTable[0].ramp = dTable[0].ramp;
-		else if (a>0&&cTable[a].ramp<0) 	cTable[a].ramp = cTable[a-1].ramp;
-		
-		//height
-		if 		(a==0&&cTable[0].height<0) 	cTable[0].height = dTable[0].height;
-		else if (a>0&&cTable[a].height<0) 	cTable[a].height = cTable[a-1].height;
-		
-		// tri
-		if 		(a==0&&cTable[0].tri<0) 	cTable[0].tri = dTable[0].tri;
-		else if (a>0&&cTable[a].tri<0) 		cTable[a].tri = cTable[a-1].tri;
-		// in case ramp is being generated, always use triangulation
-		if (cTable[a].ramp>0&&cTable[a].height>0&&cTable[a].type!=2) cTable[a].tri = 1;
-		
-		// round
-		if 		(a==0&&cTable[0].round<0) 	cTable[0].round = dTable[0].round;
-		else if (a>0&&cTable[a].round<0) 	cTable[a].round = cTable[a-1].round;
-		
-		// cornerfix (if type == 2 - Grid Path - fixes overlapping inner corners)
-		if 		(a==0&&cTable[0].cornerfix<0) cTable[0].cornerfix = dTable[0].cornerfix;
-		else if (a>0&&cTable[a].cornerfix<0)  cTable[a].cornerfix = cTable[a-1].cornerfix;
-		
-		// reverse path direction
-		if 		(a==0&&cTable[0].preverse<0) cTable[0].preverse = dTable[0].preverse;
-		else if (a>0&&cTable[a].preverse<0)  cTable[a].preverse = cTable[a-1].preverse;
-		
-		// ramptex - set horizontal texturing mode for ramps
-		if 		(a==0&&cTable[0].ramptex<0) cTable[0].ramptex = dTable[0].ramptex;
-		else if (a>0&&cTable[a].ramptex<0)  cTable[a].ramptex = cTable[a-1].ramptex;
-		
-		// split - determine whether a path gets split into little pieces or stays whole on export
-		if 		(a==0&&cTable[0].psplit<0) cTable[0].psplit = dTable[0].psplit;
-		else if (a>0&&cTable[a].psplit<0)  cTable[a].psplit = cTable[a-1].psplit;
-		
-		//range_start
-		if 		(a==0&&cTable[0].range_start==-1) 	cTable[0].range_start = dTable[0].range_start;
-		else if (a>0&&cTable[a].range_start==-1) 	cTable[a].range_start = cTable[a-1].range_start;
-		
-		//range_end
-		if 		(a==0&&cTable[0].range_end==-1) 	cTable[0].range_end = dTable[0].range_end;
-		else if (a>0&&cTable[a].range_end==-1) 		cTable[a].range_end = cTable[a-1].range_end;
-		
-		// range fix
-		if 		(cTable[a].range_start>cTable[a].range_end) 	cTable[a].range_start=0;
-		if 		(cTable[a].range_end<cTable[a].range_start) 	cTable[a].range_end=100;
-		
-		//transit_tri
-		if 		(a==0&&cTable[0].transit_tri<0) cTable[0].transit_tri = dTable[0].transit_tri;
-		else if (a>0&&cTable[a].transit_tri<0)  cTable[a].transit_tri = cTable[a-1].transit_tri;
-		
-		//transit_round
-		if 		(a==0&&cTable[0].transit_round<0) cTable[0].transit_round = dTable[0].transit_round;
-		else if (a>0&&cTable[a].transit_round<0)  cTable[a].transit_round = dTable[a-1].transit_round; // ??????
-		
-		// gaps
-		if 		(a==0&&cTable[0].gaps<0) 	cTable[0].gaps = dTable[0].gaps;
-		else if (a>0&&cTable[a].gaps<0) 	cTable[a].gaps = cTable[a-1].gaps;
-		
-		// scale
-		if 		(a==0&&!cTable[0].scale.IsSet) 	cTable[0].scale = dTable[0].scale;
-		else if (a>0&&!cTable[a].scale.IsSet) 	cTable[a].scale = dTable[0].rot_src;//cTable[a-1].scale;
-		
-		// scale_src
-		if 		(a==0&&!cTable[0].scale_src.IsSet) 	cTable[0].scale_src = dTable[0].scale_src;
-		else if (a>0&&!cTable[a].scale_src.IsSet) 	cTable[a].scale_src = dTable[0].rot_src;//cTable[a-1].scale_src;
-		
-		// rot
-		if 		(a==0&&!cTable[0].rot.IsSet) 	cTable[0].rot = dTable[0].rot;
-		else if (a>0&&!cTable[a].rot.IsSet) 	cTable[a].rot = dTable[0].rot_src;//cTable[a-1].rot;
-		
-		// rot_src
-		if 		(a==0&&!cTable[0].rot_src.IsSet) 	cTable[0].rot_src = dTable[0].rot_src;
-		else if (a>0&&!cTable[a].rot_src.IsSet) 	cTable[a].rot_src = dTable[0].rot_src;//cTable[a-1].rot_src;
-		
-		// move
-		if 		(a==0&&!cTable[0].move.IsSet) 	cTable[0].move = dTable[0].move;
-		else if (a>0&&!cTable[a].move.IsSet) 	cTable[a].move = dTable[0].rot_src;//cTable[a-1].move;
-		
-		// gaplen
-		if 		(a==0&&cTable[0].gaplen<0) 	cTable[0].gaplen = dTable[0].gaplen;
-		else if (a>0&&cTable[a].gaplen<0) 	cTable[a].gaplen = cTable[a-1].gaplen;
-		
-		// d_enable
-		if 		(a==0&&cTable[0].d_enable<0) 	cTable[0].d_enable = dTable[0].d_enable;
-		else if (a>0&&cTable[a].d_enable<0) 	cTable[a].d_enable = cTable[a-1].d_enable;
-		
-		// d_autoyaw
-		if 		(a==0&&cTable[0].d_autoyaw<0) 	cTable[0].d_autoyaw = dTable[0].d_autoyaw;
-		else if (a>0&&cTable[a].d_autoyaw<0) 	cTable[a].d_autoyaw = cTable[a-1].d_autoyaw;
-		
-		// d_autopitch
-		if 		(a==0&&cTable[0].d_autopitch<0) 	cTable[0].d_autopitch = dTable[0].d_autopitch;
-		else if (a>0&&cTable[a].d_autopitch<0) 		cTable[a].d_autopitch = cTable[a-1].d_autopitch;
-		
-		// d_pos
-		if 		(a==0&&cTable[0].d_pos<0) 	cTable[0].d_pos = dTable[0].d_pos;
-		else if (a>0&&cTable[a].d_pos<0) 		cTable[a].d_pos = cTable[a-1].d_pos;
-		
-		// d_separate
-		if 		(a==0&&cTable[0].d_separate<0) 		cTable[0].d_separate = dTable[0].d_separate;
-		else if (a>0&&cTable[a].d_separate<0) 		cTable[a].d_separate = cTable[a-1].d_separate;
-		
-		// d_autoname
-		if 		(a==0&&cTable[0].d_autoname<0) 		cTable[0].d_autoname = dTable[0].d_autoname;
-		else if (a>0&&cTable[a].d_autoname<0) 		cTable[a].d_autoname = cTable[a-1].d_autoname;
-		
-		// nulltex
-		if 		(a==0&&cTable[0].nulltex=="UNSET") 	cTable[0].nulltex = dTable[0].nulltex;
-		if 		(a>0&&cTable[a].nulltex=="UNSET") 	cTable[a].nulltex = cTable[a-1].nulltex;
-		
-		// spike_height
-		if 		(a==0&&cTable[0].spike_height<0) 	cTable[0].spike_height = dTable[0].spike_height;
-		else if (a>0&&cTable[a].spike_height<0) 	cTable[a].spike_height = cTable[a-1].spike_height;
-		
-		// d_pos_rand
-		if 		(a==0&&!cTable[0].d_pos_rand.IsSet) 	cTable[0].d_pos_rand = dTable[0].d_pos_rand;
-		else if (a>0&&!cTable[a].d_pos_rand.IsSet) 	cTable[a].d_pos_rand = cTable[a-1].d_pos_rand;
-		
-		// d_rotz_rand
-		if 		(a==0&&!cTable[0].d_rotz_rand.IsSet) 	cTable[0].d_rotz_rand = dTable[0].d_rotz_rand;
-		else if (a>0&&!cTable[a].d_rotz_rand.IsSet) 	cTable[a].d_rotz_rand = cTable[a-1].d_rotz_rand;
-		
-		// d_movey_rand
-		if 		(a==0&&!cTable[0].d_movey_rand.IsSet) 	cTable[0].d_movey_rand = dTable[0].d_movey_rand;
-		else if (a>0&&!cTable[a].d_movey_rand.IsSet) 	cTable[a].d_movey_rand = cTable[a-1].d_movey_rand;
-		
-		// d_draw
-		if 		(a==0&&cTable[0].d_draw<0) 	cTable[0].d_draw = dTable[0].d_draw;
-		else if (a>0&&cTable[a].d_draw<0) 	cTable[a].d_draw = cTable[a-1].d_draw;
-		
-		// d_skip
-		if 		(a==0&&cTable[0].d_skip<0) 	cTable[0].d_skip = dTable[0].d_skip;
-		else if (a>0&&cTable[a].d_skip<0) 	cTable[a].d_skip = cTable[a-1].d_skip;
-
-		// d_draw_rand
-		if 		(a==0&&cTable[0].d_draw_rand<0) cTable[0].d_draw_rand = dTable[0].d_draw_rand;
-		else if (a>0&&cTable[a].d_draw_rand<0) 	cTable[a].d_draw_rand = cTable[a-1].d_draw_rand;
-		
-		if (dev) cout << "     Arc " << a << " rad: " << cTable[a].rad << "\t offset: " << cTable[a].offset << "\t type: " << cTable[a].type << "\t res: " << cTable[a].res << "\t shift: " << cTable[a].shift << "\t height: " << cTable[a].height /*<< "\t tri: " << cTable[a].tri << "\t ramp: " << cTable[a].ramp << "\t round: " << cTable[a].round*/ << endl;
 	}
 }
-
 
 void file::LoadMap_GetEntities()
 {
@@ -2699,10 +1842,10 @@ void file::LoadMap_GetEntities()
 		cout << "   #" << i << " " << Entity.groupname << endl;}
 	}
 	
-	dmGroup = new group[t_dgroups]; // create original detail object group
+	mDetailGroup = new group[t_dgroups]; // create original detail object group
 	if (dev) cout << "Created " << t_dgroups << " detail object groups! " << endl;
 	for (int i = 0; i<t_dgroups; i++)
-		dmGroup[i].IsSrcMap = 1;
+		mDetailGroup[i].IsSrcMap = 1;
 	
 	// get total amount of map brushes
 	for (int i = 0; i<EntityList.size(); i++)
@@ -2757,33 +1900,33 @@ void file::LoadMap_GetEntities()
 	// get total amount of brushes and entities for each detail group
 	for (int dg = 0; dg<t_dgroups; dg++)
 	{
-		group &dGroup = dmGroup[dg];
+		group &dGroup = mDetailGroup[dg];
 		for (int i = 0; i<EntityList.size(); i++)
 		{
 			entity &Entity = EntityList[i];
 			int dID = Entity.dID;
 			
 			if (Entity.IsDetail && Entity.dID==dg)
-			dmGroup[dID].t_brushes += Entity.t_brushes;
+			mDetailGroup[dID].t_brushes += Entity.t_brushes;
 			
 			if (Entity.type==2 && Entity.IsDetail && Entity.dID==dg && Entity.key_classname!="info_detailgroup" && Entity.key_classname!="info_curve")
-			dmGroup[dID].t_ents++;
+			mDetailGroup[dID].t_ents++;
 		}
-		if (dev) cout << " Total Brushes for Detail Group " << dg << " - " << dmGroup[dg].t_brushes << endl;
-		if (dev) cout << " Total Entities for Detail Group " << dg << " - " << dmGroup[dg].t_ents << endl;
+		if (dev) cout << " Total Brushes for Detail Group " << dg << " - " << mDetailGroup[dg].t_brushes << endl;
+		if (dev) cout << " Total Entities for Detail Group " << dg << " - " << mDetailGroup[dg].t_ents << endl;
 	}
 	
 	// create Point Entities for Detail Groups
 	for (int dg = 0; dg<t_dgroups; dg++)
 	{
-		group &dGroup = dmGroup[dg];
+		group &dGroup = mDetailGroup[dg];
 		dGroup.Entities = new entity[dGroup.t_ents];
 	}
 	
 	// copy point entities that are part of a detail group to the respective detail group
 	for (int dg = 0, ed = 0; dg<t_dgroups; dg++)
 	{
-		group &dGroup = dmGroup[dg];
+		group &dGroup = mDetailGroup[dg];
 		for (int e = 1; e<EntityList.size(); e++)
 		{
 			entity &Source = EntityList[e];
@@ -2817,7 +1960,7 @@ void file::LoadMap_GetEntities()
 	if (dev) cout << "  Scanning all entities of a detail group for property keyvalues..." << endl;
 	for (int d = 0; d<t_dgroups; d++)
 	{
-		group &dGroup = dmGroup[d];
+		group &dGroup = mDetailGroup[d];
 		if (dev) cout << "     Detail Group #" << d << " total point ents " << dGroup.t_ents << " total brushes " << dGroup.t_brushes << endl;
 		for (int i = 0; i<EntityList.size(); i++)
 		{
@@ -2897,7 +2040,7 @@ void file::TransformSource()
 			Group.RoundBrushVertices(1);
 			
 			// Detail Objects
-			group_set &Set = dSet[g];
+			group_set &Set = sDetailSet[g];
 			for (int d = 0; d<t_dgroups; d++)
 			{
 				group &dGroup = Set.Groups[d];
@@ -3003,7 +2146,7 @@ void file::TransformFinal(int g)
 	// detail groups
 	for (int d = 0; d<t_dgroups; d++)
 	{
-		group &Group = dSet[g].Groups[d];
+		group &Group = DetailSet[g].Groups[d];
 		for (int b = 0; b<Group.t_brushes; b++)
 		{
 			brush &Brush = Group.Brushes[b];
@@ -3321,66 +2464,134 @@ void file::LoadMap_ConvertWorld2Face()
 	}
 }
 
-void file::createDetailGroup()
+void file::createDetailGroupSource()
 {
 	bool dev = 0;
+	int t_arcs = mGroup->t_arcs;
+	sDetailSet = new group_set[t_arcs];
 	
-	// create final detail object group
-	if (dev) cout << " Creating final detail object group..." << endl;
-	dSet = new group_set[mGroup->t_arcs];
-	if (dev) cout << "   " << mGroup->t_arcs << " Group Sets created!" << endl;
-	for (int s = 0; s<mGroup->t_arcs; s++)
+	// create source detail groups
+	for (int a = 0; a<t_arcs; a++)
 	{
-		group_set &Set = dSet[s];
+		group_set &Set = sDetailSet[a];
 		Set.Groups = new group[t_dgroups];
 		Set.t_groups = t_dgroups;
-		if (dev) cout << "     " << t_dgroups << " Detail groups created inside Set #"<<s<<"!" << endl;
-		
 		for (int d = 0; d<Set.t_groups; d++)
 		{
-			if (dev) cout << "       brushcount is res "<< cTable[s].res <<" * " << " dmGroup.t_brushes " << dmGroup[d].t_brushes << " = " << cTable[s].res * dmGroup[d].t_brushes << endl;
 			group &dGroup = Set.Groups[d];
 			
 			// detail group properties
-			dGroup.CopyProps(dmGroup[d]);
+			dGroup.CopyProps(mDetailGroup[d]);
 			
 			// solid entities
-			int brushcount = cTable[s].res * dmGroup[d].t_brushes;
+			int brushcount 		= mDetailGroup[d].t_brushes;
+			dGroup.Brushes 		= new brush[ brushcount ];
+			dGroup.t_brushes 	= brushcount;
+			
+			// point entities
+			int entcount 		= mDetailGroup[d].t_ents;
+			dGroup.Entities 	= new entity[ entcount ];
+			dGroup.t_ents 		= entcount;
+			dGroup.Dimensions 	= mDetailGroup[d].Dimensions;
+			dGroup.Origin 		= mDetailGroup[d].Origin;
+		}
+	}
+	// fill source detail object groups
+	for (int a = 0; a<t_arcs; a++)
+	{
+		group_set &Set = sDetailSet[a];
+		for (int d = 0; d<Set.t_groups; d++)
+		{
+			group &dGroup = Set.Groups[d];
+			
+			// Solid Brushes of this detail group
+			for (int b = 0; b<dGroup.t_brushes; b++)
+			{
+				brush &Brush = dGroup.Brushes[b];
+				Brush.Copy(mDetailGroup[d].Brushes[b]);
+			}
+			
+			// Point Entities of this detail group
+			for (int e = 0; e<dGroup.t_ents; e++)
+			{
+				entity &Entity = dGroup.Entities[e];
+				Entity.CopySimple(mDetailGroup[d].Entities[e]);
+			}
+		}
+	}
+}
+
+void file::createDetailGroup(int g)
+{
+	bool dev = 0;
+	
+	int t_arcs = mGroup->t_arcs;
+	// create final detail object group
+	if (dev) cout << " Creating final detail object group..." << endl;
+	if (DetailSet==nullptr) DetailSet = new group_set[t_arcs];
+	if (dev) cout << "   " << t_arcs << " Group Sets created!" << endl;
+	
+	// detail group sets
+	//for (int a = 0; a<t_arcs; a++)
+	{
+		group_set &Set = DetailSet[g];
+		group_set &SetSource = sDetailSet[g];
+		Set.Groups = new group[t_dgroups];
+		Set.t_groups = t_dgroups;
+		if (dev) cout << "     " << t_dgroups << " Detail groups created inside Set #"<<g<<"!" << endl;
+		
+		// detail groups (group of solid and point entities for an entire curve (*res))
+		for (int d = 0; d<Set.t_groups; d++)
+		{
+			group &dGroup = Set.Groups[d];
+			group &sdGroup = SetSource.Groups[d];
+			if (dev) cout << "       brushcount is res "<< cTable[g].res <<" * " << " sdGroup.t_brushes " << sdGroup.t_brushes << " = " << cTable[g].res * sdGroup.t_brushes << endl;
+			
+			// detail group properties
+			dGroup.CopyProps(sdGroup);
+			
+			// solid entities
+			int brushcount = cTable[g].res * sdGroup.t_brushes;
 			dGroup.Brushes = new brush[ brushcount ];
 			if (dev) cout << "       " << brushcount << " Brushes created inside Detail Group #"<<d<<"!" << endl;
 			dGroup.t_brushes = brushcount;
 			
 			// point entities
-			int entcount = cTable[s].res * dmGroup[d].t_ents;
+			int entcount = cTable[g].res * sdGroup.t_ents;
 			dGroup.Entities = new entity[ entcount ];
 			dGroup.t_ents = entcount;
-			dGroup.Dimensions = dmGroup[d].Dimensions;
-			dGroup.Origin = dmGroup[d].Origin;
+			if (dev) cout << "       " << entcount << " Entities created inside Detail Group #"<<d<<"!" << endl;
+			
+			dGroup.Dimensions = sdGroup.Dimensions;
+			dGroup.Origin = sdGroup.Origin;
+			if (dev) cout << "       Dimensions " << dGroup.Dimensions << " Origin " << dGroup.Origin << endl;
 		}
 	}
 	if (dev) getch();
 	// fill final detail object group
 	if (dev) cout << endl << " Filling final detail object group..." << endl;
-	for (int a = 0; a<mGroup->t_arcs; a++)
+	//for (int a = 0; a<t_arcs; a++)
 	{
-		group_set &Set = dSet[a];
+		group_set &Set = DetailSet[g];
+		group_set &SetSource = sDetailSet[g];
 		
 		for (int d = 0; d<Set.t_groups; d++)
 		{
 			group &dGroup = Set.Groups[d];
+			group &sdGroup = SetSource.Groups[d];
 			if (dev) cout << "   " << t_dgroups << " Filling Brushes of Detail Group #"<<d<<"!" << endl;
 			
 			// Solid Brushes of this detail group
 			for (int b = 0, sb=0, sec=0; b<dGroup.t_brushes; b++)
 			{
 				brush &Brush = dGroup.Brushes[b];
-				Brush.Copy(dmGroup[d].Brushes[sb]);
+				Brush.Copy(sdGroup.Brushes[sb]);
 				Brush.SecID = sec;
-				if (dev) cout << "     Brush "<<b<<" source Brush " << sb << " (of max " << dmGroup[d].t_brushes << ")" << " sec " << sec << " (of max " << cTable[a].res << ")" << endl;
+				if (dev) cout << "     Brush "<<b<<" source Brush " << sb << " (of max " << sdGroup.t_brushes << ")" << " sec " << sec << " (of max " << cTable[g].res << ")" << endl;
 				
 				sec++;
-				if (sec==cTable[a].res) {
-					if (dev) cout << "       Final Section reached! Resetting Sec to 0. Increasing source brush to " << sb+1 << " of max " << dmGroup[d].t_brushes << endl;
+				if (sec==cTable[g].res) {
+					if (dev) cout << "       Final Section reached! Resetting Sec to 0. Increasing source brush to " << sb+1 << " of max " << sdGroup.t_brushes << endl;
 					sec=0;
 					sb++;
 				}
@@ -3390,13 +2601,13 @@ void file::createDetailGroup()
 			for (int e = 0, se=0, sec=0; e<dGroup.t_ents; e++)
 			{
 				entity &Entity = dGroup.Entities[e];
-				Entity.CopySimple(dmGroup[d].Entities[se]);
+				Entity.CopySimple(sdGroup.Entities[se]);
 				Entity.SecID = sec;
-				if (dev) cout << "     Entity "<<e<<" source Entity " << se << " type "<< Entity.Keys[0].value << " (of max "<<dmGroup[d].t_ents<<")" << " sec " << sec << " (of max " << cTable[a].res << ") Euler " << Entity.Angles << endl;
+				if (dev) cout << "     Entity "<<e<<" source Entity " << se << " type "<< Entity.Keys[0].value << " (of max "<<sdGroup.t_ents<<")" << " sec " << sec << " (of max " << cTable[g].res << ") Euler " << Entity.Angles << endl;
 				
 				sec++;
-				if (sec==cTable[a].res) {
-					if (dev) cout << "       Final Section reached! Resetting Sec to 0. Increasing source entity to " << se+1 << " (of max "<< dmGroup[d].t_ents <<")" << endl;
+				if (sec==cTable[g].res) {
+					if (dev) cout << "       Final Section reached! Resetting Sec to 0. Increasing source entity to " << se+1 << " (of max "<< sdGroup.t_ents <<")" << endl;
 					sec=0;
 					se++;
 				}
@@ -3405,13 +2616,13 @@ void file::createDetailGroup()
 	}
 	
 	// apply draw, skip or random draw settings
-	for (int a = 0; a<mGroup->t_arcs; a++)
+	//for (int a = 0; a<t_arcs; a++)
 	{
 		bool dev = 0;
-		group_set &Set = dSet[a];
-		int G_DRAW = 0; if (cTable[a].d_draw>0) G_DRAW = cTable[a].d_draw;
-		int G_SKIP = 0; if (cTable[a].d_skip>0) G_SKIP = cTable[a].d_skip;
-		bool G_DRAW_RAND = 0; if (cTable[a].d_draw_rand==1) G_DRAW_RAND = 1;
+		group_set &Set = DetailSet[g];
+		int G_DRAW = 0; if (cTable[g].d_draw>0) G_DRAW = cTable[g].d_draw;
+		int G_SKIP = 0; if (cTable[g].d_skip>0) G_SKIP = cTable[g].d_skip;
+		bool G_DRAW_RAND = 0; if (cTable[g].d_draw_rand==1) G_DRAW_RAND = 1;
 		
 		if (dev) cout << " G_DRAW " <<  G_DRAW << " G_SKIP " << G_SKIP << " G_DRAW_RAND " << G_DRAW_RAND << endl;
 		for (int d = 0; d<Set.t_groups; d++)
@@ -3425,9 +2636,9 @@ void file::createDetailGroup()
 			int F_SKIP = G_SKIP; if (L_SKIP>0) F_SKIP = L_SKIP;
 			if (dev) cout << " L_DRAW " <<  L_DRAW << " L_SKIP " << L_SKIP << " L_DRAW_RAND " << L_DRAW_RAND << " F_DRAW " << F_DRAW << " F_SKIP " << F_SKIP << endl;
 			
-			bool R_DRAW[cTable[a].res]; for (int i=0; i<cTable[a].res; i++) R_DRAW[i] = 1;
+			bool R_DRAW[cTable[g].res]; for (int i=0; i<cTable[g].res; i++) R_DRAW[i] = 1;
 			if ( (G_DRAW_RAND&&L_DRAW_RAND) || (!G_DRAW_RAND&&L_DRAW_RAND) )
-			for (int i=0; i<cTable[a].res; i++) {
+			for (int i=0; i<cTable[g].res; i++) {
 				int RandZero = rand() % 10;
 				if (RandZero % 2 != 0) R_DRAW[i] = 0;
 			}
@@ -3495,14 +2706,15 @@ void file::createGroupSource()
 	// count rad-commands from settings list to get max amount of indivdual arcs to be generated
 	if (dev) cout << " count rad-commands from settings list..." << endl;
 	int &t_arcs = mGroup->t_arcs;
-	if (dev) cout << " t_arcs " << t_arcs << endl;
+	if (dev) cout << " Total Arcs Pre " << t_arcs << endl;
 	for (int i = 0; i<settings.size(); i++) {
 		if (settings[i]=="rad") t_arcs++;
+		if(dev&&i%2==0) { cout << "   settings["<<i<<"] [" << settings[i] << "] Found? "; if (settings[i]=="rad") cout << "YES!"; else cout << "NO!"; cout << " t-arcs now " << t_arcs << endl; }
 	}
 	if (t_arcs==0) t_arcs = 1;
 	if (InternalMapSettings) t_arcs = t_iarcs;
 	//cout << "File contains " << t_arcs << " rad commands." << endl; getch();
-	if (dev) cout << " t_arcs " << t_arcs << endl;
+	if (dev) cout << " Total Arcs After " << t_arcs << endl;
 	sGroup = new group[t_arcs];
 	for (int g = 0; g<t_arcs; g++)
 	{
@@ -3602,7 +2814,7 @@ void file::LoadMap_DetailObj()
 	// copy entity brushes that are of a detail type into detail source object(s)
 	for (int dg = 0, b = 0; dg<t_dgroups; dg++)
 	{
-		group &Group = dmGroup[dg];
+		group &Group = mDetailGroup[dg];
 		Group.Brushes = new brush[Group.t_brushes];
 		if (dev) cout << "Created " << Group.t_brushes << " Brushes for Detail Group "<<dg<<"!" << endl;
 		for (int e = 0; e<EntityList.size(); e++)
@@ -3612,7 +2824,7 @@ void file::LoadMap_DetailObj()
 			{
 				for (int eb = 0; eb<Entity.t_brushes; eb++)
 				{
-					brush &Brush = dmGroup[dg].Brushes[b];
+					brush &Brush = mDetailGroup[dg].Brushes[b];
 					
 					Brush.Copy(Entity.Brushes[eb]);
 					b++;
@@ -3623,12 +2835,12 @@ void file::LoadMap_DetailObj()
 	}
 	
 	for (int dg = 0; dg<t_dgroups; dg++)
-		dmGroup[dg].GetDimensions(1);
+		mDetailGroup[dg].GetDimensions(1);
 	
 	// fix position of basic detail objects
 	/*for (int i = 0; i<t_dgroups; i++)
 	{
-		group &Group = dmGroup[i];
+		group &Group = mDetailGroup[i];
 		// get offset, if X position of objects origin is not 0
 		if (Group.Origin.x!=0)
 		{

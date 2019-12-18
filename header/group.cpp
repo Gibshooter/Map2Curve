@@ -11,13 +11,84 @@
 
 using namespace std;
 
+struct brush;
+struct entity;
+
 extern ctable *cTable;
 extern group *bGroup;
 extern group *mGroup;
 extern group *sGroup;
 extern file *gFile;
+extern string def_nulltex;
 
 /* ===== GROUP METHODS ===== */
+
+ostream &operator<<(ostream &ostr, group &g)
+{
+	ostr << endl << " Group ID " << g.gID << " secs " << g.sections << " segs " << g.segments << " brushes " << g.t_brushes << " entities " << g.t_ents << endl;
+	ostr << "   Origin " << g.Origin << " sizeY " << g.SizeY << endl;
+	ostr << "   Brushes:" << endl;
+	for (int b = 0; b<g.t_brushes; b++) // Brushes
+	{
+		brush &Brush = g.Brushes[b];
+		ostr << "     Brush " << b << " sec " << Brush.SecID << " seg " << Brush.SegID << " dID " << Brush.dID << " entID " << Brush.entID << endl;
+	}
+	ostr << "   Entities:" << endl;
+	for (int e = 0; e<g.t_ents; e++) // Entities
+	{
+		entity &Entity = g.Entities[e];
+		ostr << "     Entity " << e << " Origin " << Entity.Origin << " Euler " << Entity.Angles << " sec " << Entity.SecID << " dID " << Entity.dID << " entID " << Entity.eID << endl;
+	}
+	ostr << endl;
+}
+
+void group::Move(float x, float y, float z, bool LockBrushShifts)
+{
+	for (int b = 0; b<t_brushes; b++) // Brushes
+	{
+		brush &Brush = Brushes[b];
+		Brush.Move(x,y,z,LockBrushShifts);
+	}
+	for (int e = 0; e<t_ents; e++) // Entities
+	{
+		entity &Entity = Entities[e];
+		Entity.Origin.move(x,y,z);
+	}
+}
+
+void group::MoveSecs(vector<gvector> &Move, bool LockBrushShifts)
+{
+	for (int b = 0; b<t_brushes; b++) // Brushes
+	{
+		brush &Brush = Brushes[b];
+		int sec = Brush.SecID;
+		Brush.Move( Move[sec].x, Move[sec].y, Move[sec].z, LockBrushShifts );
+	}
+	for (int e = 0; e<t_ents; e++) // Entities
+	{
+		entity &Entity = Entities[e];
+		int sec = Entity.SecID;
+		Entity.Origin.move(Move[sec].x, Move[sec].y, Move[sec].z);
+	}
+}
+
+void group::RotOriginSecs(vector<float> &RotX, vector<float> &RotY, vector<float> &RotZ, vector<vertex> &Origin, bool LockBrushShifts)
+{
+	for (int b = 0; b<t_brushes; b++) // Brushes
+	{
+		brush &Brush = Brushes[b];
+		int sec = Brush.SecID;
+		Brush.RotOrigin( RotX[sec], RotY[sec], RotZ[sec], Origin[sec] );
+	}
+	for (int e = 0; e<t_ents; e++) // Entities
+	{
+		entity &Entity = Entities[e];
+		int sec = Entity.SecID;
+		Entity.Origin.rotateOrigin(RotX[sec], RotY[sec], RotZ[sec], Origin[sec]);
+		Euler RotAngles(RotX[sec], RotY[sec], RotZ[sec]);
+		Entity.RotateEntity(RotAngles,1);
+	}
+}
 
 void group::GetBrushFaceVertexSE()
 {
@@ -516,9 +587,10 @@ void group::RoundBrushVertices(bool Override)
 // determine body Face Lengths for Texture Shift calculation
 void group::GetBrushBodyFaceLengths()
 {
+	bool dev = 0;
 	group &Group = *this;
 	int g = Group.gID;
-	//cout << "determine Face Lengths..." << endl;
+	if(dev)cout << "determine Face Lengths..." << endl;
 	// PI/GRID original and new face lengths
 	for (int b = 0; b < Group.t_brushes; b++)
 	{
@@ -533,10 +605,13 @@ void group::GetBrushBodyFaceLengths()
 			{
 				face &Face = Brush.Faces[f];
 				// identify current source brush for original Face Length calculation
-				//cout << " calculating OFbrushID: (seg "<<seg<<"*cTable[g].res "<<cTable[g].res<<")+(cTable[g].res/4 "<<cTable[g].res/4<<")-1"<< endl;
-				int OFbrushID = (seg2*cTable[g].res)+(cTable[g].res/4)-1;
+				if(dev)cout << " calculating OFbrushID: (seg "<<seg<<"*cTable[g].res "<<cTable[g].res<<")+(cTable[g].res/4 "<<cTable[g].res/4<<")-1"<< endl;
+				int OFbrushID; 
+				if (cTable[gID].type!=3) OFbrushID = (seg2*cTable[g].res)+(cTable[g].res/4)-1;
+				else OFbrushID = b;
+				
 				float OFaceLen = GetFaceLen(Group.Brushes[OFbrushID].Faces[f]);
-				//cout << " OFaceLen: " << OFaceLen << " OFbrushID: " << OFbrushID << " brush: " << b << endl;
+				if(dev)cout << " OFaceLen: " << OFaceLen << " OFbrushID: " << OFbrushID << " brush: " << b << endl;
 				
 				if (Face.fID==2)
 				{
@@ -544,11 +619,14 @@ void group::GetBrushBodyFaceLengths()
 						Face.LengthO = OFaceLen;
 					else
 						Face.LengthO = GetVecLen( GetVector(  Face.Vertices[0], Face.Vertices[1]  ));
+					
+					if (cTable[g].type!=3)
 					Face.LengthN = GetFaceLen(Face);
+					else
+					Face.LengthN = Face.LengthO;
 					//if (Brush.IsWedge) cout << "   Brush # "<<b<<" Face #" <<f<< " Tex: "<<Face.Texture << " Face Len " << Face.LengthN << endl;
 					
-					//if (b==0)
-					//cout << "Face #" <<f<< " Tex: "<<Face.Texture << "\nVecO " << VecO << "\nPitchO: " << Face.PitchO << "\nVecN " << Cross2 <<"\nPitchN: " << Face.PitchN << "\nDifference O/N: " << Face.PitchN-Face.PitchO << endl << endl;
+					if(dev)if (b==0) cout << "Face #" <<f<< " Tex: "<<Face.Texture << "\nPitchO: " << Face.PitchO << "\nPitchN: " << Face.PitchN << "\nDifference O/N: " << Face.PitchN-Face.PitchO << endl << endl;
 				}
 			}
 		}
@@ -609,10 +687,47 @@ void group::Triangulate()
 			Brush.DoSplit = 1;
 		}
 	}
-
+	if ( cTable[g].tri==0 && cTable[g].ramp>0 && cTable[g].type!=2 )
+	{
+		for (int b = 0; b < Group.t_brushes; b++)
+		{
+			brush &Brush = Group.Brushes[b];
+			int sec = Brush.SecID;
+			
+			if ( Group.heightTableSteps[sec]!=0 )
+			{
+				if (cTable[g].type==3)
+				{
+					if (sec==0) // brush is first
+					{
+						brush &Next = Group.Brushes[b+1];
+						if ( Brush.Yaw!=Next.Yaw )
+							Brush.DoSplit = 1;
+					}
+					else if (sec>0&&sec<Group.sections-1) // brush isnt first or last
+					{
+						brush &Next = Group.Brushes[b+1];
+						brush &Last = Group.Brushes[b-1];
+						if ( Brush.Yaw!=Next.Yaw || Brush.Yaw!=Last.Yaw )
+							Brush.DoSplit = 1;
+					}
+					else // brush is last
+					{
+						brush &Last = Group.Brushes[b-1];
+						if ( Brush.Yaw!=Last.Yaw )
+							Brush.DoSplit = 1;
+					}
+				}
+				else Brush.DoSplit = 1;
+			}
+			//cout << " Brush " << b << " sec " << sec << " Split? " << Brush.DoSplit << " Step " << Group.heightTableSteps[sec] << endl;
+		}
+	}
+	
 	for (int b = 0; b < Group.t_brushes; b++)
 	{
 		brush &Brush = Group.Brushes[b];
+		//cout << " Tri! Brush #" << b << " Split it? "; if (Brush.DoSplit) cout << " YES!" << endl; else cout << " NO!" << endl;
 		
 		if (Brush.valid&&Brush.draw&&Brush.DoSplit)
 		Brush.Triangulate();
@@ -876,27 +991,100 @@ void group::GetFaceGroups()
 // add custom height to this brush
 void group::AddBrushHeights()
 {
+	bool dev = 0;
 	group &Group = *this;
 	int g = Group.gID;
 	for (int b = 0; b<Group.t_brushes; b++)
 	{
 		brush &Brush = Group.Brushes[b];
 		int sec = Brush.SecID;
-		if (Brush.valid && cTable[g].height>0 && cTable[g].type!=2)
+		if (Brush.valid && (cTable[g].height!=0||cTable[g].heightmode==2))
 		{
-			float step = cTable[g].height;
-			float height = cTable[g].height * sec;
-			int start = bGroup[g].range_start;
-			
+			float step = bGroup[g].heightTableSteps[sec];
+			float height = bGroup[g].heightTable[sec];
+			if(dev) cout << " Brush " << b << " sec " << sec << " start " << bGroup[g].range_start << " Height " << height << " Step " << step << " (bGroup["<<g<<"].heightTable["<<sec<<"]) " << endl;
 			for (int f = 0; f<Brush.t_faces; f++)
 			{
 				face &Face = Brush.Faces[f];
-				if (cTable[g].ramp==2&&sec>=start) { height = bGroup[g].heightTable[sec-start-1]; }
 				Face.AddHeight(height);
 				//cout << " brush " << b << " face " << f << " sec " << sec << " height " << height << endl;
 			}
 		}
 	}
+}
+
+void group::ShearVectors()
+{
+	group &Group = *this;
+	int g = Group.gID;
+	
+	Group.MarkInsideSecBrushes();
+	
+	for (int b = 0; b<Group.t_brushes; b++) {
+		brush &Brush = Group.Brushes[b];
+		Brush.GetSourceFaces();
+	}
+	for (int b = 0; b<Group.t_brushes; b++)
+	{
+		brush &Brush = Group.Brushes[b];
+		int sec = Brush.SecID;
+		if( Brush.Tri!=nullptr&&sec>=Group.range_start&&sec<Group.range_end ) // Brush.IsDivisible&&!Brush.IsWedge&&Brush.t_faces==6
+		{
+			for (int bt = 0; bt<Brush.t_tri; bt++)
+			for (int f = 0; f<Brush.Tri[bt].t_faces; f++)
+			{
+				face &Face = Brush.Tri[bt].Faces[f];
+				//cout << " Brush " <<b<<" Tri " << bt << " Face " << f << " NULL " << Face.IsNULL << " ID " << Face.fID << " Orient " << Face.Orient << endl;
+				bool reverse = 0; if( cTable[g].preverse && (cTable[g].type==2||cTable[g].type==3) ) reverse = 1;
+				if(!Face.IsNULL&&Face.draw&&Face.fID==2&&Face.Orient!=6&&Face.Texture!="NULL"&&Face.Texture!=def_nulltex)
+					Face.ConvertToSheared(Brush.Tri[bt].IsWedge2, IsSecInside[sec], reverse, Brush);
+			}
+		}
+	}
+}
+
+void group::MarkInsideSecBrushes()
+{
+	// determins whether the brushes section is facing to the inside (longest edge is inside) or the outside (longest edge outside)
+	// depends on where the first section is facing
+	group &Group = *this;
+	int g = Group.gID;
+	IsSecInside.resize(Group.sections);
+	fill(IsSecInside.begin(), IsSecInside.end(), 1);
+	
+	for (int b = 0; b<Group.t_brushes; b++) {
+		brush &Brush = Group.Brushes[b];
+		int sec = Brush.SecID;
+		int seg = Brush.SegID;
+		
+		//if(seg==0)
+		for (int f = 0; f<Brush.t_faces; f++)
+		{
+			face &Face = Brush.Faces[f];
+			if(!Face.IsNULL&&Face.draw&&Face.fID==2&&(Face.Orient==4||Face.Orient==5))
+			{
+				// 2 = Top, 3 = Down, 4 = Front, 5 = Back
+				if( Face.Orient==5 && Face.EdgeLenL==Face.HSourceL->EdgeLenL )
+				{
+					//cout << " Face " << Face.name << " Orient " << Face.Orient << " LenL " << Face.EdgeLenL << " LenS " << Face.EdgeLenS << " Source " << Face.HSourceL->EdgeLenL << endl;
+					IsSecInside[sec] = 0;
+					break;
+				}
+				else if( Face.Orient==4 && Face.EdgeLenS==Face.HSourceS->EdgeLenS )
+				{
+					//cout << " Face " << Face.name << " Orient " << Face.Orient << " LenL " << Face.EdgeLenL << " LenS " << Face.EdgeLenS << " Source " << Face.HSourceS->EdgeLenS << endl;
+					IsSecInside[sec] = 0;
+					break;
+				}
+			}
+		}
+	}
+	
+	/*cout << " Sections Facing..." << endl;
+	for (int i=0;i<IsSecInside.size(); i++)
+	{
+		cout << " #" << i << " " << IsSecInside[i] << endl;
+	}*/
 }
 
 void group::RotateVectors()
@@ -935,7 +1123,7 @@ void group::RotateVectors()
 	}
 	
 	// rotation steps for GRID PATH circles
-	if (cTable[g].type==2)
+	if (cTable[g].type==2||cTable[g].type==3)
 	{
 		// Get Rotation for Body Faces from one Body Face of this Brush that is suited (has 4 vertices)
 		for (int b = 0, v=0; b<Group.t_brushes; b++) // path loop
@@ -1064,7 +1252,7 @@ void group::RotateVectors()
 					GapFace.VecY.rotate(0,0,deg);
 				}
 			}
-			else if (cTable[g].type==2) // GRID PATH CIRCLES
+			else if (cTable[g].type==2||cTable[g].type==3) // GRID PATH CIRCLES
 			{
 				if (Face.fID<=1)
 				{
@@ -1213,7 +1401,7 @@ void group::GetHorLengths()
 							//Group.SecBaseFace[sec] = &Face;
 						}
 						
-						if(dev) cout << " Base Face for Section " << sec << " is now " << &Group.SecBaseFace[sec] << " Tex " <<  Group.SecBaseFace[sec]->Texture << " stored in Pointer " << Group.SecBaseFace[sec] << endl;
+						//if(dev) cout << " Base Face for Section " << sec << " is now " << Group.SecBaseFace[sec]->name << " Tex " <<  Group.SecBaseFace[sec]->Texture << " stored in Pointer " << Group.SecBaseFace[sec] << endl;
 					}
 				}
 			}
@@ -1221,28 +1409,35 @@ void group::GetHorLengths()
 		if (dev) getch();
 		
 		// make Section Base Faces identify themselfs as what they are
-		if(dev) cout << " make Section Base Faces identify themselfs as what they are..." << endl;
+		if(dev) cout << endl << " make Section Base Faces identify themselfs as what they are..." << endl;
 		for (int i = 0; i<cTable[g].res; i++)
 		{
 			//cout << " SecBaseFace " << i << " Adress " << *SecBaseFace[i] << " " << &SecBaseFace[i] << endl;
 			Group.SecBaseFace[i]->IsSecBase = 1;
-			if(dev) cout << " Section " << i << " Base Face fID " << Group.SecBaseFace[i]->fID << " Tex " << Group.SecBaseFace[i]->Texture << " EdgeLenL " << Group.SecBaseFace[i]->EdgeLenL << endl;
+			if(dev) cout << " Section " << i << " Base Face fID " << Group.SecBaseFace[i]->name << " Tex " << Group.SecBaseFace[i]->Texture << " EdgeLenL " << Group.SecBaseFace[i]->EdgeLenL << endl;
 		}
+		if (dev) getch();
 		
 		// check for nullpointer lengths
-		if(dev) cout << " check for nullpointer lengths..." << endl;
+		if(dev) cout << endl << " check for nullpointer lengths..." << endl;
 		for (int i = 0; i<Group.hSourceFace.size(); i++)
 		{
-			if (Group.hSourceFace[i]==nullptr)  Group.hSourceFace[i] = Group.hSourceFace2[i];
-			if (Group.hSourceFace2[i]==nullptr) Group.hSourceFace2[i] = Group.hSourceFace[i];
+			if (Group.hSourceFace[i]==nullptr)  {Group.hSourceFace[i] = Group.hSourceFace2[i]; if (dev) cout << " HSrcFace " << i << " is NULLPTR! changed to HSrcFace2." << endl; }
+			if (Group.hSourceFace2[i]==nullptr) {Group.hSourceFace2[i] = Group.hSourceFace[i]; if (dev) cout << " HSrcFace2 " << i << " is NULLPTR! changed to HSrcFace." << endl; }
 		}
 		
+		if(dev) cout << endl << " Edgelengths for all TexGroups so far..." << endl;
 		if(dev)
-		for (int i = 0; i<Group.hEdgeLen_temp.size(); i++)
-			cout << "  Tex-Group "<< i <<" Edge-Length Long " << Group.hEdgeLen_temp[i] << "("<<Group.hSourceFace[i]<<")" << " Short " << Group.hEdgeLen_temp2[i] << "("<<Group.hSourceFace2[i]<<")"<< endl;
+		for (int i = 0; i<Group.hEdgeLen_temp.size(); i++) {
+			if (Group.hSourceFace[i]!=nullptr)
+			cout << "  Tex-Group "<< i <<" Edge-Length Long " << Group.hEdgeLen_temp[i] << "("<<Group.hSourceFace[i]->name<<")" << " Short " << Group.hEdgeLen_temp2[i] << "("<<Group.hSourceFace2[i]->name<<")"<< endl;
+			else
+			cout << "  Tex-Group "<< i <<" NULLPTR!" << endl;
+		}
+		if (dev) getch();
 		
 		// copy source face information to all faces
-		if(dev) cout << " copy source face information to all faces..." << endl;
+		if(dev) cout << endl << " copy source face information to all faces..." << endl;
 		for (int b = 0; b < Group.t_brushes; b++)
 		{
 			brush &Brush = Group.Brushes[b];
@@ -1257,18 +1452,20 @@ void group::GetHorLengths()
 					{
 						Face.HSourceL = Group.hSourceFace[Face.group];
 						Face.HSourceS = Group.hSourceFace2[Face.group];
-						if(dev) cout << "  Brush "<<b<<" Face "<<f<<" facegroup "<<Face.group<<" sec "<<sec<<" Source Face H-Shift (Adress) Long " << Face.HSourceL <<" Short " << Face.HSourceS << endl;
+						if(dev) {cout << "  Brush "<<b<<" Face "<<f<<" facegroup "<<Face.group<<" sec "<<sec<<" Source Face H-Shift Long " << Face.HSourceL->name <<" Short " << Face.HSourceS->name; if (Face.IsSecBase) cout<<"[X]"<<endl; else cout << endl;}
 					}
 				}
 			}
 		}
+		if (dev) getch();
 		
 		// horizontal face shifts for source faces
-		if(dev) cout << " horizontal face shifts for source faces..." << endl;
+		if(dev) cout << endl << " horizontal face shifts for source faces..." << endl;
+		for (int sec = 0; sec < cTable[g].res; sec++)
 		for (int b = 0; b < Group.t_brushes; b++)
 		{
 			brush &Brush = Group.Brushes[b];
-			if (Brush.valid)
+			if (Brush.valid&&Brush.SecID==sec)
 			{
 				int &sec = Brush.SecID;
 				brush *LBrush = nullptr;
@@ -1281,8 +1478,8 @@ void group::GetHorLengths()
 						face *LSrcFaceL = nullptr, *LSrcFaceS = nullptr;
 						if (sec>0)
 						{
-							LSrcFaceL = LBrush->Faces[f].HSourceL; if(dev) cout << " LSrcFaceL " << LSrcFaceL << endl;
-							LSrcFaceS = LBrush->Faces[f].HSourceS; if(dev) cout << " LSrcFaceS " << LSrcFaceS << endl;
+							LSrcFaceL = LBrush->Faces[f].HSourceL; //if(dev&&f==2) {cout << " LSrcFaceL "; if(LSrcFaceL!=nullptr) cout << LSrcFaceL->name << endl; else cout << " NULL!" << endl;}
+							LSrcFaceS = LBrush->Faces[f].HSourceS; //if(dev&&f==2) {cout << " LSrcFaceS "; if(LSrcFaceS!=nullptr) cout << LSrcFaceS->name << endl; else cout << " NULL!" << endl;}
 						}
 						face &SrcFaceL = *Face.HSourceL;
 						face &SrcFaceS = *Face.HSourceS;
@@ -1290,20 +1487,21 @@ void group::GetHorLengths()
 						{
 							int tg = Face.group;
 							if (sec==0) {
-								Face.HShiftL = SrcFaceL.EdgeLenL; if(dev) cout << " Face.HShiftL " << Face.HShiftL << endl;
-								Face.HShiftS = SrcFaceS.EdgeLenS; if(dev) cout << " Face.HShiftS " << Face.HShiftS << endl;
+								Face.HShiftL = SrcFaceL.EdgeLenL; if(dev&&f==2) cout << " b " << b << " sec " << sec << " Face.HShiftL " << Face.HShiftL << " \t( EdgeLenL "<< SrcFaceL.EdgeLenL <<" )" << endl;
+								Face.HShiftS = SrcFaceS.EdgeLenS; //if(dev&&f==2) cout << " Face.HShiftS " << Face.HShiftS << endl;
 							} else {
-								Face.HShiftL = LSrcFaceL->HShiftL + SrcFaceL.EdgeLenL; if(dev) cout << " Face.HShiftL " << Face.HShiftL << endl;
-								Face.HShiftS = LSrcFaceS->HShiftS + SrcFaceS.EdgeLenS; if(dev) cout << " Face.HShiftS " << Face.HShiftS << endl;
+								Face.HShiftL = LSrcFaceL->HShiftL + SrcFaceL.EdgeLenL; if(dev&&f==2) cout << " b " << b << " sec " << sec << " Face.HShiftL " << Face.HShiftL << " \t( LHShift_L " << LSrcFaceL->HShiftL <<" \t["<<LSrcFaceL->name<<"] + \tEdgeLenL "<< SrcFaceL.EdgeLenL <<" \t["<<SrcFaceL.name<<"] )" << endl;
+								Face.HShiftS = LSrcFaceS->HShiftS + SrcFaceS.EdgeLenS; //if(dev&&f==2) cout << " Face.HShiftS " << Face.HShiftS << endl;
 							}
 						}
 					}
 				}
 			}
 		}
+		if (dev) getch();
 		
 		// final horizontal face shifts
-		if(dev) cout << " final horizontal face shifts..." << endl;
+		/*if(dev) cout << endl << " final horizontal face shifts..." << endl;
 		for (int b = 0; b < Group.t_brushes; b++)
 		{
 			brush &Brush = Group.Brushes[b];
@@ -1334,98 +1532,203 @@ void group::GetHorLengths()
 							Face.HShiftL = LSrcFaceL->HShiftL + SrcFaceL.EdgeLenL;
 							Face.HShiftS = LSrcFaceS->HShiftS + SrcFaceS.EdgeLenS;
 						}
-						if(dev) { cout << "  B "<<b<<" F "<<f<< " sec " <<sec<< " FGroup "<< Face.group <<" H-Shift L " << Face.HShiftL << " S " << Face.HShiftS << " SrcFaceL.EdgeLenL " << SrcFaceL.EdgeLenL;
-						if (sec>0)cout << " LSrcFaceL->HShiftL " << LSrcFaceL->HShiftL << " SrcFaceS.EdgeLenS " << SrcFaceS.EdgeLenS << endl; else cout << endl; }
+						if(dev&&f==2) { cout << "  B "<<b<<" F "<<f<< " sec " <<sec<< " FGroup "<< Face.group <<" H-Shift L " << Face.HShiftL << " \tS " << Face.HShiftS << " \tEdgeL " << SrcFaceL.EdgeLenL << " \tEdgeS " << SrcFaceS.EdgeLenS;
+						if (sec>0)cout << " \tLSrcFaceL->HShiftL " << LSrcFaceL->HShiftL << " \t[ "<<LSrcFaceL->name<<" ]" << endl; else cout << endl; }
+					
+						//if(f==2) Face.Texture = Face.HSourceL->name;
+						//else Face.Texture="{LARGE#S"+to_string(f-2);
 					}
 				}
 			}
-		}
+		}*/
 	}
 }
 
 // create height Table for smooth ramp generation
-void group::CreateHeightTableSmooth()
+void group::CreateHeightTable()
 {
 	bool dev = 0;
 	group &Group = *this;
 	int g = Group.gID;
-	if (cTable[g].ramp==2&&cTable[g].type!=2)
+	
+	// create GapList
+	Group.CreateGapList();
+	
+	int res = cTable[gID].res;
+	int start = range_start;
+	int end = range_end;
+	int range = range_end-range_start;
+
+	vector<float> &List = heightTable; List.resize(res+1);
+	vector<float> &ListRel = heightTableSteps; ListRel.resize(res+1);
+	vector<float> Slope;
+	vector<float> Steps;
+	
+	// 0 = Linear, 1 = Smooth, 2 = Spline, 3 = Random Jagged, 4 = Random Smooth
+	if (cTable[g].heightmode==0||(cTable[g].path=="UNSET"&&cTable[g].heightmode==2))
 	{
-		int range_end   = Group.range_end;
-		int range_start = Group.range_start;
-		int range		= range_end-range_start;
-		if (range<=1) range = 2;
-		if (dev) cout << " range_start " << range_start << " range_end " << range_end << " range " << range << endl;
-		//create source circle
-			// circle segment
-			float height_max = cTable[g].height * (range);
-			float height_half = (cTable[g].height * (range))/2;
-			float chord  = 4*height_half;
-			float rad    = (  (4*pow(height_half,2)) + pow(chord,2)  ) / (8 * height_half);
-		if (dev) cout << " height_max\t" << height_max << endl;
-		if (dev) cout << " height_half\t" << height_half << endl;
-		if (dev) cout << " chord\t\t" << chord << endl;
-		if (dev) cout << " rad\t\t" << rad << endl;
-		
-		float x_step = cTable[g].height*2;
-		if (dev) cout << " x_step\t\t" << x_step << endl;
-		
-		Group.heightTable.resize(range);
-		for (int i = 0; i<Group.heightTable.size(); i++)
-		Group.heightTable[i] = height_max;
-		
-		// Fill first Half of the Height Table
-		for (int i = 0; i<ceil(range/2.0); i++)
-		{
-			float x = 0, y = 0, y_fixed = 0;
-			
-			x = (height_max/(range/2.0))*(i+1);
-			y = GetIsectCircleLine(rad, x);
-			y_fixed = rad - y;
-			//Group.heightTable.push_back(y_fixed);
-			Group.heightTable[i] = y_fixed;
-			
-			if (dev) cout << "  i "<<i<< " x " << x << " isect " << y << " y_fixed " << y_fixed << endl;
+		if (cTable[g].heightmode==2) {
+			cout << "|    [WARNING] Heightmode set to \"Spline\", but no valid spline file found!" << endl;
+			cout << "|              Using linear heightmode instead..."<<endl;
+			cTable[g].heightmode=0;
 		}
-		
-		if (dev)
-		for (int i = 0; i<Group.heightTable.size(); i++)
-			cout << " height table #" << i << " y " << round(Group.heightTable[i]) << endl;
-		
-		// Fill second Half by subtracting the first Half from the max height
-		for (int i = 0, j = Group.heightTable.size()-2; i<ceil(range/2); i++)
-		{
-			float y = height_max - Group.heightTable[i];
-			if (dev) cout << " Height Table #" << i << " j " << j << " of range " << range/2 << " height " << y << " = height_max " << height_max << " - heightTable[j] " << heightTable[j] << endl;
-			Group.heightTable[j] = y;
-			j--;
-			//Group.heightTable.push_back(y);
-		}
-		
-		for (int i = 0; i< Group.heightTable.size(); i++)
-			Group.heightTable[i] = round(Group.heightTable[i]);
-		
-		if (dev)
-		for (int i = 0; i<Group.heightTable.size(); i++)
-		{
-			cout << " height table #" << i << " y " << round(Group.heightTable[i]) << " difference ";
-			if (i>0) cout << round(Group.heightTable[i] - Group.heightTable[i-1]) << endl;
-			else cout << round(Group.heightTable[i] - 0) << endl;
-		}
-		if (dev) getch();
+		if (dev) cout << " Creating Linear Heighttable... Step " << cTable[g].height << " range " << range << endl; 
+		CreateSlopeLinear(cTable[g].height, cTable[g].res, Slope);
+	}
+	else if (cTable[g].heightmode==1)
+	{
+		if (dev) cout << " Creating Smooth Heighttable... Step " << cTable[g].height << " range " << range << endl; 
+		CreateSlopeSmooth(cTable[g].height, range, Slope);
+	}
+	else if (cTable[g].heightmode==2)
+	{
+		if (dev) cout << " Creating Spline Heighttable... Step " << cTable[g].height << " range " << range << endl; 
+		CreateSlopeSpline(gFile->PathList[g], range, Slope, Steps);
+	}
+	else if (cTable[g].heightmode==3)
+	{
+		if (dev) cout << " Creating Random Heighttable... Step " << cTable[g].height << " range " << range << endl; 
+		CreateSlopeRandom(cTable[g].height, cTable[g].res, Slope);
 	}
 	
-	// create height Table path (type 2)
-	/*if (cTable[g].type==2)
+	// round heights
+	if (cTable[g].heightmode!=2)
+	for (int i=0; i<Slope.size(); i++)
+		Slope[i] = round(Slope[i]);
+	
+	/*
+	if(dev) {
+	cout << endl << " Slope List (original) size " << Slope.size() << endl;
+	for (int i=0; i<Slope.size(); i++)
+		cout << " Slope["<<i<<"] " << Slope[i] << endl; getch();}
+	
+	// if heightmode 2 (spline), cut height info of last corner first
+	if (cTable[g].heightmode==2&&cTable[g].type!=2)
 	{
-		for (int i = 0; i<PathList[g].heightTable.size(); i++) {
-			Group.heightTable.push_back(PathList[g].heightTable[i]);
-			//cout << " new heightTable #" << i << " is " <<Group.heightTable[i] << endl;
+		path_set &Set = gFile->PathList[g];
+		int erase = Set.Paths[0].t_corners-1;
+		if(dev) cout << " Heightmode 2 -> Cleaning Slope List... first to be deleted: " << erase << endl;
+		for (int i=0, p=1; i<Slope.size(); i++) {
+			if(dev) cout << "   Entry #" << i+1 << "/"<<Slope.size()<< " " << Slope[i] << " erase " << erase << endl;
+			if (i==erase) {
+				if (dev) cout << "      ERASED!" << endl;
+				Slope.erase(Slope.begin()+i);
+				erase+= Set.Paths[p].t_corners-1;
+				p++;
+			}
 		}
 	}*/
-	//getch();
+	
+	if(dev) {
+	cout << endl << " Slope List (after cleansing) size " << Slope.size() << endl;
+	for (int i=0; i<Slope.size(); i++)
+		cout << " Slope["<<i<<"] " << Slope[i] << endl; getch();}
+	
+	// create Heightlist and StepList
+	int off=0; if(cTable[g].heightmode!=2) off=1;
+	for (int i=0, j=0; i<res+off; i++)
+	{
+		if(dev) cout << " List #" << i+1 << "/"<<res<< " start-offset " << start << " Heightlist #" << j+1 << "/"<<Slope.size()<<" Gap " << GapList[i] << endl;
+		List[i] = 0;
+		ListRel[i] = 0;
+		if (i>=start) {
+			if (cTable[g].heightmode==2) {
+				List[i] = Slope[j];
+				ListRel[i] = Steps[j];
+				j++;
+			} else {
+				if (!GapList[i]) {
+					List[i] = Slope[j];
+					ListRel[i] = Slope[j+1]-Slope[j];
+					j++;
+				} else {
+					List[i] = Slope[j];
+					ListRel[i] = 0;
+				}
+			}
+		}
+		/*if (i>=start) {
+			if (!GapList[i]||(cTable[g].type==2&&cTable[g].heightmode==2)) {
+				List[i] = Slope[j];
+				ListRel[i] = Slope[j+1]-Slope[j];
+				j++;
+			} else {
+				List[i] = Slope[j];
+				ListRel[i] = 0;
+			}
+		}*/
+	}
+	if(dev)getch();
+	
+	// if random, connect last with first
+	if (cTable[g].heightmode==3)
+		ListRel[List.size()-2] = List[0] - List[List.size()-2];
+	
+	// fill out-of-range entries with 0
+	for (int i=0; i<List.size(); i++)
+	{
+		if(i<start||i>end) {
+			List[i] = 0;
+			ListRel[i] = 0;
+		}
+	}
+	
+	if (dev) { cout << " FINAL height table:" << endl; for (int i = 0; i<List.size(); i++) cout << "   #" << i << " " << List[i] << " Rel " << ListRel[i] << endl; getch(); }
 }
 
+// create GapList for Height Slope Generation
+void group::CreateGapList()
+{
+	bool dev = 0;
+	group &Group = *this;
+	int g = Group.gID;
+	GapList.resize(cTable[g].res);
+	for (int i=0; i<GapList.size(); i++)
+		GapList[i] = 0;
+		
+	if (cTable[gID].type==2)
+	{
+		path_set &Set = gFile->PathList[g]; //mGroup->Brushes.cset[g];
+		
+		for (int p=0,i=0; p<Set.t_paths; p++) {
+			for (int c=0; c<Set.Paths[p].t_corners-1; c++) {
+				path_corner &Corner = Set.Paths[p].Corners[c];
+				if (Corner.NextIsGap90) {
+					Group.GapList[i+1] = 1;
+					i++;
+				}
+				else if (Corner.NextIsGap180) {
+					Group.GapList[i+1] = 1;
+					Group.GapList[i+2] = 1;
+					i+=2;
+				}
+				if (dev) cout << " GapList["<<i<<"] " << Group.GapList[i] << endl;
+				i++;
+			}
+		}
+	}
+	
+	if (dev)
+	for (int i=0; i<Group.GapList.size(); i++) {
+		cout << " GapList["<<i<<"] " << Group.GapList[i] << endl;
+	}
+}
+
+bool group::CheckForSlopes()
+{
+	bool dev = 0;
+	
+	group &Group = *this;
+	for (int b=0; b<Group.t_brushes; b++)
+	{
+		brush &Brush = Group.Brushes[b];
+		if (Brush.step>0) return true;
+	}
+	for (int i=0; i<Group.heightTable.size(); i++)
+	{
+		if (Group.heightTable[i]>0) return true;
+	}
+}
 
 // Generate Curve Object from loaded Settings, Paths and Map Source Object
 void group::Build()
@@ -1435,6 +1738,12 @@ void group::Build()
 	group &Group = *this;
 	int g = Group.gID;
 	group &SrcGroup = sGroup[g];
+	
+	bool SHOW_LINES = 0;
+	canvas *Canva;
+	if (SHOW_LINES) Canva = new canvas(200, 50);
+	
+	if (dev)cout << " Building "<<Group.t_brushes<<" brushes | res " << cTable[Group.gID].res << " | sections " << Group.sections << " | segments " << Group.segments << endl;
 	for (int b=0; b<Group.t_brushes; b++)
 	{
 		brush &Brush = Group.Brushes[b];
@@ -1443,17 +1752,33 @@ void group::Build()
 		brush &SrcBrush = SrcGroup.Brushes[seg];
 		if (SrcBrush.valid)
 		{
-			if (dev)cout << "  Entering Brush #" << b+1 << ", Total Faces: " << Brush.t_faces << ", section #" << sec+1 << ", segment #" << seg+1 << endl;
-			//Brush.DoSplit = SrcBrush.cset->c[0].Vertices[sec].DoSplit;
+			if (dev)cout << "  Entering Brush #" << b+1 << " | Faces: " << Brush.t_faces << " | sec #" << sec+1 << "/"<<Group.sections<<" | seg #" << seg+1<<"/"<<Group.segments << endl;
 			
-			// circle vertex interator
-			int cIDa = sec; if (cTable[g].type==2) cIDa=sec*2;
+			// circle vertex iterator
+			int cIDa = sec; if (cTable[g].type==2||cTable[g].type==3) cIDa=sec*2;
 			int cIDb = cIDa+1;
 			Brush.step = SrcBrush.cset->c[0].Vertices[cIDa].step;
 			Brush.pID = SrcBrush.cset->c[0].Vertices[cIDa].pID;
 			Brush.Align = SrcBrush.cset->c[0].Vertices[cIDa].Align;
+			Brush.DoSplit = SrcBrush.cset->c[0].Vertices[cIDa].DoTri;
+			Brush.IsGap = SrcBrush.cset->c[0].Vertices[cIDa].IsGap;
+			Brush.Yaw = SrcBrush.cset->c[0].Vertices[cIDa].Yaw;
+			Brush.Pitch = SrcBrush.cset->c[0].Vertices[cIDa].Pitch;
+			Brush.IsCCW = SrcBrush.cset->c[0].Vertices[cIDa].IsCCW;
 			if (!SrcBrush.valid) Brush.valid=0;
 			
+			if (0) {
+				cout << "  cIDa: " << cIDa << "(sec(*2 if type=2/3))" << endl;
+				cout << "  cIDb: " << cIDb << "(sec+1)" << endl;
+				cout << "  Step: " << Brush.step << endl;
+				cout << "  pID: " << Brush.pID << endl;
+				cout << "  Align: " << Brush.Align << endl;
+				cout << "  DoSplit: " << Brush.DoSplit << endl;
+				cout << "  IsGap: " << Brush.IsGap << endl << endl;
+				cout << "  Contruction Frame: " << endl;
+				getch();
+				cout << SrcBrush.cset[seg] << endl;
+			}
 			for (int f = 0, c=0; f<Brush.t_faces; f++)
 			{
 				if (dev)cout << "    Entering Face #" << f+1 << "..." << endl;
@@ -1478,7 +1803,7 @@ void group::Build()
 						else { // Head Face
 							//int secb;
 							if (dev)cout << "        Generating Vertex #" << v+1 << " of Head Face, mG->B["<<seg<<"].cset->c["<<v<<"].V["<<cIDb<<"] :" << SrcGroup.Brushes[seg].cset->c[v].Vertices[cIDb] << endl;
-							if (cIDa==Group.sections-1&&cTable[g].type!=2) cIDb=0; else cIDb=cIDa+1;
+							if (cIDa==Group.sections-1&&cTable[g].type!=2&&cTable[g].type!=3) cIDb=0; else cIDb=cIDa+1;
 							Face.Vertices[v] = SrcGroup.Brushes[seg].cset->c[v].Vertices[cIDb];
 						}
 					}
@@ -1554,7 +1879,27 @@ void group::Build()
 					if (dev) cout << "        Face Normal " << Face.Normal << endl;
 					c++;
 				}
+				
+				if(SHOW_LINES)
+				for (int i=0;i<Face.vcount-1; i++) 
+					 { Canva->CreateLine(0.1, Face.Vertices[i], Face.Vertices[i+1]); }
 			}
+			if(SHOW_LINES) Canva->Print();
+			if (dev) getch();
+		}
+	}
+	if(SHOW_LINES) delete Canva;
+	// DEV INFO
+	if (0)
+	for (int b=0; b<Group.t_brushes; b++)
+	{
+		brush &Brush = Group.Brushes[b];
+		{
+			cout << " Brush #" << b << " sec " << Brush.SecID << " seg " << Brush.SegID << endl;
+			cout << "  Step: " << Brush.step << endl;
+			cout << "  pID: " << Brush.pID << endl;
+			cout << "  Align: " << Brush.Align << endl;
+			cout << "  DoSplit: " << Brush.DoSplit << endl << endl;
 		}
 	}
 }
@@ -1571,8 +1916,10 @@ void group::CheckBrushValidity()
 		if (!valid) Group.invalids++;
 	}
 	
-	if (Group.t_brushes-Group.invalids<=0)
-	Group.valid = 0;
+	if (Group.t_brushes-Group.invalids<=0) {
+		Group.valid = 0;
+		Group.ValidMesh = 0;
+	}
 }
 
 void group::GetBrushFaceOrients()
@@ -1731,6 +2078,32 @@ void group::GetDimensions(bool Overwrite)
 							if (V.z > D.zb) D.zb = V.z;
 						}
 						//cout << " dimensions taken from v" << v << V << " : " << D.xs << ", " << D.xb << ", " << D.ys << ", " << D.yb << ", " << D.zs << ", " << D.zb << endl;
+					}
+				}
+			}
+			if (Brush.Gap!=nullptr)
+			{
+				brush &GapBrush = *Brush.Gap;
+				for (int f = 0; f<GapBrush.t_faces; f++)
+				{
+					face &Face = GapBrush.Faces[f];
+					if (Face.draw)
+					{
+						for (int v = 0; v<Face.vcount; v++)
+						{
+							vertex &V = Face.Vertices[v];
+							
+							if (!setBox) { D.set(V.x,V.y,V.z); setBox = 1; }
+							else
+							{
+								if (V.x < D.xs) D.xs = V.x;
+								if (V.x > D.xb) D.xb = V.x;
+								if (V.y < D.ys) D.ys = V.y;
+								if (V.y > D.yb) D.yb = V.y;
+								if (V.z < D.zs) D.zs = V.z;
+								if (V.z > D.zb) D.zb = V.z;
+							}
+						}
 					}
 				}
 			}
