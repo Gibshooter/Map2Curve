@@ -32,6 +32,10 @@ struct vertex
 	bool DoAddHeight = 0;
 	bool DoTri = 0;
 	bool IsCCW = 0;
+	bool IsValid = 1;
+	int SecID = 0;
+	int SegID = 0;
+	bool carved = 0;
 	
 	/* ===== VERTEX METHODS ===== */
 	
@@ -45,6 +49,7 @@ struct vertex
 	void push (int i);
 	void move(float moveX, float moveY, float moveZ);
 	void scale(float n);
+	void ScaleOrigin(float n, vertex Origin);
 	
 	vertex () {}
 	vertex (float a, float b, float c);
@@ -60,11 +65,14 @@ vertex GetMVertex(vertex v1, vertex v2);
 vertex GetCenTri(vertex v1, vertex v2, vertex v3);
 bool CompareVertices(vertex V0, vertex V1);
 bool CompareVerticesDeci(vertex V0, vertex V1, int deciplace);
+bool CompareVerticesXYDeci(vertex V0, vertex V1, int deciplace);
 bool CompareVerticesR(vertex V0, vertex V1);
 bool CompareVerticesXY(vertex V0, vertex V1);
 vertex Add(vertex V1, vertex V2);
 vertex Add(vertex V, gvector Vec);
 bool IsVertexInList(vertex &V, vertex *VList, int vcount, bool UsePrecision, int deci);
+bool IsVertexInList(vertex &V, vector<vertex> VList, bool UsePrecision, int deci);
+bool IsVertexXYInList(vertex &V, vector<vertex> VList, bool UsePrecision, int deci);
 
 
 /* ===== VERTEX GROUP CLASS ===== */

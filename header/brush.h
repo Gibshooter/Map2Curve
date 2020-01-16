@@ -56,6 +56,9 @@ struct brush
 	float Pitch		= 0;
 	face *HSourceL = nullptr;
 	face *HSourceS = nullptr;
+	dimensions D;
+	vertex Origin;
+	bool IsOrigin = 0;
 	
 	int* vlist 		= nullptr;
 	circleset *cset = nullptr;
@@ -87,6 +90,9 @@ struct brush
 	void RefreshSpikeTents();
 	void CreateTent();
 	void Reconstruct();
+	void CheckForHoles(vector<int> &Neighbors);
+	void FixHoles();
+	bool IsEdgeInBrush(vertex &E1, vertex &E2, int Exlude);
 	
 	void GetSourceFaces();
 	void GetSimpleCentroid();
@@ -100,6 +106,10 @@ struct brush
 	void GetFaceNormals();
 	void GetFaceShifts();
 	void GetTVecAligns();
+	void CarveBrush(gvector Plane);
+	bool IsOriginBrush();
+	void GetBrushDimensions(bool Overwrite);
+	void FixBorderliner(int prec);
 	
 	brush* Gap = nullptr;
 	brush* Tri = nullptr;
@@ -110,10 +120,15 @@ struct brush
 
 /* ===== BRUSH FUNCTIONS ===== */
 
+ostream &operator<<(ostream &ostr, brush &Brush);
+
 brush* Face2Brush(face &SrcFace);
 brush* Face2BrushTri(face &SrcFace, int Side);
 brush* Face2BrushTriBridge(face &SrcFace, int VID);
 brush* Face2BrushTriFan(face &SrcFace, int VID);
 
+void ExportBrushToOBJ(string OutputFile, brush &Brush);
+brush* CreateCube(int size);
+brush* MakeBoxHollow(dimensions D, float wallsize, string Tex);
 
 #endif

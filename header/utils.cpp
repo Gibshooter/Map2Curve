@@ -6,6 +6,7 @@
 #include <vector>
 #include <iostream>
 #include <fstream>
+#include <iomanip> // precision
 #include <dirent.h> // dir, opendir, readdir, closedir
 #include <math.h> // floorf, pow, sqrt, isnan, isinf, round
 #include <sstream> // stringstream
@@ -336,6 +337,16 @@ void CreateSlopeSmooth(float step, int size, vector<float>&List)
 
 /* ===== FILE & STRING HANDLING FUNCTIONS ===== */
 
+void ReplaceInList(vector<string> &List1, vector<string> &List2, string L1_candidate, string L2_replace)
+{
+	for(int i=0; i<List1.size(); i++)
+	{
+		string &EntryL1 = List1[i];
+		string &EntryL2 = List2[i];
+		if(EntryL1==L1_candidate) { EntryL2 = L2_replace; break; }
+	}
+}
+
 bool ContainsInvalids(string Subject, string Valids)
 {
 	if (Subject.find_first_not_of(Valids)==-1)
@@ -435,7 +446,7 @@ void GetFileList(string path, vector<string> &list)
 	DIR *dir;
 	struct dirent *ent;
 	if ((dir = opendir (c_path)) != NULL) {
-	  /* print all the files and directories within directory */
+	  // print all the files and directories within directory
 	  while ((ent = readdir (dir)) != NULL) {
 	    list.push_back(ent->d_name);
 	  }
@@ -517,6 +528,36 @@ int n_pow(int a, int expo)
 
 
 /* ===== MISC NUMBER FUNCTIONS ===== */
+
+int IsBorderliner(float n, int prec)
+{
+	bool dev = 0;
+	if(n<0) n=-n;
+	if(dev) cout << setprecision(8) << " IsBorderliner " << n << " precision " << prec << endl;
+	int d = pow(10, prec);
+	if (d==0) d=1;
+	
+	// n = 5.0001
+	int n_round = n; // n_round = 5
+	if( n == n_round ) { if(dev)cout << " Number is even! "<<endl<<endl; return 2; } // number is even
+	else
+	{
+		float n_deci = n-n_round; // n_deci = 5.0001 - 5 = 0.0001
+		if(round(n_deci)==0) // round(0.0001) == 0
+		{
+		}
+		else // e.g. round(0.9999) == 1
+		{
+			n_deci -= 1; // 0.9999 - 1 = -0.0001
+			n_deci = -n_deci; // n_deci = 0.0001
+		}
+		float temp = round(n_deci*d); // e.g. d=100; temp = 0.0001 * 100 = 0.01
+		if(dev) cout << "   n_deci " << n_deci << endl;
+		if(dev) cout << "   temp " << temp << endl;
+		if(temp==0) { if(dev)cout << " Number is Borderliner! "<<endl<<endl; return 1; }
+		else { if(dev)cout << " Number is NO Borderliner! "<<endl<<endl; return 0; }
+	}
+}
 
 float GetRandInRange(float min, float max)
 {

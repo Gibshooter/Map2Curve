@@ -29,6 +29,26 @@ extern group *bGroup;
 
 /* ===== FACE METHODS ===== */
 
+void face::AddNewVertex(vertex N)
+{
+	// create new vertex array
+	vertex *NewVerts = new vertex[vcount+1];
+	
+	// copy old array
+	for (int v=0; v<vcount; v++)
+	{
+		NewVerts[v] = Vertices[v];
+	}
+	NewVerts[vcount] = NewVerts[vcount-1]; // copy last original vertex, to copy possible settings
+	NewVerts[vcount].setall(N.x,N.y,N.z); // copy coords of new vertex
+	
+	delete[] Vertices;
+	Vertices = NewVerts;
+	vcount++;
+	
+	SortVertices(Normal);
+}
+
 void face::MiniShift()
 {
 	bool dev = 0;
@@ -209,25 +229,189 @@ void face::RefreshTent(face &Base)
 	}
 }
 
-void face::ConvertToSheared(bool IsLongEdge, bool IsInside, bool Reverse, brush &Brush)
+void face::SortVertices(gvector nVec)
+{
+	bool dev = 0;
+	face &Face = *this;
+	if(dev) cout<< " Sorting Face Vertices - Tex " << Face.Texture << " nVec "<< nVec << endl;
+	//Face.GetNormal();
+	Face.Normal = nVec;
+	
+	face Face2; Face2.CopyFace(Face,1);
+	float Yaw = GetVecAlign(Normal,0);
+	Face2.RotateVertices(0,0,-Yaw);
+	Face2.Normal.rotate(0,0,-Yaw);
+	
+	float Pitch = GetVecAlign(Face2.Normal,1);
+	Face2.RotateVertices(0,Pitch,0);
+	if(dev) Face2.Normal.rotate(0,Pitch,0);
+	
+	Face2.RotateVertices(0,-90,0);
+	if(dev) Face2.Normal.rotate(0,-90,0);
+	
+	if(dev) cout<< "  Face Yaw " << Yaw << " Pitch " << Pitch << endl;
+	Face2.GetCentroid();
+	if(dev) cout << "   Face2 Normal " << Face2.Normal << " Yaw " << GetVecAlign(Face2.Normal,0) << " Pitch " << GetVecAlign(Face2.Normal,1) << endl;
+	if(dev) cout << "   Face2 Centroid " << Face2.Centroid << endl;
+	
+	vector<int> Sorted; Sorted.resize(vcount,0);
+
+	// Get Yaw Angles
+	if(dev) cout<<"   Getting Yaw Angles..." << endl;
+	vector<float> ListYaw; ListYaw.resize(vcount,0);
+	for(int v=0; v<vcount; v++)
+	{
+		vertex &V = Face2.Vertices[v];
+		gvector Vec = GetVector(Face2.Centroid,V);
+		ListYaw[v] = GetVecAlign(Vec,0);
+		if(dev) cout<< "      vertex #" << v << " Yaw " << ListYaw[v] << endl;
+	}
+	
+	int small = 0, big = 0;
+	for(int v=1; v<vcount; v++) if(ListYaw[v]<ListYaw[small]) small = v;
+	for(int v=1; v<vcount; v++) if(ListYaw[v]>ListYaw[big]) big = v;
+	Sorted[0] = small;
+	Sorted[Sorted.size()-1] = big;
+	fill(Sorted.begin()+1,Sorted.end()-1,big);
+	
+	// get sorted Vertex index list based on Yaw
+	for(int s=1; s<vcount-1; s++)
+	{
+		int &Ind_C = Sorted[s];
+		int &Ind_L = Sorted[s-1];
+		float &Ang_L = ListYaw[ Ind_L ]; // the current minimum yaw
+		// check all yaws for one that is NOT smaller than current minimum and yet the smallest of all the remaining ones
+		for(int v=0; v<vcount; v++)
+		{
+			float &Candi = ListYaw[v];
+			if(Candi>Ang_L && Candi<ListYaw[ Sorted[s] ]) { Ind_C = v; if(dev)cout << "        Changing Current Index to " << v << "("<< ListYaw[ Sorted[s] ] <<")" <<endl; }
+			if(dev)cout << "        Sorted #" << s << " Ind_C " << Ind_C << " LastYaw " << Ang_L << " CurYaw " << ListYaw[ Sorted[s] ] << " Candi #" << v << " " << Candi << endl;
+		}
+	}
+	
+	if(dev) {
+	cout << "     Sorted Vertex Index List..." << endl;
+	for(int v=0; v<Sorted.size(); v++) { int &V = Sorted[v]; cout << "        #" << v << " Index " << Sorted[v] << " Yaw " << ListYaw[ Sorted[v] ] << endl; } }
+	
+	// create new vertex array and replace old one
+	vertex *V_New = new vertex[vcount];
+	for(int i=0; i<vcount; i++)
+	{
+		vertex &V = V_New[i];
+		vertex &N = Vertices[ Sorted[i] ];
+		V = N;
+	}
+	delete[] Vertices;
+	Vertices = V_New;
+	
+	//if(Face2.Normal.z>0)
+	Face.RevOrder(0);
+	
+	if(dev) {
+	cout << "     Final Vertex List..." << endl;
+	for(int v=0; v<vcount; v++) { cout << "        #" << v << " " << Vertices[v] << endl; } getch(); cout << endl; }
+}
+
+void face::ConvertToSheared()
+{
+	bool dev = 0;
+	face &Face = *this;
+	
+	GetBaseEdges(Face);
+	GetBaseShift(Face,0,1,0);
+	Face.OffsetX = Face.HSourceL->OffsetX;
+	Face.RefreshEdges();
+	Face.GetLenHor(0);
+	
+	if(dev) {cout << " Shearing Face " << Face.name << endl << " Tex " << Face.Texture << endl << " Orient " << Face.Orient << endl << " Offset ";
+	if (Face.VecX.IsHor) cout << OffsetX << endl; else cout << OffsetY << endl;
+	cout << " Shift "; 		if (Face.VecX.IsHor) cout << ShiftX << endl; else cout << ShiftY << endl;
+	cout << " BaseShift ";	if (Face.VecX.IsHor) cout << BaseShiftX << endl; else cout << BaseShiftY << endl; }
+	
+	if(Face.Orient==2||Face.Orient==3)
+	{
+		// get new Face Vectors
+		gvector VecH_Old = *Face.VecH;
+		Face.GetNormal();
+		gvector Cross = Normalize( GetCross(Face.Normal, Face.EdgeV) );
+		Face.VecH->CopyCoords(Cross);
+		if(GetDot(*Face.VecH, VecH_Old)<0) Face.VecH->flip();
+		
+		// get old Hor Lengths
+		float HLenO = EdgeLenL;
+		
+		// get new lengths, texture, scale and shift
+		float HLenN=0;
+		if		(vcount==4&&Face.Orient==3) HLenN = GetAdjaLen(GetVector(Vertices[1],Vertices[3]), *Face.VecH);
+		else if (vcount==4&&Face.Orient==2) HLenN = GetAdjaLen(GetVector(Vertices[0],Vertices[2]), *Face.VecH);
+		else if (vcount==3) HLenN = GetAdjaLen(GetVector(Vertices[0],Vertices[2]), *Face.VecH);
+		
+		float m = HLenO/HLenN;
+		if(Face.VecX.IsHor) {
+			Face.ScaleX /= m; } else {
+			Face.ScaleY /= m; }
+		
+		GetBaseShift(Face,0,1,0);
+		if(Face.VecX.IsHor) {
+			Face.ShiftX = Face.BaseShiftX + Face.OffsetX;
+		} else {
+			Face.ShiftY = Face.BaseShiftY + Face.OffsetY;
+		}
+		if(dev){
+			cout << " Hypo " << Hypo << " (Len " << GetVecLen(Hypo) << ")" << endl;
+			cout << " VecH " << *VecH << endl;
+			cout << " VecH_OLD " << VecH_Old << endl;
+			cout << " EdgeH " << EdgeH << " (Len " << GetVecLen(EdgeH) << ")" << endl;
+			cout << " HSourceL " << Face.HSourceL->EdgeH << " name " << Face.HSourceL->name <<" (Len " << Face.HSourceL->EdgeLenL << ")" << endl;
+			cout << " HSourceS " << Face.HSourceS->EdgeH << " name " << Face.HSourceS->name <<" (Len " << Face.HSourceS->EdgeLenS << ")" << endl;
+			cout << " HLenO " << HLenO << "(made of Face.HSourceL->EdgeLenL ("<<Face.HSourceL->EdgeLenL<<"))" << endl;
+			cout << " HLenN " << HLenN << endl;
+			cout << " m " << m << endl;
+			cout << " Scale "; if(Face.VecX.IsHor) cout << ScaleX<<endl; else cout << ScaleY << endl;
+			cout << " BaseShift "; if(Face.VecX.IsHor) cout << BaseShiftX<<endl; else cout << BaseShiftY << endl;
+			cout << " Shift "; if(Face.VecX.IsHor) cout << ShiftX<<endl; else cout << ShiftY << endl;
+			cout << " Hor Vec? "; if(Face.VecX.IsHor) cout <<"X"<<endl; else cout << "Y" << endl;
+		}
+	}
+	else
+	{
+		// get old Hor Face Lengths
+		float HLenO = Face.HSourceL->EdgeLenL;
+		float HLenN = Face.EdgeLenL;
+		float m = (HLenO - HLenN)/2;
+		if(dev) cout << " HLenO " << HLenO << " HLenN " << HLenN << " m " << m << endl;
+		
+		// get new texture scale and shift
+		if(m!=0)
+		{
+			if(Face.VecX.IsHor)
+			Face.ShiftX = Face.ShiftX - m;
+			else
+			Face.ShiftY = Face.ShiftY - m;
+		}
+	}
+	
+	if(dev) getch();
+	if(dev) cout << endl;
+}
+
+void face::ConvertToShearedTri(bool IsLongEdge, bool IsInside, bool Reverse, brush &Brush)
 {
 	bool dev = 0;
 	face &Face = *this;
 	
 	// Determine whether this wedge is the long or the short one in the case of a reversed spline extrusion
-	if(Reverse) { if(IsLongEdge) IsLongEdge=0; else IsLongEdge=1; }
+	//if(Reverse) { if(IsLongEdge) IsLongEdge=0; else IsLongEdge=1; }
 	GetBaseEdges(Face);
 	GetBaseShift(Face,0,1,0);
 	Face.OffsetX = Face.HSourceL->OffsetX;
 	Face.RefreshEdges();
 	
-	if(dev) {cout << " Shearing Face " << Face.name << endl << " Tex " << Face.Texture << endl << " Orient " << Face.Orient << endl << " Offset ";
+	if(dev) {cout << " Shearing Face " << Face.name << endl << " Tex " << Face.Texture << endl << " Orient " << Face.Orient << endl << " IsWedge " << Brush.IsWedge << endl << " Offset ";
 	if (Face.VecX.IsHor) cout << OffsetX << endl; else cout << OffsetY << endl;
 	cout << " Shift "; 		if (Face.VecX.IsHor) cout << ShiftX << endl; else cout << ShiftY << endl;
 	cout << " BaseShift ";	if (Face.VecX.IsHor) cout << BaseShiftX << endl; else cout << BaseShiftY << endl;
 	if (IsLongEdge) cout << " LONG Wedge" << endl; else cout <<" SHORT Wedge" << endl;}
-	
-	//Face.Texture = Face.name;
 	
 	if(Face.Orient==2||Face.Orient==3)
 	{
@@ -248,20 +432,21 @@ void face::ConvertToSheared(bool IsLongEdge, bool IsInside, bool Reverse, brush 
 		//	if(IsLongEdge) HLenN = GetAdjaLen(Brush.HSourceL->EdgeLenL, GetVecAng(Brush.HSourceS->EdgeH, *Face.VecH)); else HLenN = Face.GetLenHor(0); if(HLenN<0) HLenN=-HLenN;
 		//else
 		//	if(IsLongEdge) HLenN = Face.GetLenHor(0); else { HLenN = GetAdjaLen(Brush.HSourceS->EdgeLenS, GetVecAng(Brush.HSourceS->EdgeH, *Face.VecH)); if(HLenN<0) HLenN=-HLenN; } // necessary for spline extrusion ???
-		HLenN = Face.GetLenHor(0); if(HLenN<0) HLenN=-HLenN;
+		if(!Brush.IsWedge) HLenN = Face.GetLenHor(0); if(HLenN<0) HLenN=-HLenN;
+		else if(Brush.IsWedge) HLenN = GetAdjaLen(GetVector(Vertices[0],Vertices[2]), *Face.VecH);
 		
 		float m = HLenO/HLenN;
 		if(Face.VecX.IsHor) {
 			Face.ScaleX /= m; } else {
 			Face.ScaleY /= m; }
+		
 		GetBaseShift(Face,0,1,0);
 		if(Face.VecX.IsHor) {
 			Face.ShiftX = Face.BaseShiftX + Face.OffsetX;
 		} else {
 			Face.ShiftY = Face.BaseShiftY + Face.OffsetY;
 		}
-		
-		if(dev){
+		/*if(dev){
 			cout << " Hypo " << Hypo << " (Len " << GetVecLen(Hypo) << ")" << endl;
 			cout << " VecH " << *VecH << endl;
 			cout << " VecH_OLD " << VecH_Old << endl;
@@ -275,7 +460,7 @@ void face::ConvertToSheared(bool IsLongEdge, bool IsInside, bool Reverse, brush 
 			cout << " BaseShift "; if(Face.VecX.IsHor) cout << BaseShiftX<<endl; else cout << BaseShiftY << endl;
 			cout << " Shift "; if(Face.VecX.IsHor) cout << ShiftX<<endl; else cout << ShiftY << endl;
 			cout << " Hor Vec? "; if(Face.VecX.IsHor) cout <<"X"<<endl; else cout << "Y" << endl;
-		}
+		}*/
 	}
 	else
 	{
@@ -320,6 +505,120 @@ void face::ConvertToSheared(bool IsLongEdge, bool IsInside, bool Reverse, brush 
 	}
 	if(dev) getch();
 	if(dev) cout << endl;
+}
+
+int face::IsFaceBeyondPlane(gvector nVec)
+{
+	bool dev = 0;
+	int Invalids = 0;
+	if(dev) cout << "    +----" << endl << "    | IsFaceBeyondPlane?..." << endl;
+	// for each vertex of the face, check if it is beyond the given plane
+	for(int v=0; v<vcount; v++)
+	{
+		vertex &V = Vertices[v];
+		vertex Origin(nVec.px,nVec.py,0);
+		vertex Pos(V.x,V.y,0);
+		gvector Hypo(Origin, Pos);
+		float AdjaLen = GetAdjaLen(Hypo,nVec);
+		if(dev) cout << "    |   #"<<v<<" AdjaLen " << AdjaLen << " Origin " << Origin << " V " << V << " HypoLen " << GetVecLen(Hypo) << endl;
+		if(AdjaLen>0) { V.IsValid = 0; Invalids++; }
+	}
+	if(Invalids==vcount)
+	{
+		// All Vertices of this face are beyond Plane. Face is completely out of bound and can be discarded!
+		if(dev) cout << "    | 111111111111 All Vertices of this face are beyond Plane!" << endl << "    +----" << endl << endl;
+		if(dev) getch();
+		draw = 0;
+		return 1;
+	} else if(Invalids==0) {
+		// No Vertex of this face is beyond Plane. Face wont be carved at all!
+		if(dev) cout << "    | 000000000000 No Vertex of this face is beyond Plane!" << endl << "    +----" << endl << endl;
+		if(dev) getch();
+		return 0;
+	} else {
+		// Some vertices of this face are on the one and some on the other side of the Plane. Face will be carved!
+		if(dev) cout << "    | 222222222222 Face will be carved!" << endl << "    +----" << endl << endl;
+		if(dev) getch();
+		return 2;
+	}
+}
+
+int face::CarveFace(gvector Plane)
+{
+	bool dev = 0;
+	face &Face = *this;
+	Face.GetNormal();
+	if(dev) cout << endl << "FACE Carving Face (tex " << Face.Texture << " nVec " << Normal << " vcount " <<Face.vcount<<") with Plane " << Plane << endl;
+	int IsBeyond = Face.IsFaceBeyondPlane(Plane);
+	if(IsBeyond==2)
+	{
+		Plane.rotate(0,0,-90); // cutting plane vector is currently a normal vector, so rotate it by 90 degree to get an intersection line
+		vector<vertex> V_New;
+		// carve relevant edges (one vertex in front of plane and one behind)
+		for(int v=0; v<vcount; v++)
+		{
+			vertex &V1 = Vertices[v];
+			vertex *V2_Ptr = nullptr;
+			if(v<vcount-1)	V2_Ptr = &Vertices[v+1];
+			else			V2_Ptr = &Vertices[0];
+			vertex &V2 = *V2_Ptr;
+			
+			if( (V1.IsValid&&!V2.IsValid) || (!V1.IsValid&&V2.IsValid) )
+			{
+				// make everything flat, because this way it's easier to intersect
+				gvector Line = GetVector(V1,V2);
+				gvector Line_Flat = Line; Line_Flat.z = 0;
+				vertex Plane_Origin(Plane.px,Plane.py,0);
+				vertex V1_Flat(V1.x,V1.y,0);
+				vertex Isect = GetLineIsect(V1_Flat, Plane_Origin, Line_Flat, Plane);
+				
+				// now get height of 2D intersection
+				if(Line.z!=0)
+				{
+					float AdjaLen = GetAdjaLen(Line, Line_Flat);
+					gvector Section = GetVector(V1_Flat, Isect);
+					float Sec_Len = GetVecLen(Section);
+					float m = Sec_Len/AdjaLen;
+					gvector Hypo_New(Line); Hypo_New.mult(m);
+					Isect.z = V1.z + Hypo_New.z;
+				}
+				else Isect.z = V1.z;
+				
+				if(dev) cout << "FACE  #"<<v<<" Line_F " << Line_Flat << " V1_F " << V1_Flat << " V2 " << V2 << " Plane " << Plane << "(yaw "<<GetVecAlign(Plane,0)<<") Plane_O " << Plane_Origin << " Isect " << Isect << endl;
+				V_New.push_back(Isect);
+			}
+		}
+		// delete obsolete and add new vertices from intersection
+		vector<vertex> V_Clean;
+		for(int v=0; v<vcount; v++)
+		{
+			vertex &V = Vertices[v];
+			if(V.IsValid) { V_Clean.push_back(V);
+			if(dev) cout << "FACE    Clean Vertex #" << v << V << endl; }
+		}
+		for(int v=0; v<V_New.size(); v++)
+		{
+			vertex &V = V_New[v];
+			V_Clean.push_back(V);
+			if(dev) cout << "FACE    New Vertex #" << v << V << endl;
+		}
+		vertex *V_Final = new vertex[V_Clean.size()];
+		for(int v=0; v<V_Clean.size(); v++) {
+			V_Final[v] = V_Clean[v];
+			if(dev) cout << "FACE    Final Vertex #" << v << V_Final[v] << endl;
+		}
+		
+		delete[] Vertices;
+		Vertices = V_Final;
+		vcount = V_Clean.size();
+		
+		// sort final vertices
+		Face.SortVertices(Face.Normal);
+		if(dev) cout << endl << "FACE END (vcount now " <<Face.vcount<<")" << endl;
+		return 2;
+	}
+	else if(IsBeyond==1) return 1;
+	else if(IsBeyond==0) return 0;
 }
 
 void face::CreateRamp(int g, int b, int f, int SecID, bool IsWedge2, float Bstep)
@@ -734,6 +1033,7 @@ void face::CopyFace(face &Source, bool CopyVertices)
 	HSourceL = Source.HSourceL;
 	HSourceS = Source.HSourceS;
 	name 	= Source.name;
+	draw	= Source.draw;
 	if (CopyVertices)
 	{
 		vcount = Source.vcount;
@@ -871,8 +1171,6 @@ bool face::GetVertexOrder()
 
 
 
-
-
 /* ===== FACE FUNCTIONS ===== */
 
 // check if 2 faces are parallel to each other
@@ -922,6 +1220,42 @@ bool DoFacesShareVerts(face &F1, face &F2, int deciplaces)
 	return false;
 }
 
+bool IsVertexOnPlane(gvector &Normal, vertex &V, int deci)
+{
+	bool dev = 0;
+	int p = pow(10,deci); // precision
+	if (p==0) p=1;
+	
+	// distance
+	double d = GetDistPlaneVertex(Normal,V);
+	
+	if(dev) cout << " Distance d " << d << " rounded by deci " << deci << " = " << (floorf(d*p)/p) << endl;
+	if(dev) getch();
+	int d_rounded = floorf(d*p);
+	if ( d_rounded/p==0 ) return true;
+	else return false;
+}
+
+double GetDistPlaneVertex(gvector &Normal, vertex &V)
+{
+	bool dev = 0;
+	vertex Origin(Normal.px, Normal.py, Normal.pz);
+	double d = GetAdjaLen(  GetVector( Zero, Origin ), Normal  );
+	float x1 = Normal.x;
+	float x2 = Normal.y;
+	float x3 = Normal.z;
+	float p1 = V.x;
+	float p2 = V.y;
+	float p3 = V.z;
+	
+	double tempA = (x1*p1)+(x2*p2)+(x3*p3)-d;
+	double tempB = sqrt( pow(x1,2) + pow(x2,2) + pow(x3,2) );
+	
+	double result = tempA / tempB;
+	if(dev) cout << " Distance Plane " << Normal << " Plane Pos " <<Origin << " V " << V << " d " << d << " tempA " << tempA << " tempB " << tempB << " result " << result << endl;
+	return result;
+}
+
 bool IsVertexOnFace(face &Face, vertex &V, int deci)
 {
 	int p = pow(10,deci); // precision
@@ -929,8 +1263,9 @@ bool IsVertexOnFace(face &Face, vertex &V, int deci)
 	
 	// distance
 	double d = GetDistFaceVertex(Face,V);
-	
-	if ( (floorf(d*p)/p)==0 ) return true;
+	int d_rounded = round(d);
+	float d_multi = d_rounded*p;
+	if ( d_multi/p==0 ) return true;
 	else return false;
 }
 
@@ -1410,7 +1745,8 @@ float GetFaceLen(face &Face) {
 	return result;
 }
 
-ostream &operator<<(ostream &ostr, face &Face)
+
+void WriteFaceMAP(ostream &ostr, face &Face)
 {
 	ostr << setprecision(8) << fixed;
 	ostr << Face.Vertices[0] << Face.Vertices[1] << Face.Vertices[2];
@@ -1433,6 +1769,47 @@ ostream &operator<<(ostream &ostr, face &Face)
 	ostr << Face.ScaleY << " ";
 	ostr << endl;
 	
+	ostr << setprecision(0) << fixed;
+}
+
+
+ostream &operator<<(ostream &ostr, face &Face)
+{
+	ostr << endl << " ### Printing Face ###" << endl;
+	ostr << "  Vertices: " << Face.vcount << endl;
+	for(int v=0; v<Face.vcount; v++) {
+		ostr << "   #" << v << " " << Face.Vertices[v] << endl;
+	}
+	ostr << "  Normal " << Face.Normal << endl;
+	ostr << "  Texture " << Face.Texture << endl;
+	ostr << "  VecX " << Face.VecX << endl;
+	ostr << "  VecY " << Face.VecY << endl;
+	ostr << "  ShiftX " << Face.ShiftX << endl;
+	ostr << "  ShiftY " << Face.ShiftY << endl;
+	ostr << "  ScaleX " << Face.ScaleX << endl;
+	ostr << "  ScaleY " << Face.ScaleY << endl;
+	ostr << endl;
+	
 	return ostr;
 }
+
+bool DoFacesShareVertices(face &F1, face &F2)
+{
+	for(int v1=0; v1<F1.vcount; v1++)
+	{
+		for(int v2=0; v2<F2.vcount; v2++)
+		{
+			if( CompareVerticesR(F1.Vertices[v1], F2.Vertices[v2]) )
+			{
+				return 1;
+			}
+		}
+	}
+	return 0;
+}
+
+
+
+
+
 

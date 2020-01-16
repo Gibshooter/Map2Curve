@@ -45,6 +45,7 @@ struct group {
 	vector<face*> hSourceFace2;
 	vector<float> heightTable;
 	vector<float> heightTableSteps;
+	vector<gvector> SecIsect; // intersections for detail groups if d_carve is active
 	vector<bool> GapList;
 	face **SecBaseFace = nullptr;
 	dimensions Dimensions; // bounding box
@@ -56,7 +57,9 @@ struct group {
 	bool RCON = 0;
 	bool ValidMesh = 1;
 	bool ValidSpline = 1;
-	vector<bool> IsSecInside;
+	string groupname = "";
+	vector<bool> IsSecInside; // list of inside sections; not used ATM!; meant to be used for proper texture shearing
+	bool HasOrigin = 0;
 	
 	float d_pos = -1;
 	int d_autopitch = -1;
@@ -67,18 +70,24 @@ struct group {
 	tform d_pos_rand;
 	tform d_rotz_rand;
 	tform d_movey_rand;
+	tform d_scale_rand;
 	int d_draw = -1;
 	int d_draw_rand = -1;
 	int d_skip = -1;
+	int d_carve = -1;
+	int d_circlemode = -1;
 	
-	void GetDimensions(bool Overwrite);
+	void MarkGroupOriginObjects();
+	void GetGroupDimensions(bool Overwrite, bool CustomOrigin);
 	void Move(float x, float y, float z, bool LockBrushShifts);
 	void MoveSecs(vector<gvector> &Move, bool LockBrushShifts);
+	void ScaleOriginSecs(vector<float> &Scale, vector<vertex> &Origin);
 	void RotOriginSecs(vector<float> &RotX, vector<float> &RotY, vector<float> &RotZ, vector<vertex> &Origin, bool LockBrushShifts);
 	void Copy(group &Source);
 	void CopyProps(group &Source);
+	void FillUnsetKeySettings();
 	
-	void GetOrigin();
+	void GetGroupOrigin();
 	void CheckBrushValidity();
 	void GetBrushFaceOrients();
 	void CheckBrushDivisibility();
@@ -100,6 +109,9 @@ struct group {
 	void GetTransitVertices();
 	void CheckNULLBrushes();
 	bool CheckForSlopes();
+	void CreateIsects();
+	void CarveGroupSections();
+	void WeldGroupVertices(bool WeldGaps);
 	
 	void AddBrushHeights();
 	void CreateHeightTable();
@@ -120,11 +132,10 @@ struct group {
 	void GetBrushFaceCentroidsC();
 	void GetBrushTVecAligns();
 	void MarkInsideSecBrushes();
+	void GetGroupOriginCustom();
 	
-	group() {
-		boundBox = new brush(6,3);
-	}
-	~group() {delete[] Brushes; delete boundBox; delete[] Entities;}
+	group() {}
+	~group() {delete[] Brushes; delete[] boundBox; delete[] Entities;}
 };
 
 ostream &operator<<(ostream &ostr, group &g);
@@ -137,7 +148,7 @@ struct group_set
 	int t_groups = 0;
 	dimensions Dimensions;
 	
-	void GetDimensions(bool Overwrite);
+	void GetGroupSetDimensions(bool Overwrite);
 	group_set() {}
 	~group_set() { delete[] Groups; }
 };

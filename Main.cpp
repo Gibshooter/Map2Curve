@@ -4,6 +4,8 @@
 #include "header\settings.h"
 #include "header\utils.h"
 #include "header\vertex.h"
+#include "header\RMF.h"
+#include "header\LSE.h"
 
 #include <iostream>
 #include <string>
@@ -64,11 +66,11 @@ using namespace std;
 
 
 // command list // 0 = bool, 1 = int, 2 = float, 3 = string, 4 = tform
-vector<string> slist    { "rad", "offset", "res", "type", "obj", "shift", "target", "append", "tri", "round", "height", "ramp", "p_cornerfix", "p_reverse", "ramptex", "p_split", "splinefile", "scale", "rot", "move", "scale_src", "rot_src", "bounds", "range_start", "range_end", "transit_tri", "transit_round", "gaps", "gaplen", "skipnull", "d_enable", "d_autoyaw", "d_autopitch", "d_pos", "nulltex", "spike_height", "d_separate", "d_autoname", "d_pos_rand", "d_rotz_rand", "d_movey_rand", "d_draw", "d_draw_rand", "d_skip", "heightmode", "p_scale", "p_expand", "p_evenout", "map", "c_enable", "texmode" };
+vector<string> slist    { "rad", "offset", "res", "type", "obj", "shift", "target", "append", "tri", "round", "height", "ramp", "p_cornerfix", "p_reverse", "ramptex", "p_split", "splinefile", "scale", "rot", "move", "scale_src", "rot_src", "bounds", "range_start", "range_end", "transit_tri", "transit_round", "gaps", "gaplen", "skipnull", "d_enable", "d_autoyaw", "d_autopitch", "d_pos", "nulltex", "spike_height", "d_separate", "d_autoname", "d_pos_rand", "d_rotz_rand", "d_movey_rand", "d_draw", "d_draw_rand", "d_skip", "heightmode", "p_scale", "p_expand", "p_evenout", "map", "c_enable", "texmode", "d_carve", "d_autoassign", "d_circlemode", "flatcircle", "d_scale_rand", "rmf" };
 vector<int> slist_id; 
-vector<int> slist_type  {  2,     2,        1,     1,      0,     1,       3,        0,        0,     0,       2,        0,      0,             0,           0,         0,         3,            4,       4,     4,      4,           4,         0,        2,             2,           0,             0,               0,      2,        0,          0,          0,           0,             2,       3,         2,              0,            0,            4,            4,             4,              1,        0,             1,        1,            4,         2,          0,           0,     0,          1};
-vector<int> slist_min   { -131072,-131072,  0,     0,      0,     0,       0,        0,        0,     0,       -131072,  0,      0,             0,           0,         0,         0,            0,       0,     0,      0,           0,         0,        0,             0,           0,             0,               0,      0,        0,          0,          0,           0,             0,       0,         0,              0,            0,            0,            0,             0,              0,        0,             0,        0,            0,         -131072,    0,           0,     0,          0};
-vector<int> slist_max   { 131072, 131072,   384,   3,      1,     5,       255,      1,        1,     1,       131072,   1,      1,             1,           1,         1,         255,          30,      30,    30,     30,          1,         1,        100,           100,         1,             1,               1,      131072,   1,          1,          1,           1,             1,       15,        131072,         1,            1,            30,           30,            30,             384,      1,             384,      5,            30,         131072,    1,           1,     1,          1};
+vector<int> slist_type  {  2,     2,        1,     1,      0,     1,       3,        0,        0,     0,       2,        0,      0,             0,           0,         0,         3,            4,       4,     4,      4,           4,         1,        2,             2,           0,             0,               0,      2,        0,          0,          0,           0,             2,       3,         2,              0,            0,            4,            4,             4,              1,        0,             1,        1,            4,         2,          0,           0,     0,          1,         1,        1,               1,               0,           4,             0};
+vector<int> slist_min   { -131072,-131072,  0,     0,      0,     0,       0,        0,        0,     0,       -131072,  0,      0,             0,           0,         0,         0,            0,       0,     0,      0,           0,         0,        0,             0,           0,             0,               0,      0,        0,          0,          0,           0,             0,       0,         0,              0,            0,            0,            0,             0,              0,        0,             0,        0,            0,         -131072,    0,           0,     0,          0,         0,        0,               0,               0,           10,            0};
+vector<int> slist_max   { 131072, 131072,   384,   3,      1,     5,       255,      1,        1,     1,       131072,   1,      1,             1,           1,         1,         255,          30,      30,    30,     30,          1,         2,        100,           100,         1,             1,               1,      131072,   1,          1,          1,           1,             1,       15,        131072,         1,            1,            30,           30,            30,             384,      1,             384,      5,            30,         131072,    1,           1,     1,          1,         1,        1,               1,               1,           10,            1};
 
 
 // Global Objects
@@ -84,9 +86,9 @@ vector<int> slist_max   { 131072, 131072,   384,   3,      1,     5,       255, 
 	bool ValidDefaults = 1;
 	ctable *dTable = nullptr; // Defaults construction Table
 	
-	group *mGroup = nullptr; 	// imported map source object
-	group *sGroup = nullptr; 	// Transformed map source objects (1 for each curve object)
-	group *bGroup = nullptr; 	// generated curve object
+	group *mGroup = nullptr; 	// Imported map
+	group *sGroup = nullptr; 	// Transformed map (1 for each curve object)
+	group *bGroup = nullptr; 	// Generated curves
 	
 	group *mDetailGroup = nullptr;	// original detail objects
 	group_set *sDetailSet = nullptr; // copied detail objects for each individual curve object
@@ -133,9 +135,9 @@ int main(int argc, char *argv[])
 		
 		// check for valid files
 		cout << "++---------------------++\n";
-		cout << "||   Map2Curve v0.6    ||\n";
+		cout << "||   Map2Curve v0.7    ||\n";
 		cout << "||      by ToTac       ||\n";
-		cout << "||   Dec 16th, 2019    ||\n";
+		cout << "||   Jan 16th, 2020    ||\n";
 		cout << "++---------------------++\n\n";
 		
 		int vcount = 0; // valid files counter
@@ -248,12 +250,13 @@ int main(int argc, char *argv[])
 				cout << "|  Creating Detail Objects..." << endl;
 				cFile.createDetailGroupSource();
 				
-				bool IsSetSTforms = 0, IsSetMap = 0, IsSetObj = 0;
+				bool IsSetSTforms = 0, IsSetMap = 0, IsSetObj = 0, IsSetRMF = 0;
 				for (int g = 0; g<mGroup->t_arcs; g++)
 				{
 					if (cTable[g].scale_src.IsSet || cTable[g].rot_src.IsSet) IsSetSTforms = 1;
 					if (cTable[g].map>0) IsSetMap = 1;
 					if (cTable[g].obj>0) IsSetObj = 1;
+					if (cTable[g].rmf>0) IsSetRMF = 1;
 				}
 				
 				if (IsSetSTforms)
@@ -281,8 +284,6 @@ int main(int argc, char *argv[])
 					
 					if (Group.valid)
 					{
-						cFile.createDetailGroup(g);
-						
 						def_nulltex = cTable[g].nulltex;
 						for (int i=0;i<def_nulltex.length();i++) def_nulltex[i] = toupper(def_nulltex[i]);
 						def_spikesize = cTable[g].spike_height;
@@ -300,6 +301,9 @@ int main(int argc, char *argv[])
 						cout << "|    Range:      Section " << floor(cTable[g].res*(cTable[g].range_start/100.0))+1 << " - " << floor(cTable[g].res*(cTable[g].range_end/100.0)) << " of total " << cTable[g].res << endl; //
 						cout << "|" << endl;
 						
+						cout << "|    Creating Detail Objects..." << endl;
+						cFile.createDetailGroup(g);
+						
 						cout << "|    Creating Construction Framework..." << endl;
 						cFile.createFramework(g);
 						
@@ -312,16 +316,20 @@ int main(int argc, char *argv[])
 						cout << "|    Texturing..." << endl;
 						cFile.texturize(g);
 						
+						cout << "|    Performing Cleanup..." << endl;
+						cFile.WeldVertices(g);
+						cFile.FixBorderliner(g);
+						
 						if (  ( cTable[g].tri>0 || cTable[g].ramp>0 || cTable[g].transit_tri>0 || cTable[g].round>0 || cTable[g].transit_round>0 ) && cTable[g].type!=2  ) {
 						cout << "|    Triangulating..." << endl;
 						cFile.Triangulate(g); }
 						
-						if ( cTable[g].texmode==1 &&cTable[g].tri>0 && ( cTable[g].ramp==0||(cTable[g].ramp>0&&cTable[g].height==0) ) && (cTable[g].type==0||cTable[g].type==1) ) {
-						cout << "|    Seamless Texture Mapping..." << endl;
+						if ( cTable[g].texmode==1 && ( cTable[g].ramp==0||(cTable[g].ramp>0&&cTable[g].height==0) ) && (cTable[g].type==0||cTable[g].type==1) ) {
+						cout << "|    Applying Texture Mapping..." << endl;
 						bGroup[g].ShearVectors(); }
 						
 						if (  cTable[g].ramp>0 ) {
-						cout << "|    Creating a Ramp..." << endl;
+						cout << "|    Creating Ramp..." << endl;
 						cFile.RampIt(g); }
 						
 						if (  cTable[g].scale.IsSet || cTable[g].move.IsSet || cTable[g].rot.IsSet  ) {
@@ -338,10 +346,9 @@ int main(int argc, char *argv[])
 						
 						cout << "|" << endl;
 						
-						if(cTable[g].map==0 && cTable[g].obj==0)
+						if(cTable[g].map==0 && cTable[g].obj==0 && cTable[g].rmf==0)
 						{
-							cout << "|    [ERROR] No output format set! Either <map> or <obj> format"<< endl;
-							cout << "|            has to be set, for generated data to be exported!"<< endl;
+							cout << "|    [WARNING] No output format set! Using RMF file format..."<< endl;
 						}
 					}
 					else
@@ -374,12 +381,18 @@ int main(int argc, char *argv[])
 				
 				if (validGroups>0) {
 				if (IsSetMap) {
-				cout << "|  Exporting selected data to map file \""; //\""<<cFile.name<<"_arc.map\"..." << endl;
+				cout << "|  Exporting selected data to MAP file \"";
 				cFile.ExportToMap();
 				cout << "\"..." << endl; }
 				
+				if (IsSetRMF) {
+				cout << "|  Exporting selected data to RMF file \"";
+				cFile.ExportToRMF();
+				cout << "\"..." << endl; }
+				
+				
 				if (IsSetObj) {
-				cout << "|  Exporting selected data to obj file(s)..." << endl;
+				cout << "|  Exporting selected data to OBJ file(s)..." << endl;
 				cFile.ExportToObj(); }
 				}
 				
@@ -420,9 +433,10 @@ int main(int argc, char *argv[])
 	}
 	else // argc == 1
 	{
-		cout << "This program works by dropping files onto the executable.\n";
-		cout << "Files can be Goldsource-Map (*.map) and Map2Curve Settings-File (*.txt).";
+		cout << "This program works by feeding it files.\n";
+		cout << "Valid input files are Goldsource-Map (*.map) and Map2Curve Preset-Files (*.txt).";
 		cout << "\n\nPRESS ANY BUTTON TO EXIT..." << endl;
+		
 		getch();
 		return 0;
 	}

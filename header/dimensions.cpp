@@ -2,11 +2,21 @@
 
 #include <math.h>
 #include <ostream>
+//#include <iostream>
 
 using namespace std;
 
 
 /* ===== DIMENSIONS METHODS & FUNCTIONS ===== */
+dimensions::dimensions(float as, float ab, float bs, float bb, float cs, float cb)
+{
+	xs = as;
+	xb = ab;
+	ys = bs;
+	yb = bb;
+	zs = cs;
+	zb = cb;
+}
 
 void dimensions::set(float a, float b, float c)
 {
@@ -16,6 +26,26 @@ void dimensions::set(float a, float b, float c)
 	yb = b;
 	zs = c;
 	zb = c;
+}
+
+void dimensions::set(float xyz[6])
+{
+	xs = xyz[0];
+	xb = xyz[1];
+	ys = xyz[2];
+	yb = xyz[3];
+	zs = xyz[4];
+	zb = xyz[5];
+}
+
+void dimensions::set(float as, float ab, float bs, float bb, float cs, float cb )
+{
+	xs = as;
+	xb = ab;
+	ys = bs;
+	yb = bb;
+	zs = cs;
+	zb = cb;
 }
 
 void dimensions::expand(int size)

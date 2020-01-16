@@ -67,12 +67,12 @@ struct path_set
 	bool cornerFix = 0;
 	bool preverse = 0;
 	int type = 0;
-	vector<float> heightTable;
+	//vector<float> heightTable;
 	float t_length = 0;
 	vertex Origin;
 	dimensions D;
 	
-	void GetDimensions();
+	void GetSplineSetDimensions();
 	void Scale(tform n);
 	void Analyze();
 	int CountSections();
@@ -109,7 +109,7 @@ struct circle
 	int SrcFace = 0;
 	vector<gvector> InVec;
 
-	void build_circlePi(int res, float rad, float height);
+	void build_circlePi(int res, float rad, float height, bool flat);
 	void build_circleGrid(int res, float rad, float height);
 	void build_pathGrid(int g, float posy, float height, path_set &Set);
 	void build_pathIntersect(int g, float posy, float height, path_set &Set);

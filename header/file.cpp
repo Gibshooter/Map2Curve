@@ -1,5 +1,4 @@
 #include "file.h"
-#include "group.h"
 #include "settings.h"
 #include "group.h"
 #include "vertex.h"
@@ -18,6 +17,7 @@
 
 using namespace std;
 
+//enum keytype;
 extern ctable *cTable;
 extern ctable *sTable;
 extern ctable *dTable;
@@ -31,566 +31,6 @@ extern vector<WADFile> WADFiles;
 extern vertex Zero;
 
 /* ===== FILE METHODS ===== */
-
-// Export Brush to .map-File
-void file::ExportToMap()
-{
-	bool dev = 0;
-	if (dev) cout << " Exporting Brush to .map-File..." << endl;
-	
-	ofstream mapfile;
-	
-	// custom export file
-	if (dev) cout << " Custom export file..." << endl;
-	
-	string str_target = "";
-	if (target!="ERR"&&target!="UNSET"&&target.length()>0)
-		str_target = target;
-	else
-		str_target = p_path+name+"_arc.map";
-	
-	// Console Info Message
-	if (dev) cout << " Console Info Message..." << endl;
-	cout << str_target;
-	
-	// append
-	string targetFile = "";
-	string targetFile_world;
-	string targetFile_ents;
-	if (append&&CheckIfFileExists(str_target))
-	{
-		targetFile 			= LoadTextFile(str_target);
-		targetFile_world 	= GetMapWorld(targetFile);
-		targetFile_ents 	= GetMapEnts(targetFile);
-	} else append = 0;
-	
-	if (dev) cout << " append " << cTable[0].append << " target len " << targetFile.length() << " worldspawn len " << targetFile_world.length() << " entities len " << targetFile_ents.length() << endl;
-	
-	// Skipping Brushes with only Nullfaces
-	for (int g = 0; g < mGroup->t_arcs; g++)
-	{
-		group &Group = bGroup[g];
-		if (cTable[g].skipnull>0 && cTable[g].map>0)
-		Group.CheckNULLBrushes();
-	}
-	
-	// Export to file
-	mapfile.open(str_target);
-	
-	// Write worldspawn header
-	if (dev) cout << " Worldspawn header..." << endl;
-	if (append)
-	mapfile << targetFile_world;
-	else
-	mapfile << EntityList[0].content.substr(0, EntityList[0].head_end) << endl;
-	
-	// Write all world brushes first (all arcs)
-	if (dev) cout << " Writing all world brushes first (all arcs)..." << endl;
-	for (int g = 0; g < mGroup->t_arcs; g++)
-	{
-		if(cTable[g].map>0 && cTable[g].c_enable>0)
-		{
-			// arc settings
-			int secs = bGroup[g].sections;
-			
-			// Iterate Brushes
-			for (int b = 0; b < bGroup[g].t_brushes; b++)
-			{
-				brush &Brush = bGroup[g].Brushes[b];
-				int sec = Brush.SecID;
-				
-				if (Brush.entID==0 && sec<bGroup[g].range_end && sec>=bGroup[g].range_start && Brush.draw)  // custom range (e.g. 0 to 100%) determined by range_start/end command
-				{
-					if (dev) cout << "  Writing Brush " << b << "..." << endl;
-					if (Brush.Tri==nullptr)
-					{
-						mapfile << "{" << endl;
-						
-						// Iterate Faces
-						for (int f = 0; f < Brush.t_faces; f++)
-						{
-							face &Face = Brush.Faces[f];
-							
-							if (Face.draw)
-							mapfile << Face;
-						}
-						
-						mapfile << "}" << endl;
-					}
-					else
-					{
-						for (int bt=0; bt<Brush.t_tri; bt++)
-						{
-							brush &TriBrush = Brush.Tri[bt];
-							if (TriBrush.draw)
-							{
-								mapfile << "{" << endl;
-								
-								// Iterate Faces
-								for (int f = 0; f < TriBrush.t_faces; f++)
-								{
-									face &FaceTB = TriBrush.Faces[f];
-									
-									if (FaceTB.draw)
-									mapfile << FaceTB;
-								}
-								
-								mapfile << "}" << endl;
-							}
-						}
-					}
-					
-					// Gap of current Brush
-					if (cTable[g].gaps>0&&Brush.Gap!=nullptr)
-					{
-						if (dev) cout << "   Writing Gap Brush..." << endl;
-						brush &Gap = *Brush.Gap;
-						mapfile << "{" << endl;
-						for (int f = 0; f < Gap.t_faces; f++)
-						{
-							face &GFace = Gap.Faces[f];
-							
-							if (GFace.draw)
-							mapfile << GFace;
-						}
-						mapfile << "}" << endl;
-					}
-				}
-			}
-		}
-	}
-	mapfile << "}" << endl; // finish world brushes
-	
-	if (append)
-	mapfile << targetFile_ents;
-
-	// write solid entities
-	if (dev) cout << " Writing solid entities..." << endl;
-	for (int g = 0; g < mGroup->t_arcs; g++)
-	{
-		if (cTable[g].type!=2&&cTable[g].type!=3 && cTable[g].map>0 && cTable[g].c_enable>0)
-		for (int e = 0; e < EntityList.size(); e++) // entity loop
-		{
-			entity &Entity = EntityList[e];
-			
-			// current solid entity header
-			if ( Entity.type==1 && !Entity.IsDetail )
-			{
-				mapfile << Entity.content.substr(0, Entity.head_end) << "\n";
-				//cout << "Arc #"<<g<<" Entity ID " << e << " Entity Type " << Entity.type << endl;
-				
-				// Iterate Brushes
-				for (int b = 0; b < bGroup[g].t_brushes; b++)
-				{
-					brush &Brush = bGroup[g].Brushes[b];
-					int sec = Brush.SecID;
-					
-					if (Brush.entID==e && sec<bGroup[g].range_end && sec>=bGroup[g].range_start && Brush.draw)
-					{
-						//cout << "Brush.SecID: " << Brush.SecID << ", range: " << range << endl;
-						if (Brush.Tri==nullptr)
-						{
-							mapfile << "{" << endl;
-							
-							// Iterate Faces
-							for (int f = 0; f < Brush.t_faces; f++)
-							{
-								face &Face = Brush.Faces[f];
-								
-								if (Face.draw)
-								mapfile << Face;
-							}
-							
-							mapfile << "}" << endl;
-						}
-						else
-						{
-							for (int bt=0; bt<Brush.t_tri; bt++)
-							{
-								brush &TriBrush = Brush.Tri[bt];
-								if (TriBrush.draw)
-								{
-									mapfile << "{" << endl;
-									
-									// Iterate Faces
-									for (int f = 0; f < TriBrush.t_faces; f++)
-									{
-										face &FaceTB = TriBrush.Faces[f];
-										
-										if (FaceTB.draw)
-										mapfile << FaceTB;
-									}
-									
-									mapfile << "}" << endl;
-								}
-							}
-						}
-						// Iterate Faces
-						/*
-						for (int f = 0; f < Brush.t_faces; f++)
-						{
-							face &Face = Brush.Faces[f];
-							
-							if (Face.draw)
-							mapfile << Face;
-						}
-						mapfile << "}" << endl;*/
-						
-						// Gap of current Brush
-						if (cTable[g].gaps>0&&Brush.Gap!=nullptr)
-						{
-							if (dev) cout << "   Writing Gap Brush..." << endl;
-							brush &Gap = *Brush.Gap;
-							mapfile << "{" << endl;
-							for (int f = 0; f < Gap.t_faces; f++)
-							{
-								face &GFace = Gap.Faces[f];
-								
-								if (GFace.draw)
-								mapfile << GFace;
-							}
-							mapfile << "}" << endl;
-						}
-					}
-				}
-				mapfile << "}" << endl; // finish current solid entity
-			}
-		}
-		else if ( (cTable[g].type==2||cTable[g].type==3) && cTable[g].map>0 && cTable[g].c_enable>0)
-		{
-			int t_orients 	= 1;
-			int t_paths 	= PathList[g].t_paths;
-			// count total orientations and assign orient ID to each Brush
-			//for (int sec = 0; sec<bGroup[g].sections; sec++)
-			for (int b = 1, o=0; b < bGroup[g].t_brushes; b++)
-			{
-				brush &Brush = bGroup[g].Brushes[b];
-				brush &LBrush = bGroup[g].Brushes[b-1];
-				
-				if (Brush.draw)
-				{
-					int sec = Brush.SecID;
-					
-					if (Brush.Align!=LBrush.Align)
-					{
-						o++;
-						if (sec==0) o=0;
-						if (b < bGroup[g].sections) t_orients++;
-						Brush.oID = o;
-					}
-					else if (Brush.Align==LBrush.Align)
-					{
-						if (sec==0) o=0;
-						Brush.oID = o;
-					}
-					
-					//Brush.Faces[2].Texture = "o_" + to_string(o) + "_p" + to_string(Brush.pID) + "_e" + to_string(Brush.entID);
-					//Brush.Faces[3].Texture = "o_" + to_string(o) + "_p" + to_string(Brush.pID) + "_e" + to_string(Brush.entID);
-					//Brush.Faces[4].Texture = "o_" + to_string(o) + "_p" + to_string(Brush.pID) + "_e" + to_string(Brush.entID);
-					//cout << " Brush " << b << " sec " << sec << " Align " << Brush.Align << " oID " << Brush.oID << " pID " << Brush.pID << endl;
-				}
-			}
-			//cout << " total orient groups " << t_orients << endl;
-			//cout << " total brushes " << bGroup[g].t_brushes;
-			//cout << " total ents " << EntityList.size() << endl;
-			//getch();
-			
-			// write spline brushes
-			for (int o = 0; o < t_orients; o++) // orientation loop
-			for (int p = 0; p < t_paths; p++) // paths loop
-			for (int e = 0; e < EntityList.size(); e++) // entity loop
-			{
-				entity &Entity = EntityList[e];
-				
-				// current solid entity header
-				if (Entity.type==1)
-				{
-					bool wrote_head = 0;
-					bool wrote_foot = 0;
-					// Iterate Brushes
-					for (int b = 0; b < bGroup[g].t_brushes; b++)
-					{
-						brush &Brush = bGroup[g].Brushes[b];
-						int sec = Brush.SecID;
-						//cout << "  Brush "<<b<<" Exp"; if (Brush.exported) cout << " YES"; else cout <<" NO ";
-						if(dev)cout << " eID " << Brush.entID << " pID " << Brush.pID << " oID " << Brush.oID << " Draw " << Brush.draw << endl;
-						
-						if (!Brush.exported && Brush.entID==e && ((cTable[g].psplit==1&&Brush.oID==o)||(cTable[g].psplit==0)) && Brush.pID==p && sec<bGroup[g].range_end && sec>=bGroup[g].range_start && Brush.draw)
-						{
-							if (!wrote_head)
-							{
-								mapfile << Entity.content.substr(0, Entity.head_end) << "\n";
-								wrote_head = 1;
-								//cout << "    Wrote Head!"<< endl;
-							}
-							
-							//mapfile << "{" << endl;
-							if (Brush.Tri==nullptr)
-							{
-								mapfile << "{" << endl;
-								
-								// Iterate Faces
-								for (int f = 0; f < Brush.t_faces; f++)
-								{
-									face &Face = Brush.Faces[f];
-									
-									if (Face.draw)
-									mapfile << Face;
-								}
-								
-								mapfile << "}" << endl;
-							}
-							else
-							{
-								for (int bt=0; bt<Brush.t_tri; bt++)
-								{
-									brush &TriBrush = Brush.Tri[bt];
-									if (TriBrush.draw)
-									{
-										mapfile << "{" << endl;
-										
-										// Iterate Faces
-										for (int f = 0; f < TriBrush.t_faces; f++)
-										{
-											face &FaceTB = TriBrush.Faces[f];
-											
-											if (FaceTB.draw)
-											mapfile << FaceTB;
-										}
-										
-										mapfile << "}" << endl;
-									}
-								}
-							}
-
-							// Iterate Faces
-							/*for (int f = 0; f < Brush.t_faces; f++)
-							{
-								face &Face = Brush.Faces[f];
-								
-								if (Face.draw)
-								mapfile << Face;
-							}
-							mapfile << "}" << endl;*/
-							
-							Brush.exported = 1;
-							//cout << "    Wrote Brush #"<<b<<"!"<< endl;
-						}
-						if (b==bGroup[g].t_brushes-1&&!wrote_foot&&wrote_head)
-						{
-							//cout << "    Wrote Footer!"<< endl;
-							mapfile << "}" << endl;
-							wrote_foot = 1;
-						}
-					}
-					//mapfile << "}" << endl; // finish current solid entity
-				}
-			}
-		}
-	}
-
-	// Bounding Boxes
-	if (dev) cout << " Bounding Boxes..." << endl;
-	for (int g = 0; g < mGroup->t_arcs; g++)
-	{
-		if (cTable[g].bound && cTable[g].map>0)
-		{
-			brush &Box = *bGroup[g].boundBox;
-			mapfile << "{\n\"classname\" \"func_detail\"\n\"zhlt_detaillevel\" \"1\"\n\"zhlt_clipnodedetaillevel\" \"1\"\n";
-			mapfile << "{\n";
-			
-			for (int f=0; f<6; f++)
-			{
-				face &Face = Box.Faces[f];
-				mapfile << Face;
-			}
-			mapfile << "}\n}\n";
-		}
-	}
-	
-	// Detail Objects
-	if (dev) cout << " Detail Objects..." << endl;
-	for (int g = 0; g < mGroup->t_arcs; g++)
-	{
-		group_set &Set = DetailSet[g];
-		
-		if ( cTable[g].d_enable && cTable[g].map>0 )
-		for (int dg = 0; dg < Set.t_groups; dg++)
-		{
-			group &dGroup = Set.Groups[dg];
-			
-			if ( dGroup.d_enable!=0 )
-			{
-				for (int e = 0; e < EntityList.size(); e++) // entity loop
-				{
-					entity &Entity = EntityList[e];
-					
-					if ( Entity.dID==dg && Entity.type == 1 && Entity.t_brushes>0 && Entity.IsDetail )
-					{
-						// export detail objects as whole objects
-						if ( (cTable[g].d_separate==0 && dGroup.d_separate<=0) || (cTable[g].d_separate==1 && dGroup.d_separate==0) )
-						{
-							// current solid entity header
-							mapfile << Entity.content.substr(0, Entity.head_end) << "\n";
-							//cout << "Arc #"<<g<<" Entity ID " << e << " Entity Type " << Entity.type << endl;
-							//mapfile << " Entity dID " << Entity.dID << " eID " << Entity.eID << " brushes " << Entity.t_brushes << endl;
-							
-							// Iterate Brushes
-							for (int b = 0; b < dGroup.t_brushes; b++)
-							{
-								brush &Brush = dGroup.Brushes[b];
-								int sec = Brush.SecID;
-								if ( Brush.entID==e && sec<bGroup[g].range_end && sec>=bGroup[g].range_start && Brush.draw )
-								{
-									mapfile << "{" << endl;
-									
-									// Iterate Faces
-									for (int f = 0; f < Brush.t_faces; f++)
-									{
-										face &Face = Brush.Faces[f];
-										
-										if (Face.draw)
-										mapfile << Face;
-									}
-									
-									mapfile << "}" << endl;
-								}
-							}
-							mapfile << "}" << endl; // finish current solid entity
-						}
-						// export detail objects as individual solid objects
-						else
-						{
-							for (int s=0; s<bGroup[g].sections; s++)
-							{
-								mapfile << Entity.content.substr(0, Entity.head_end) << "\n";
-								if (dev) {
-								cout << endl << " Writing Point Entities of dGroup..." << endl;
-								cout << "   Global Autoname:" << cTable[g].d_autoname << endl;
-								cout << "   Local Autoname:" << dGroup.d_autoname << endl;
-								getch();}
-								if (cTable[g].d_autoname>0 || dGroup.d_autoname>0) {
-									string L_name = "", L_target = "";
-									if(Entity.key_target!="") {
-										L_target = Entity.key_target+"_"+to_string(s);
-										mapfile << "\"target\" \"" << L_target << "\"" << endl;
-									}
-									if(Entity.key_targetname!="") {
-										L_name = Entity.key_targetname+"_"+to_string(s);
-										mapfile << "\"targetname\" \"" << L_name << "\"" << endl;
-									}
-								}
-								
-								for (int b = 0; b < dGroup.t_brushes; b++)
-								{
-									brush &Brush = dGroup.Brushes[b];
-									int sec = Brush.SecID;
-									
-									if (sec==s && Brush.entID==e && sec<bGroup[g].range_end && sec>=bGroup[g].range_start && Brush.draw)
-									{
-										mapfile << "{" << endl;
-										// Iterate Faces
-										for (int f = 0; f < Brush.t_faces; f++) {
-											face &Face = Brush.Faces[f];
-											if (Face.draw)
-											mapfile << Face;
-										}
-										mapfile << "}" << endl;
-									}
-								}
-								mapfile << "}" << endl; // finish current solid entity
-							}
-						}
-					}
-				}
-				// Export Point Entities
-				for (int e = 0; e < dGroup.t_ents; e++)
-				{
-					entity &Entity = dGroup.Entities[e];
-					int sec = Entity.SecID;
-					if ( sec<bGroup[g].range_end && sec>=bGroup[g].range_start && Entity.draw )
-					{
-						mapfile << Entity.content.substr(0,Entity.head_end-2);
-						mapfile << "\"angles\" \"" << Entity.Angles.Pitch << " " << Entity.Angles.Yaw << " " << Entity.Angles.Roll << "\"" << endl;
-						mapfile << "\"origin\" \"" << Entity.Origin.x << " " << Entity.Origin.y << " " << Entity.Origin.z << "\"" << endl;
-						if (cTable[g].d_autoname>0 || dGroup.d_autoname>0) {
-							string L_name = "", L_target = "";
-							if(Entity.key_target!="") {
-								L_target = Entity.key_target+"_"+to_string(sec);
-								mapfile << "\"target\" \"" << L_target << "\"" << endl;
-							}
-							if(Entity.key_targetname!="") {
-								L_name = Entity.key_targetname+"_"+to_string(sec);
-								mapfile << "\"targetname\" \"" << L_name << "\"" << endl;
-							}
-						}
-						mapfile << "}" << endl;
-					}
-				}
-			}
-		}
-	}
-	
-	mapfile << "\n";
-	mapfile.close();
-}
-
-
-// Export Original Map to Map again
-void file::ExportToMapO(string p)
-{
-	if (p=="") p = p_path+name+"_original.map";
-	
-	ofstream mapfile;
-	mapfile.open(p);
-
-	// worldspawn header
-	mapfile << EntityList[0].content.substr(0, EntityList[0].head_end) << endl;
-	
-	for (int g = 0; g < mGroup->t_arcs; g++)
-	{
-		// write all world brushes first (all arcs)
-		// Iterate Brushes
-		for (int b = 0; b < sGroup[g].t_brushes; b++)
-		{
-			brush &Brush = sGroup[g].Brushes[b];
-			
-			mapfile << "{" << endl;
-			
-			// Iterate Faces
-			for (int f = 0; f < Brush.t_faces; f++)
-			{
-				face &Face = Brush.Faces[f];
-				
-				mapfile << setprecision(8) << fixed;
-				mapfile << Face.Vertices[0] << Face.Vertices[1] << Face.Vertices[2];
-				mapfile << setprecision(8) << fixed;
-				
-				mapfile << " " << Face.Texture;
-				mapfile << " [ ";
-				mapfile << Face.VecX.x << " ";
-				mapfile << Face.VecX.y << " ";
-				mapfile << Face.VecX.z << " ";
-				mapfile << Face.ShiftX << " ";
-				mapfile << "] [ ";
-				mapfile << Face.VecY.x << " ";
-				mapfile << Face.VecY.y << " ";
-				mapfile << Face.VecY.z << " ";
-				mapfile << Face.ShiftY << " ";
-				mapfile << "] ";
-				mapfile << Face.Rot << " ";
-				mapfile << Face.ScaleX << " ";
-				mapfile << Face.ScaleY << " ";
-				mapfile << endl;
-			}
-			mapfile << "}" << endl;
-		}
-	}
-	mapfile << "}" << endl;
-	
-	mapfile << endl;
-	mapfile.close();
-}
 
 void file::GetInfo() { //get filename and path from full path
 	
@@ -617,10 +57,10 @@ void file::GetInfo() { //get filename and path from full path
     }
     //cout << " Type: " << type << " path_cfg: " << path_cfg << " path_map: " << path_map << endl;
  	if (type==1) {
-		cout << "|    Type: Settings File (*.txt): \t" << endl;
+		cout << "|    Type: Preset-File (*.txt): \t" << endl;
 		cout << "|    Path: " << fullpath << endl;
 	} else {
-		cout << "|    Type: Map File (*.map)" << endl;
+		cout << "|    Type: Map-File (*.map)" << endl;
 		cout << "|    Path: " << fullpath << endl;
 		//if (InternalMapSettings)
 		//cout << "|    Map Contains Setting Entities (info_curve)!" << endl;
@@ -663,7 +103,7 @@ void file::GetInfo() { //get filename and path from full path
 			cout << "|" << endl;
 		} else {
 			cout << "|    [INFO] No internal Preset-Entity (info_curve) found in Map-File!" << endl;
-			cout << "|           Using external Settings File ("<<path_cfg<<")..." << endl;
+			cout << "|           Using external Preset-File ("<<path_cfg<<")..." << endl;
 			cout << "|" << endl;
 		}
 	}
@@ -731,126 +171,6 @@ void file::CheckForCustomSource()
 	}
 }*/
 
-void file::ExportToObj()
-{
-	for (int g = 0; g < mGroup->t_arcs; g++)
-	{
-		if (cTable[g].obj&&bGroup[g].valid) // wether or not this arc is being exported to an obj file
-		{
-			ofstream objfile;
-			objfile.open(p_path+name+"_"+to_string(g+1)+".obj");
-			
-			for (int b = 0; b < bGroup[g].t_brushes; b++)
-			{
-				brush &Brush = bGroup[g].Brushes[b];
-				int sec = Brush.SecID;
-				
-				if (sec < bGroup[g].range_end && sec >= bGroup[g].range_start && Brush.draw)  // custom range (e.g. 0 to 90 degree) determined by arc command in settings file
-				{
-					if (Brush.Tri==nullptr)
-					{
-						objfile << "g brush_export" << b << endl;
-						
-						for (int f = 0; f < Brush.t_faces; f++)
-						{
-							face &Face = Brush.Faces[f];
-							int tverts = Face.vcount;
-							
-							if (Face.draw)
-							{
-								for(int v = 0; v < tverts; v++)
-								{
-									objfile << "v " << Face.Vertices[v].x << " " << Face.Vertices[v].y << " " << Face.Vertices[v].z << " " << endl;
-								}
-								
-								objfile << "f";
-								
-								for(int i = 0; i < tverts; i++)
-								{
-									objfile << " -" << i+1;
-								}
-								
-								objfile << endl << endl;
-							}
-						}
-					}
-					else
-					{
-						for (int bt=0; bt<Brush.t_tri; bt++)
-						{
-							brush &TriBrush = Brush.Tri[bt];
-							objfile << "g brush_export" << b << endl;
-							
-							for (int f = 0; f < TriBrush.t_faces; f++)
-							{
-								face &Face = TriBrush.Faces[f];
-								int tverts = Face.vcount;
-								
-								if (Face.draw)
-								{
-									for(int v = 0; v < tverts; v++)
-									{
-										objfile << "v " << Face.Vertices[v].x << " " << Face.Vertices[v].y << " " << Face.Vertices[v].z << " " << endl;
-									}
-									
-									objfile << "f";
-									
-									for(int i = 0; i < tverts; i++)
-									{
-										objfile << " -" << i+1;
-									}
-									
-									objfile << endl << endl;
-								}
-							}
-						}
-					}
-				}
-			}
-
-			// Gaps
-			if (cTable[g].gaps>0)
-			for (int b = 0; b < bGroup[g].t_brushes; b++)
-			{
-				if(bGroup[g].Brushes[b].Gap!=nullptr)
-				{
-					brush &Gap = *bGroup[g].Brushes[b].Gap;
-					int sec = Gap.SecID;
-	
-					if (sec<bGroup[g].range_end && sec>=bGroup[g].range_start)
-					{
-						objfile << "g brush_export" << b << endl;
-						
-						for (int f=0; f<Gap.t_faces; f++)
-						{
-							face &Face = Gap.Faces[f];
-							int tverts = Face.vcount;
-							if (Face.draw)
-							{
-								for(int v = 0; v < tverts; v++)
-								{
-									objfile << "v " << Face.Vertices[v].x << " " << Face.Vertices[v].y << " " << Face.Vertices[v].z << " " << endl;
-								}
-								
-								objfile << "f";
-								
-								for(int i = 0; i < tverts; i++)
-								{
-									objfile << " -" << i+1;
-								}
-								
-								objfile << endl << endl;
-							}
-						}
-						objfile << endl << endl;
-					}
-				}
-			}
-			objfile.close();
-		}
-	}
-}
-
 
 void file::texturize(int g)
 {
@@ -875,7 +195,7 @@ void file::texturize(int g)
 			float mx = 1.0;
 			float my = 1.0;
 			
-			if (Face.fID==2/*||(Face.fID<=1&&cTable[g].type==2)*/)
+			if (Face.fID==2)
 			{
 				if (Face.LengthO!=Face.LengthN)
 				{
@@ -894,12 +214,7 @@ void file::texturize(int g)
 			Face.ShiftY = Face.BaseShiftY * my;
 			Face.ScaleX /= mx;
 			Face.ScaleY /= my;
-			/*
-			FaceT.ShiftX = FaceT.BaseShiftX * mx;
-			FaceT.ShiftY = FaceT.BaseShiftY * my;
-			FaceT.ScaleX /= mx;
-			FaceT.ScaleY /= my;
-			*/
+			
 			// Add Shifts to horizontal Body Faces
 			if (Face.fID==2)
 			{
@@ -932,30 +247,18 @@ void file::texturize(int g)
 						if (Face.VecX.IsHor) 	{ Face.ShiftX = Temp_BaseShift; Face.OffsetX = 0; }
 						else 				 	{ Face.ShiftY = Temp_BaseShift; Face.OffsetY = 0;}
 					
-					//if (Face.VecX.IsHor) 	Face.ShiftX += Face.OffsetX;
-					//else 				 	Face.ShiftY += Face.OffsetY;
 					if(dev&&(sec==55||sec==5)&&f==3) cout << " s " << sec << " b " << b << " \tBF " << Face.HSourceL << " \tBS " << Temp_BaseShift << " \tEL " << Temp_EdgeLen << " \tHSL " << LBrush->Faces[f].HShiftL << " * msh "<< msh <<" \tSX " << Face.ShiftX << " \tSY " << Face.ShiftY << endl;
 				}
 			}
 			
 			// Add Offset to vertical body and head/base Face Shift
-			if (Face.fID==2)
-			{
+			if (Face.fID==2) {
 				if (Face.VecX.IsHor) 	Face.ShiftY += Face.OffsetY;
 				else 				 	Face.ShiftX += Face.OffsetX;
 			} else {
 										Face.ShiftY += Face.OffsetY;
 										Face.ShiftX += Face.OffsetX;
 			}
-			
-			/*
-			if (Face.fID==2)
-				if (Face.VecX.IsHor) 	Face.ShiftX = 0 + Face.OffsetX;
-				else 					Face.ShiftY = 0 + Face.OffsetY;*/
-			
-			/*if (Face.fID==2)
-				if (Face.VecX.IsHor) 	Face.ShiftX = Face.BaseShiftX;// + Face.OffsetX;
-				else 					Face.ShiftY = Face.BaseShiftY;// + Face.OffsetY;*/
 			
 			Face.MiniShift();
 		}
@@ -975,6 +278,7 @@ void file::texturize(int g)
 			
 			Face.ShiftX = Face.BaseShiftX + Face.OffsetX;
 			Face.ShiftY = Face.BaseShiftY + Face.OffsetY;
+			Face.MiniShift();
 			//cout << " Gap Face BaseShiftX " << Face.BaseShiftX << " + OffsetX " << Face.OffsetX << " = ShiftX " << Face.ShiftX << endl;
 			//cout << " Gap Face BaseShiftY " << Face.BaseShiftY << " + OffsetY " << Face.OffsetY << " = ShiftY " << Face.ShiftY << endl;
 		}
@@ -990,18 +294,27 @@ void file::createBounds(int g)
 	}
 	
 	// get total dimensions of this arc and create a bounding box afterwards
-	bGroup[g].GetDimensions(0); // brush group
-	DetailSet[g].GetDimensions(0); // detail group
-	
+	bGroup[g].GetGroupDimensions(0,0); // brush group
+	DetailSet[g].GetGroupSetDimensions(0); // detail group
 	//cout << " bGroup #"<<g<<" Dimensions " << bGroup[g].Dimensions << endl;
 	//cout << " dGroup #"<<g<<" Dimensions " << DetailSet[g].Dimensions << endl;
 	
 	dimensions AllCombined;
-	if (t_dgroups>0) AllCombined = DimensionCombine(bGroup[g].Dimensions, DetailSet[g].Dimensions);
+	if (t_dgroups>0&&bGroup[g].t_brushes>0) AllCombined = DimensionCombine(bGroup[g].Dimensions, DetailSet[g].Dimensions);
+	else if(bGroup[g].t_brushes==0&&t_dgroups>0) AllCombined = DetailSet[g].Dimensions;
 	else AllCombined = bGroup[g].Dimensions;
 	
 	AllCombined.expand(64);
-	bGroup[g].boundBox->MakeCuboid(AllCombined, "SKIP");
+	
+	if(cTable[g].bound==1)
+	{
+		bGroup[g].boundBox = new brush[1];
+		bGroup[g].boundBox->MakeCuboid(AllCombined, "SKIP");
+	}
+	else if(cTable[g].bound==2)
+	{
+		bGroup[g].boundBox = MakeBoxHollow(AllCombined, 16, "SKY");
+	}
 }
 
 void file::buildArcs(int g)
@@ -1073,7 +386,6 @@ void file::buildArcs(int g)
 	// Rotate the Texture Vectors of all Brush Faces
 	if(dev) cout << "  Rotating Tex Vectors..." << endl;
 	bGroup[g].RotateVectors();
-	//bGroup[g].ShearVectors();
 	
 	// GetBaseEdges, Face Normals and Baseshift
 	if(dev) cout << "  Getting Base Edges and Shifts..." << endl;
@@ -1091,7 +403,7 @@ void file::buildArcs(int g)
 	
 	// Rotate and Move Detail Group Objects
 	if(dev) cout << "  Rotate and Move Detail Group Objects..." << endl;
-	DetailObj_Transform(g);
+	TransformDetailObj(g);
 	
 	// Print updated Section Base Faces
 	/*for (int g = 0; g < mGroup->t_arcs; g++)
@@ -1174,201 +486,261 @@ void file::FixDetailPos()
 
 
 // Transform Detail Objects
-void file::DetailObj_Transform(int g)
+void file::TransformDetailObj(int g)
 {
 	bool dev = 0;
 	if (dev) cout << " Transform Detail Objects..." << endl;
-	if (cTable[g].d_enable>0)
+	group_set &Set = DetailSet[g];
+	
+	for (int d = 0; d<Set.t_groups; d++)
 	{
-		group_set &Set = DetailSet[g];
+		group &dGroup = Set.Groups[d];
+		dGroup.FillUnsetKeySettings();
+		int res = cTable[g].res;
+		float offset = cTable[g].offset_NO; // difference (offset) between new and old (N/O) curve radius (original map position and generated one from rad+offset setting)
+		vertex &Origin = dGroup.Origin;
 		
-		bool G_YAW   = 1; if (cTable[g].d_autoyaw!=1)     G_YAW = 0;
-		bool G_PITCH = 1; if (cTable[g].d_autopitch!=1) G_PITCH = 0;
-		bool G_ENABLE = 1; if (cTable[g].d_enable!=1)  G_ENABLE = 0;
-		bool G_POS_RAND = 1; if (!cTable[g].d_pos_rand.IsSet||cTable[g].d_pos_rand.x==0)  G_POS_RAND = 0;
-		bool G_RZ_RAND = 1; if (!cTable[g].d_rotz_rand.IsSet||cTable[g].d_rotz_rand.x==0)  G_RZ_RAND = 0;
-		bool G_MY_RAND = 1; if (!cTable[g].d_movey_rand.IsSet||cTable[g].d_movey_rand.x==0)  G_MY_RAND = 0;
+		bool L_YAW   	= dGroup.d_autoyaw;
+		bool L_PITCH 	= dGroup.d_autopitch;
+		bool L_ENABLE 	= dGroup.d_enable;
+		bool L_CIRCLE 	= dGroup.d_circlemode;
+		bool L_POS_RAND = dGroup.d_pos_rand.x;
+		bool L_RZ_RAND 	= dGroup.d_rotz_rand.x;
+		bool L_MY_RAND 	= dGroup.d_movey_rand.x;
+		bool L_SC_RAND 	= dGroup.d_scale_rand.x;
 		
-		if (dev) cout << " G_YAW " << G_YAW << " G_PITCH " << G_PITCH << " G_ENABLE " << G_ENABLE << " G_ANGLE " << cTable[g].d_pos << endl; 
-		for (int d = 0; d<Set.t_groups; d++)
+		if (dev) cout << " L_YAW " << L_YAW << " L_PITCH " << L_PITCH << " L_ENABLE " << L_ENABLE << " L_angle " << dGroup.d_pos << endl;
+		if (L_ENABLE&&!L_CIRCLE)
 		{
-			group &dGroup = Set.Groups[d];
-			bool L_YAW   = 1; if (dGroup.d_autoyaw>0)     L_YAW = 1; else if (G_YAW&&dGroup.d_autoyaw<0) L_YAW = 1;			else L_YAW = 0;
-			bool L_PITCH = 1; if (dGroup.d_autopitch>0) L_PITCH = 1; else if (G_PITCH&&dGroup.d_autopitch<0) L_PITCH = 1;	else L_PITCH = 0;
-			bool L_ENABLE = 1; if (dGroup.d_enable>0) L_ENABLE = 1;  else if (G_ENABLE&&dGroup.d_enable<0) L_ENABLE = 1;	else L_ENABLE = 0;
-			bool L_POS_RAND = 1; if (!dGroup.d_pos_rand.IsSet||dGroup.d_pos_rand.x==0) L_POS_RAND = 0;
-			bool L_RZ_RAND = 1; if (!dGroup.d_rotz_rand.IsSet||dGroup.d_rotz_rand.x==0) L_RZ_RAND = 0;
-			bool L_MY_RAND = 1; if (!dGroup.d_movey_rand.IsSet||dGroup.d_movey_rand.x==0) L_MY_RAND = 0;
+			vector<vertex> OriginN (res);
+			vector<float> T_Pos (res);
+			vector<float> T_MoveYR (res); // random MoveY
+			vector<float> T_Pitch (res);
+			vector<float> T_Yaw (res);
+			vector<float> T_YawR (res); // random Yaw
+			vector<float> T_YawC (res); // Yaw + Random Yaw combined
+			vector<gvector> T_Move (res);
+			vector<float> Dummy (res); // list of "0" for Rotation
+			vector<float> T_Scale (res);
 			
-			if (dev) cout << " L_YAW " << L_YAW << " L_PITCH " << L_PITCH << " L_ENABLE " << L_ENABLE << " L_angle " << dGroup.d_pos << endl;
-			if (L_ENABLE)
-			{
-				int res = cTable[g].res;
-				float offset = cTable[g].offset_NO; // difference (offset) between new and old (N/O) curve radius (original map position and generated one from rad+offset setting)
-				vertex &Origin = dGroup.Origin;
-				vector<vertex> OriginN (res);
-				vector<float> T_Pos (res);
-				vector<float> T_MoveYR (res); // random MoveY
-				vector<float> T_Pitch (res);
-				vector<float> T_Yaw (res);
-				vector<float> T_YawR (res); // random Yaw
-				vector<float> T_YawC (res); // Yaw + Random Yaw combined
-				vector<gvector> T_Move (res);
-				vector<float> Dummy (res); // list of "0" for Rotation
+			dGroup.GetGroupDimensions(1,1);
+			if (dev) cout << " ============================================= Detail Group " << d << " of curve " << g <<" Origin " << dGroup.Origin << " ============================================= " << endl;
+			
+			// spline from which to get position vector (xyz location) for this detail group
+			circle Spline;
+			if (dev) cout << " Creating circle for this DGroup..." << endl;
+			float OriginOffY = dGroup.Origin.y + offset;
+			if (dev) cout << " dGroup.SizeY " << dGroup.SizeY << " dGroup.Origin " << dGroup.Origin << " offset " << offset << " OriginOffY " << OriginOffY << endl;
+			if (cTable[g].type==0) {
+				Spline.build_circlePi(res, OriginOffY, Origin.z, cTable[g].flatcircle);
+				Spline.tverts = res;
+			} else if (cTable[g].type==1) {
+				Spline.build_circleGrid(res, OriginOffY, Origin.z);
+				Spline.tverts = res;
+			} else if (cTable[g].type==2) {
+				Spline.build_pathGrid(g, OriginOffY, Origin.z, PathList[g]);
+			} else if (cTable[g].type==3) {
+				Spline.build_pathIntersect(g, OriginOffY, Origin.z, PathList[g]);
+			}
+			
+			Spline.AddHeight(g, PathList);
+			if (cTable[g].type==0||cTable[g].type==1)
+			Spline.ConvertToSpline(g);
+			Spline.GetAngles(g);
+			
+			if (dev) { cout << "   Generated Spline - type " << cTable[g].type << " res " << cTable[g].res << " secs " << bGroup[g].sections << endl;
+			for (int v=0;v<Spline.tverts;v++) cout << "     v " << v<< Spline.Vertices[v] <<endl; }
+			
+			// ================ TRANSFORMATION CALCULATION ================
+			
+				// create individual Origins for each section
+				for(int i=0;i<res;i++)
+					OriginN[i] = dGroup.Origin;
 				
-				dGroup.GetDimensions(1);
-				if (dev) cout << " ============================================= Detail Group " << d << " of curve " << g <<" Origin " << dGroup.Origin << " ============================================= " << endl;
-				
-				// spline from which to get position vector (xyz location) for this detail group
-				circle Spline;
-				if (dev) cout << " Creating circle for this DGroup..." << endl;
-				float OriginOffY = dGroup.Origin.y + offset;
-				if (dev) cout << " dGroup.SizeY " << dGroup.SizeY << " dGroup.Origin " << dGroup.Origin << " offset " << offset << " OriginOffY " << OriginOffY << endl;
-				if (cTable[g].type==0) {
-					Spline.build_circlePi(res, OriginOffY, Origin.z);
-					Spline.tverts = res;
-				} else if (cTable[g].type==1) {
-					Spline.build_circleGrid(res, OriginOffY, Origin.z);
-					Spline.tverts = res;
-				} else if (cTable[g].type==2) {
-					Spline.build_pathGrid(g, OriginOffY, Origin.z, PathList[g]);
-				} else if (cTable[g].type==3) {
-					Spline.build_pathIntersect(g, OriginOffY, Origin.z, PathList[g]);
+				// get initial position along section axis (equal to x movement)
+				if ( L_POS_RAND ){
+					for(int i=0;i<res;i++) { T_Pos[i] = GetRandInRange(dGroup.d_pos_rand.y,dGroup.d_pos_rand.z); }
+				} else {
+					for(int i=0;i<res;i++) { T_Pos[i] = dGroup.d_pos; }
 				}
+				if (dev) for(int i=0;i<res;i++) cout << " T_Pos " << T_Pos[i] << endl;
 				
-				Spline.AddHeight(g, PathList);
-				if (cTable[g].type==0||cTable[g].type==1)
-				Spline.ConvertToSpline(g);
-				Spline.GetAngles(g);
-				
-				if (dev) { cout << "   Generated Spline - type " << cTable[g].type << " res " << cTable[g].res << " secs " << bGroup[g].sections << endl;
-				for (int v=0;v<Spline.tverts;v++) cout << "     v " << v<< Spline.Vertices[v] <<endl; }
-				
-				// ================ TRANSFORMATION CALCULATION ================
-				
-					// create individual Origins for each section
+				// get random offset on Y axis within given limits
+				for(int i=0;i<res;i++) T_MoveYR[i] = 0;
+				if ( L_MY_RAND )
+				{
 					for(int i=0;i<res;i++)
-						OriginN[i] = dGroup.Origin;
-					
-					// get initial position along section axis (equal to x movement)
-					if (G_POS_RAND||L_POS_RAND) {
-						if (G_POS_RAND&&!L_POS_RAND) {
-							for(int i=0;i<res;i++) { T_Pos[i] = GetRandInRange(cTable[g].d_pos_rand.y,cTable[g].d_pos_rand.z); }
-						} else {
-							for(int i=0;i<res;i++) { T_Pos[i] = GetRandInRange(dGroup.d_pos_rand.y,dGroup.d_pos_rand.z); }
-						}
-					} else {
-						if ( dGroup.d_pos!=-1 )	for(int i=0;i<res;i++) T_Pos[i] = dGroup.d_pos;
-						else					for(int i=0;i<res;i++) T_Pos[i] = cTable[g].d_pos;
-					}
-					if (dev) for(int i=0;i<res;i++) cout << " T_Pos " << T_Pos[i] << endl;
-					
-					// get random offset on Y axis within given limits
+					T_MoveYR[i] = GetRandInRange(dGroup.d_movey_rand.y,dGroup.d_movey_rand.z);
+				}
+				if (dev) for(int i=0;i<res;i++) cout << " T_MoveYR " << T_MoveYR[i] << endl;
+				
+				// get random Scaling within given limits
+				for(int i=0;i<res;i++) T_Scale[i] = 1.0;
+				if ( L_SC_RAND )
+				{
 					for(int i=0;i<res;i++)
-						T_MoveYR[i] = 0;
-					if (G_MY_RAND||L_MY_RAND)
-					for(int i=0;i<res;i++)
+					T_Scale[i] = GetRandInRange(dGroup.d_scale_rand.y,dGroup.d_scale_rand.z);
+				}
+				if (dev) for(int i=0;i<res;i++) cout << " T_Scale " << T_Scale[i] << endl;
+				
+				// get yaw
+				if ( L_YAW )
+				{
+					for(int i=0, v=0;i<res;i++)
 					{
-						if (G_MY_RAND&&!L_MY_RAND)
-							T_MoveYR[i] = GetRandInRange(cTable[g].d_movey_rand.y,cTable[g].d_movey_rand.z);
-						else
-							T_MoveYR[i] = GetRandInRange(dGroup.d_movey_rand.y,dGroup.d_movey_rand.z);
-					}
-					if (dev) for(int i=0;i<res;i++) cout << " T_MoveYR " << T_MoveYR[i] << endl;
-					
-					// get yaw
-					if ( (G_YAW&&L_YAW) || (!G_YAW&&L_YAW) ) {
-						for(int i=0, v=0;i<res;i++)
-						{
-							vertex &V = Spline.Vertices[v];
-							if (T_Pos[i]!=0&&T_Pos[i]!=1)
-								T_Yaw[i] = V.Yaw;
-							else {
-								T_Yaw[i] = V.YawB;
-							}
-							v+=2;
+						vertex &V = Spline.Vertices[v];
+						if (T_Pos[i]!=0&&T_Pos[i]!=1)
+							T_Yaw[i] = V.Yaw;
+						else {
+							T_Yaw[i] = V.YawB;
 						}
-					}
-					if (dev) for(int i=0;i<res;i++) cout << " T_Yaw " << T_Yaw[i] << endl;
-					
-					// get random Z axis rotation (offset)
-					if (L_RZ_RAND||G_RZ_RAND) {
-						float min = 0, max = 0;
-						if (G_RZ_RAND&&!L_RZ_RAND) {
-							min = cTable[g].d_rotz_rand.y;
-							max = cTable[g].d_rotz_rand.z;
-						} else {
-							min = dGroup.d_rotz_rand.y;
-							max = dGroup.d_rotz_rand.z;
-						}
-						for(int i=0;i<res;i++) T_YawR[i] = GetRandInRange(min, max);
-					}
-					if (dev) for(int i=0;i<res;i++) cout << " T_YawR " << T_YawR[i] << endl;
-					
-					// combine Yaw and Random Yaw
-					for(int i=0;i<res;i++)
-						T_YawC[i] = T_Yaw[i] + T_YawR[i];
-					
-					// get pitch
-					if ( ( ( cTable[g].height!=0 && cTable[g].ramp>0 ) || cTable[g].type==2 || cTable[g].type==3) && ( (G_PITCH&&L_PITCH) || (!G_PITCH&&L_PITCH) ) ){
-						for(int i=0, v=0;i<res;i++)
-						{
-							vertex &V = Spline.Vertices[v];
-							T_Pitch[i] = V.Pitch;
-							v+=2; // if (cTable[g].type==2||cTable[g].type==3) v+=2; else v++;
-						}
-					}
-					if (dev) for(int i=0;i<res;i++) cout << " T_Pitch " << T_Pitch[i] << endl;
-					
-					if (dev) cout << " Spline res " << Spline.tverts << " res " << res << endl;
-					// Get new location (XYZ)
-					for(int sec=0,v=0; sec<res; sec++)
-					{
-						float m = T_Pos[sec];
-						vertex &PosA = Spline.Vertices[v];
-						vertex &PosB = Spline.Vertices[v+1];
-						gvector VecOA = GetVector(Origin, PosA);
-						gvector VecAB = GetVector(PosA,PosB);
-						gvector VecAC; 
-						VecAC = VecAB; VecAC.mult(m); if(cTable[g].ramp==0) VecAC.z = 0;
-						gvector VecYR; if(T_Pos[sec]==0.0) VecYR = Spline.InVec[sec]; else if (T_Pos[sec]==1.0&&sec<res-1) VecYR = Spline.InVec[sec+1]; else { VecYR = Normalize(VecAB); VecYR.rotate(0,0,90); }
-						if(T_MoveYR[sec]!=0) VecYR.mult(T_MoveYR[sec]);
-						if (dev) cout << " sec" << sec << " PosA " << PosA << " PosB " << PosB << " VecOA " << VecOA << " VecAB " << VecAB << " VecAC " << VecAC << " VecYR " << VecYR << endl;
-						OriginN[sec] = Add(  Add(  Add(Origin,VecOA), VecAC  ), VecYR  );
-						T_Move[sec] = VecAdd ( VecAdd(VecOA, VecAC), VecYR );
 						v+=2;
 					}
-					if (dev) for(int i=0;i<res;i++) cout << " T_Move " << T_Move[i] << " OriginN " << OriginN[i] << endl;
+				}
+				if (dev) for(int i=0;i<res;i++) cout << " T_Yaw " << T_Yaw[i] << endl;
 				
-				// ================ END ================
+				// get random Z axis rotation (offset)
+				if ( L_RZ_RAND ) {
+					float min = 0, max = 0;
+					min = dGroup.d_rotz_rand.y;
+					max = dGroup.d_rotz_rand.z;
+					for(int i=0;i<res;i++) T_YawR[i] = GetRandInRange(min, max);
+				}
+				if (dev) for(int i=0;i<res;i++) cout << " T_YawR " << T_YawR[i] << endl;
 				
-				// move to new Location
-				if (dev) cout << " Moving to new Location..." << endl;
-				dGroup.MoveSecs(T_Move, 1);
+				// combine Yaw and Random Yaw
+				for(int i=0;i<res;i++)
+					T_YawC[i] = T_Yaw[i] + T_YawR[i];
 				
-				// Add Yaw R
-				if (dev) cout << " Adding Yaw Random..." << endl;
-				dGroup.RotOriginSecs(Dummy, Dummy, T_YawR, OriginN, 1);
+				// get pitch
+				if ( ( ( cTable[g].height!=0 && cTable[g].ramp>0 ) || cTable[g].type==2 || cTable[g].type==3) && L_PITCH ){
+					for(int i=0, v=0;i<res;i++)
+					{
+						vertex &V = Spline.Vertices[v];
+						T_Pitch[i] = V.Pitch;
+						v+=2;
+					}
+				}
+				if (dev) for(int i=0;i<res;i++) cout << " T_Pitch " << T_Pitch[i] << endl;
 				
-				// Add Pitch
-				if (dev) cout << " Adding Pitch..." << endl;
-				dGroup.RotOriginSecs(Dummy, T_Pitch, Dummy, OriginN, 1);
+				if (dev) cout << " Spline res " << Spline.tverts << " res " << res << endl;
 				
-				// Add Yaw
-				if (dev) cout << " Adding Yaw..." << endl;
-				dGroup.RotOriginSecs(Dummy, Dummy, T_Yaw, OriginN, 1);
-			}
+				// Get new location (XYZ)
+				for(int sec=0,v=0; sec<res; sec++)
+				{
+					float m = T_Pos[sec];
+					vertex &PosA = Spline.Vertices[v];
+					vertex &PosB = Spline.Vertices[v+1];
+					gvector VecOA = GetVector(Origin, PosA); // Origin -> PosA
+					gvector VecAB = GetVector(PosA,PosB); // PosA -> PosB
+					
+					// section position vector
+					gvector VecAC; // PosA -> Pos C (VecAB * Position e.g. 0.5)
+					VecAC = VecAB; VecAC.mult(m); if(cTable[g].ramp==0) VecAC.z = 0;
+					
+					// y movement vector
+					gvector VecYR;
+					if		(T_Pos[sec]==0.0) 				{ VecYR = Spline.InVec[sec]; }
+					else if (T_Pos[sec]==1.0&&sec<res-1) 	{ VecYR = Spline.InVec[sec+1]; }
+					else 									{ VecYR = Normalize(VecAB); VecYR.rotate(0,0,90); }
+					if		(T_MoveYR[sec]!=0) 				{ VecYR.mult(T_MoveYR[sec]); }
+					else 									{ VecYR.set(0); }
+					
+					if (dev) cout << " sec" << sec << " m " << m << " PosA " << PosA << " PosB " << PosB << " VecOA " << VecOA << " VecAB " << VecAB << " VecAC " << VecAC << " VecYR " << VecYR << endl;
+					
+					OriginN[sec] = Add(  Add(  Add(Origin,VecOA), VecAC  ), VecYR  );
+					T_Move[sec] = VecAdd ( VecAdd(VecOA, VecAC), VecYR );
+					v+=2;
+				}
+				if (dev) for(int i=0;i<res;i++) cout << " T_Move " << T_Move[i] << " OriginN " << OriginN[i] << endl;
+			
+			// ================ END ================
+			// move to new Location
+			if (dev) cout << " Moving to new Location..." << endl;
+			dGroup.MoveSecs(T_Move, 1);
+			
+			// Add Random Yaw
+			if (dev) cout << " Adding Yaw Random..." << endl;
+			dGroup.RotOriginSecs(Dummy, Dummy, T_YawR, OriginN, 1);
+			
+			// Add Pitch
+			if (dev) cout << " Adding Pitch..." << endl;
+			dGroup.RotOriginSecs(Dummy, T_Pitch, Dummy, OriginN, 1);
+			
+			// Add Scale
+			if (dev) cout << " Adding Scale..." << endl;
+			dGroup.ScaleOriginSecs (T_Scale, OriginN);
+			
+			// Add Yaw
+			if (dev) cout << " Adding Yaw..." << endl;
+			dGroup.RotOriginSecs(Dummy, Dummy, T_Yaw, OriginN, 1);
 		}
-		
-		// print all
-		if(dev)
+		else if(L_ENABLE&&L_CIRCLE)
+		{
+			if(dev) {cout << " dGroup " << dGroup.groupname  << " is Array!" << endl; getch();}
+			
+			vector<vertex> OriginN (res);
+			vector<float> T_Yaw (res);
+			vector<float> Dummy (res); // list of "0" for Rotation
+			vector<gvector> T_Move (res);
+			
+			// Get new location (XYZ)
+			for(int i=0; i<res; i++)
+			{
+				gvector &Move = T_Move[i];
+				Move.y = cTable[g].offset;
+			}
+			
+			// create individual Origins for each section
+			for(int i=0;i<res;i++)
+				OriginN[i] = Zero;
+			
+			// get yaw
+			float step = 360.0/res;
+			float step_half = step/2;
+			if(cTable[g].flatcircle==1) step_half = 0;
+			
+			for(int i=0;i<res;i++)
+			{
+				T_Yaw[i] = -(i*step)-step_half;
+			}
+			if(dev) for(int i=0;i<res;i++) cout << " T_Yaw " << T_Yaw[i] << endl;
+			
+			// Add OffsetY
+			dGroup.MoveSecs(T_Move, 1);
+			
+			// Add Yaw
+			dGroup.RotOriginSecs(Dummy, Dummy, T_Yaw, OriginN, 1);
+		}
+	}
+	
+	// create Intersection Planes
+	if(cTable[g].type==0)
+	{
 		for (int d = 0; d<Set.t_groups; d++)
 		{
-			group &dGroup = Set.Groups[d];
-			cout << dGroup;
+			group &Group = Set.Groups[d];
+			if( Group.d_enable>0 && Group.d_carve>0 )
+			Group.CreateIsects();
 		}
-		if(dev) getch();
+		
+		// Carve Detail Objects
+		for (int d = 0; d<Set.t_groups; d++)
+		{
+			group &Group = Set.Groups[d];
+			if( Group.d_enable>0 && Group.d_carve>0 )
+			Group.CarveGroupSections();
+		}
 	}
+	
+	// print all
+	if(dev)
+	for (int d = 0; d<Set.t_groups; d++)
+	{
+		group &dGroup = Set.Groups[d];
+		cout << dGroup;
+	}
+	if(dev) getch();
 }
 
 void file::createGroupBrush(int g)
@@ -1547,6 +919,39 @@ void file::roundCoords(int g)
 	bGroup[g].RoundBrushVertices(0);
 }
 
+void file::WeldVertices(int g)
+{
+	// only gap brushes and carved detail brushes have to be welded, because of precision issues
+	
+	// gaps
+	if(cTable[g].gaps==1&&(cTable[g].type==0||cTable[g].type==1))
+	bGroup[g].WeldGroupVertices(1);
+	
+	// detail brushes
+	if(t_dgroups>0&&cTable[g].d_carve==1)
+	for(int d=0;d<DetailSet[g].t_groups; d++)
+		DetailSet[g].Groups[d].WeldGroupVertices(0);
+}
+
+void file::FixBorderliner(int g)
+{
+	bool dev = 0;
+	// curve brushes
+	for(int b=0; b<bGroup[g].t_brushes; b++)
+	{
+		brush &Brush = bGroup[g].Brushes[b];
+		if(dev)cout << " Brush sec" << Brush.SecID << " range start " << bGroup[g].range_start << " range end " << bGroup[g].range_end << endl;
+		if(Brush.draw&&Brush.SecID>=bGroup[g].range_start&&Brush.SecID<bGroup[g].range_end)
+		{
+			if(dev)cout << "  Fixing Borderliner! " << endl;
+			Brush.FixBorderliner(2);
+			
+			if(Brush.Gap!=nullptr)
+				Brush.Gap->FixBorderliner(2);
+		}
+	}
+}
+
 // Create a Ramp & adjust Face Texture Vectors accordingly
 void file::RampIt(int g)
 {
@@ -1651,7 +1056,7 @@ void file::createFramework(int g)
 				
 				// generate Circles
 				if (type==0)
-					Circle.build_circlePi(res,indrad,height);
+					Circle.build_circlePi(res,indrad,height,cTable[g].flatcircle);
 				else if (type==1)
 				{
 					//cout << "Attempting to build Grid Circle... (res,rad,height)" << res << "," << indrad << "," << height << endl;
@@ -1703,6 +1108,7 @@ void file::LoadMap_GetEntities()
 	}
 	
 	// determine end pos of each entity and save content to new string
+	if (dev) cout << " Determine end pos of each entity..." << endl;
 	for (int i = 0, t_ents = EntityList.size(); i<EntityList.size(); i++)
 	{
 		entity &Entity = EntityList[i];
@@ -1713,6 +1119,7 @@ void file::LoadMap_GetEntities()
 	}
 	
 	// determine entity types
+	if (dev) cout << " Determine entity types..." << endl;
 	for (int i = 0; i<EntityList.size(); i++)
 	{
 		entity &Entity = EntityList[i];
@@ -1735,9 +1142,11 @@ void file::LoadMap_GetEntities()
 		Entity.type = 1;
 		
 		if (Entity.type==1) t_solids++;
+		if (dev) { cout << "   Entity #" << i; if (Entity.type==2) cout << " is a Point Entity!"<<endl; else if (Entity.type==1) cout << " is a Solid Entity!"<<endl; else cout << " is Worldspawn!"<<endl; }
 	}
 	
 	// determine internal head end pos
+	if (dev) cout << " Determine internal head end pos..." << endl;
 	for (int i = 0; i<EntityList.size(); i++)
 	{
 		entity &Entity = EntityList[i];
@@ -1756,17 +1165,32 @@ void file::LoadMap_GetEntities()
 		}
 	}
 	
+	// check for active d_autoassign command in solid and point entities
+	bool PRE_autoassign = 0;
+	for (int i = 0; i<EntityList.size(); i++)
+	{
+		entity &Entity = EntityList[i];
+		if (Entity.type>=1)
+		{
+			int find = Entity.content.find("\"m2c_d_autoassign\" \"");
+			if (find!=-1)
+			{
+				find+=20;
+				if(Entity.content[find]=='1') PRE_autoassign = 1;
+			}
+		}
+	}
+	
 	// check if entity is part of a detail group
+	if (dev) cout << " Check if entity is part of a detail group..." << endl;
 	for (int i = 0, c=0; i<EntityList.size(); i++)
 	{
 		entity &Entity = EntityList[i];
+		if (dev) cout << "   Entity #" << i << " Content-Size " << Entity.content.length() << endl;
 		
-		int find = 0, skip1 = 0, skip2 = 0;
-		string str_skip1 = "info_curve";
-		find = Entity.content.find("\"m2c_d_group\" \"");
-		skip1 = Entity.content.find(str_skip1);
-		if (skip1==-1)
-		if (find!=-1)
+		int find = Entity.content.find("\"m2c_d_group\" \"");
+		if (Entity.content.find("info_curve")==-1)
+		if (find!=-1) // m2c_d_group indicator found
 		{
 			find += 15; // put cursor to beginning of value
 			int groupname_end = Entity.content.find("\"",find);
@@ -1775,15 +1199,23 @@ void file::LoadMap_GetEntities()
 				Entity.groupname = Entity.content.substr(find, groupname_end-find);
 				Entity.IsDetail = 1;
 			}
-		} else {
-			if(Entity.type==2) {
-				Entity.IsDetail = 1;
-				Entity.groupname = "custom_dg0"+to_string(c);
-				if (dev)cout << " Found empty DetailGroup? Name [" << Entity.groupname << "] type [" << Entity.type << "]" <<endl;
-				c++;
+		} else { // detail group indicator NOT found
+			if(d_autoassign==0&&!PRE_autoassign) { // contruction method is "framework" (default)
+				if(Entity.type==2) {
+					Entity.IsDetail = 1;
+					Entity.groupname = "detail_custom0"+to_string(c);
+					if (dev)cout << " Found empty DetailGroup? Name [" << Entity.groupname << "] type [" << Entity.type << "]" <<endl;
+					c++;
+				}
+			} else if(d_autoassign==1||PRE_autoassign) { // construction method is "duplication array" = all entities without a groupname will be added to the "array" group
+				if(Entity.type==1||Entity.type==2) {
+					Entity.IsDetail = 1;
+					Entity.groupname = "detail_array";
+				}
 			}
 		}
 		if (dev)cout << " Found DetailGroup? " << Entity.IsDetail << " Name " << Entity.groupname << " type " << Entity.type <<endl;
+		if (dev)cout << " content " << endl << Entity.content << endl << endl;
 	}
 	
 	// Get specific Keys and KeyValues of all Solid and Point Entities
@@ -1791,6 +1223,7 @@ void file::LoadMap_GetEntities()
 	{
 		entity &Entity = EntityList[i];
 		Entity.GetKeyValues();
+		Entity.GetKeyValues_M2C();
 	}
 	
 	// Get internal map settings from settings entity info_curve and store them in settingsM variable
@@ -1911,6 +1344,9 @@ void file::LoadMap_GetEntities()
 			
 			if (Entity.type==2 && Entity.IsDetail && Entity.dID==dg && Entity.key_classname!="info_detailgroup" && Entity.key_classname!="info_curve")
 			mDetailGroup[dID].t_ents++;
+			
+			if (Entity.dID==dg&&dGroup.groupname=="")
+			dGroup.groupname = Entity.groupname;
 		}
 		if (dev) cout << " Total Brushes for Detail Group " << dg << " - " << mDetailGroup[dg].t_brushes << endl;
 		if (dev) cout << " Total Entities for Detail Group " << dg << " - " << mDetailGroup[dg].t_ents << endl;
@@ -1934,26 +1370,14 @@ void file::LoadMap_GetEntities()
 			if (dev) cout << " DGroup " << dg << " Entity " << e << " List #" << ed<< endl;
 			if ( Source.type==2 && Source.IsDetail && Source.dID==dg && Source.key_classname!="info_detailgroup")
 			{
-				//for (int ed = 0; ed<dGroup.t_ents; ed++)
-				{
-					if (dev) cout << "   Copying point entity " << e << " of dgroup " << dg << " to this dgroups Entity list (current #" << ed<<")"<< endl;
-					entity &Entity = dGroup.Entities[ed];
-					Entity.CopySimple(Source);
-					ed++;
-				}
+				if (dev) cout << "   Copying point entity " << e << " of dgroup " << dg << " to this dgroups Entity list (current #" << ed<<")"<< endl;
+				entity &Entity = dGroup.Entities[ed];
+				Entity.CopySimple(Source);
+				ed++;
 			}
 		}
 		ed=0;
 	}
-
-	// after getting values from info_detailgroup, they can be cut from the entity list
-	/*for (int i = 0; i<EntityList.size(); i++)
-	{
-		entity &Entity = EntityList[i];
-		if (Entity.key_classname=="info_detailgroup") {
-			Entity.IsDetail=0;
-		}
-	}*/
 	
 	// scan all solid entities (brush eID) and point entities of a detail group for property keyvalues (starting angle, pitch, yaw, separation, etc.)
 	// double values are being overwritten, there can only be one command/entity that controls the whole detail group
@@ -1968,15 +1392,18 @@ void file::LoadMap_GetEntities()
 			if (Entity.type>=1 && Entity.IsDetail && Entity.dID==d)
 			{
 				if (dev) cout << "     Entity #" << i << " class: " << Entity.key_classname << " Keys: enable " << Entity.d_enable << " angle " << Entity.d_pos << " pitch " << Entity.d_autopitch << " yaw " << Entity.d_autoyaw << " sep " << Entity.d_separate << " d_autoname " << Entity.d_autoname  <<endl;
-				if (Entity.d_pos>0) 		dGroup.d_pos 		= Entity.d_pos; 		//else 								dGroup.d_pos = 0;
+				if (Entity.d_pos>0) 		dGroup.d_pos 		= Entity.d_pos;				else if (Entity.d_pos==-1)			dGroup.d_pos = 0;
 				if (Entity.d_autopitch>0) 	dGroup.d_autopitch 	= Entity.d_autopitch;		else if (Entity.d_autopitch==-1) 	dGroup.d_autopitch 	= 0;
 				if (Entity.d_autoyaw>0) 	dGroup.d_autoyaw 	= Entity.d_autoyaw;			else if (Entity.d_autoyaw==-1) 		dGroup.d_autoyaw 	= 0;
 				if (Entity.d_separate>0) 	dGroup.d_separate 	= Entity.d_separate;		else if (Entity.d_separate==-1) 	dGroup.d_separate 	= 0;
 				if (Entity.d_autoname>0) 	dGroup.d_autoname 	= Entity.d_autoname;		else if (Entity.d_autoname==-1) 	dGroup.d_autoname 	= 0;
 				if (Entity.d_enable>0) 		dGroup.d_enable 	= Entity.d_enable;			else if (Entity.d_enable==-1) 		dGroup.d_enable 	= 0;
-				if (Entity.d_pos_rand.IsSet) 	dGroup.d_pos_rand = Entity.d_pos_rand;
-				if (Entity.d_rotz_rand.IsSet) 	dGroup.d_rotz_rand = Entity.d_rotz_rand;
-				if (Entity.d_movey_rand.IsSet) 	dGroup.d_movey_rand = Entity.d_movey_rand;
+				if (Entity.d_circlemode>0) 	dGroup.d_circlemode	= Entity.d_circlemode;		else if (Entity.d_circlemode==-1) 	dGroup.d_circlemode = 0;
+				if (Entity.d_carve>0) 		dGroup.d_carve 		= Entity.d_carve;			else if (Entity.d_carve==-1) 		dGroup.d_carve 		= 0;
+				if (Entity.d_scale_rand.IsSet) 	dGroup.d_scale_rand 	= Entity.d_scale_rand;
+				if (Entity.d_pos_rand.IsSet) 	dGroup.d_pos_rand 		= Entity.d_pos_rand;
+				if (Entity.d_rotz_rand.IsSet) 	dGroup.d_rotz_rand 		= Entity.d_rotz_rand;
+				if (Entity.d_movey_rand.IsSet) 	dGroup.d_movey_rand 	= Entity.d_movey_rand;
 				if (Entity.d_draw>0) 		dGroup.d_draw 		= Entity.d_draw;		else if (Entity.d_draw==-1) 		dGroup.d_draw 		= 0;
 				if (Entity.d_skip>0) 		dGroup.d_skip 		= Entity.d_skip;		else if (Entity.d_skip==-1) 		dGroup.d_skip 		= 0;
 				if (Entity.d_draw_rand>0) 	dGroup.d_draw_rand 	= Entity.d_draw_rand;	else if (Entity.d_draw_rand==-1) 	dGroup.d_draw_rand 	= 0;
@@ -1984,19 +1411,6 @@ void file::LoadMap_GetEntities()
 			}
 		}
 	}
-
-	/*for (int i = 0; i<EntityList.size(); i++)
-	{
-		entity &Entity = EntityList[i];
-		cout << " Entity #" << i << endl;
-		cout << "   Type: \t" << Entity.type << endl;
-		cout << "   Start: \t" << Entity.pos_start << endl;
-		cout << "   End: \t" << Entity.pos_end << endl;
-		cout << "   Head: \t" << Entity.head_end << endl;
-		cout << "   Brush: \t" << Entity.t_brushes << endl;
-	}
-	
-	getch();*/
 }
 
 
@@ -2036,8 +1450,10 @@ void file::TransformSource()
 			}
 			//if (dev) sGroup[g].ExportGroupToMap(p_path+name+"_transformed"+to_string(g+1)+".map");
 			
-			if (cTable[g].rot_src.y!=0||cTable[g].rot_src.z!=0)
-			Group.RoundBrushVertices(1);
+			if (cTable[g].rot_src.y!=0||cTable[g].rot_src.z!=0) {
+				if(dev) cout << "  rot_src active -> Rounding Vertices..." << endl;
+				Group.RoundBrushVertices(1);
+			}
 			
 			// Detail Objects
 			group_set &Set = sDetailSet[g];
@@ -2063,7 +1479,7 @@ void file::TransformSource()
 					Euler RotEuler(rot_x,rot_y,rot_z);
 					if (cTable[g].rot_src.IsSet)	Entity.RotateEntity(RotEuler,1);
 				}
-				dGroup.GetDimensions(1);
+				dGroup.GetGroupDimensions(1,1);
 				
 				// fix position of basic detail objects
 				/*if (dGroup.Origin.x!=0)
@@ -2082,7 +1498,7 @@ void file::TransformSource()
 				dGroup.Origin.x = 0;*/
 			}
 			if (dev) cout << "   Getting Dimensions..." <<endl;
-			Group.GetDimensions(1);
+			Group.GetGroupDimensions(1,0);
 			if (dev) cout << "   Checking Brush Validity..." <<endl;
 			Group.CheckBrushValidity();
 			if (dev) cout << "   Getting Face Orients..." <<endl;
@@ -2113,22 +1529,26 @@ void file::TransformFinal(int g)
 	float rot_y = cTable[g].rot.y;
 	float rot_z = cTable[g].rot.z;
 	
+	bool scale_valid = 1; 	if(scale_x==0&&scale_x==1) 			scale_valid = 0;
+	bool rot_valid = 1; 	if(rot_x==0&&rot_y==0&&rot_z==0) 	rot_valid = 0;
+	bool move_valid = 1; 	if(move_x==0&&move_y==0&&move_z==0) move_valid = 0;
+	
 	if (dev) cout << " ######## Final Transformation: ######## " << cTable[g].rot << endl;
 	// Apply custom transformations
 	for (int b = 0; b<bGroup[g].t_brushes; b++)
 	{
 		brush &Brush = bGroup[g].Brushes[b];
 		
-		if (cTable[g].scale.IsSet) {
+		if (cTable[g].scale.IsSet&&scale_valid) {
 			Brush.Scale(scale_x);
 			//Brush.Scale(scale_y);
 			//Brush.Scale(scale_z);
 		}
 		
-		if (cTable[g].rot.IsSet)
+		if (cTable[g].rot.IsSet&&rot_valid)
 			Brush.Rot(rot_x,rot_y,rot_z);
 			
-		if (cTable[g].move.IsSet)
+		if (cTable[g].move.IsSet&&move_valid)
 			Brush.Move(move_x,move_y,move_z,1);
 		
 		if (Brush.Tri!=nullptr)
@@ -2136,9 +1556,9 @@ void file::TransformFinal(int g)
 			for (int bt = 0; bt<Brush.t_tri; bt++)
 			{
 				brush &TriBrush = Brush.Tri[bt];
-				if (cTable[g].scale.IsSet)	TriBrush.Scale(scale_x);
-				if (cTable[g].rot.IsSet)	TriBrush.Rot(rot_x,rot_y,rot_z);
-				if (cTable[g].move.IsSet)	TriBrush.Move(move_x,move_y,move_z,1);
+				if (cTable[g].scale.IsSet&&scale_valid)		TriBrush.Scale(scale_x);
+				if (cTable[g].rot.IsSet&&rot_valid)			TriBrush.Rot(rot_x,rot_y,rot_z);
+				if (cTable[g].move.IsSet&&move_valid)		TriBrush.Move(move_x,move_y,move_z,1);
 			}
 		}
 	}
@@ -2151,19 +1571,19 @@ void file::TransformFinal(int g)
 		{
 			brush &Brush = Group.Brushes[b];
 			
-			if (cTable[g].scale.IsSet)	Brush.Scale(scale_x);
-			if (cTable[g].rot.IsSet)	Brush.Rot(rot_x,rot_y,rot_z);
-			if (cTable[g].move.IsSet)	Brush.Move(move_x,move_y,move_z,1);
+			if (cTable[g].scale.IsSet&&scale_valid)	Brush.Scale(scale_x);
+			if (cTable[g].rot.IsSet&&rot_valid)		Brush.Rot(rot_x,rot_y,rot_z);
+			if (cTable[g].move.IsSet&&move_valid)	Brush.Move(move_x,move_y,move_z,1);
 		}
 		for (int e = 0; e<Group.t_ents; e++)
 		{
 			entity &Entity = Group.Entities[e];
 			
-			if (cTable[g].scale.IsSet)	Entity.ScaleOrigin(scale_x, Zero);
-			if (cTable[g].rot.IsSet)	Entity.RotateOrigin(rot_x,rot_y,rot_z, Zero);
+			if (cTable[g].scale.IsSet&&scale_valid)	Entity.ScaleOrigin(scale_x, Zero);
+			if (cTable[g].rot.IsSet&&rot_valid)		Entity.RotateOrigin(rot_x,rot_y,rot_z, Zero);
 			Euler RotEuler(rot_x,rot_y,rot_z);
-			if (cTable[g].rot.IsSet)	Entity.RotateEntity(RotEuler,1);
-			if (cTable[g].move.IsSet)	Entity.Origin.move(move_x,move_y,move_z);
+			if (cTable[g].rot.IsSet&&rot_valid)		Entity.RotateEntity(RotEuler,1);
+			if (cTable[g].move.IsSet&&move_valid)	Entity.Origin.move(move_x,move_y,move_z);
 		}
 	}
 }
@@ -2200,7 +1620,7 @@ void file::createGroupMap()
 	}
 	
 	if (dev) cout << "  GetDimensions..." << endl;
-	mGroup->GetDimensions(0);
+	mGroup->GetGroupDimensions(0,0);
 	
 	if (dev) getch();
 	/*cout << " Dimensions: x " << mGroup->Dimensions.xs << " " << mGroup->Dimensions.xb << endl;
@@ -2492,8 +1912,12 @@ void file::createDetailGroupSource()
 			int entcount 		= mDetailGroup[d].t_ents;
 			dGroup.Entities 	= new entity[ entcount ];
 			dGroup.t_ents 		= entcount;
+			
+			dGroup.gID			= a;
 			dGroup.Dimensions 	= mDetailGroup[d].Dimensions;
 			dGroup.Origin 		= mDetailGroup[d].Origin;
+			dGroup.groupname 	= mDetailGroup[d].groupname;
+			dGroup.HasOrigin	= mDetailGroup[d].HasOrigin;
 		}
 	}
 	// fill source detail object groups
@@ -2562,8 +1986,11 @@ void file::createDetailGroup(int g)
 			dGroup.t_ents = entcount;
 			if (dev) cout << "       " << entcount << " Entities created inside Detail Group #"<<d<<"!" << endl;
 			
-			dGroup.Dimensions = sdGroup.Dimensions;
-			dGroup.Origin = sdGroup.Origin;
+			dGroup.gID			= g;
+			dGroup.Dimensions 	= sdGroup.Dimensions;
+			dGroup.Origin 		= sdGroup.Origin;
+			dGroup.groupname 	= sdGroup.groupname;
+			dGroup.HasOrigin	= sdGroup.HasOrigin;
 			if (dev) cout << "       Dimensions " << dGroup.Dimensions << " Origin " << dGroup.Origin << endl;
 		}
 	}
@@ -2718,7 +2145,7 @@ void file::createGroupSource()
 	sGroup = new group[t_arcs];
 	for (int g = 0; g<t_arcs; g++)
 	{
-		if (mGroup->t_brushes-mGroup->invalids>0) {
+		if (mGroup->t_brushes>0&&mGroup->t_brushes-mGroup->invalids>0) {
 		if (dev) cout << " #"<<g<<" Copying mGroup... invalids " << mGroup->invalids << " valids " << mGroup->t_brushes  << endl;
 		sGroup[g].Copy(*mGroup);
 		sGroup[g].IsSrcMap = 1;
@@ -2726,10 +2153,13 @@ void file::createGroupSource()
 		if (dev) cout << " mGroup copied to sGroup"<<g<<" invalids " << sGroup[g].invalids << " valids " << sGroup[g].t_brushes  << endl;
 		//sGroup[g].ExportGroupToMap(p_path+name+"_fixed"+to_string(g+1)+".map"); getch();
 		}
+		else if(mGroup->t_brushes==0)
+		{
+			if (dev) cout << "|    [WARNING] No Curve Brushes found! Is this a problem or not, I do not know. Let us see..." << endl;
+		}
 		else
 		{
 			cout << "|    [WARNING] Something went horribly wrong! The Source Map doesn't contain valid brushes ("<< mGroup->t_brushes-mGroup->invalids << ")!" << endl;
-			getch(); 
 		}
 	}
 	if (dev) getch();
@@ -2794,6 +2224,22 @@ void file::LoadMap_DetailObj()
 		}
 	}
 	
+	if (dev) cout << "  Fixing Holes..." << endl;
+	if (dev) getch();
+	for (int e = 0; e<EntityList.size(); e++)
+	{
+		entity &Entity = EntityList[e];
+		if (Entity.IsDetail)
+		{
+			for (int eb = 0; eb<Entity.t_brushes; eb++)
+			{
+				brush &Brush = Entity.Brushes[eb];
+				
+				// restore missing vertices of each face
+				Brush.FixHoles();
+			}
+		}
+	}
 	// get original detail brushes Texture Shifts
 	if (dev) cout << "  Getting original detail brushes Texture Shifts..." << endl;
 	if (dev) getch();
@@ -2827,6 +2273,7 @@ void file::LoadMap_DetailObj()
 					brush &Brush = mDetailGroup[dg].Brushes[b];
 					
 					Brush.Copy(Entity.Brushes[eb]);
+					Brush.SegID = b;
 					b++;
 				}
 			}
@@ -2835,7 +2282,10 @@ void file::LoadMap_DetailObj()
 	}
 	
 	for (int dg = 0; dg<t_dgroups; dg++)
-		mDetailGroup[dg].GetDimensions(1);
+		mDetailGroup[dg].MarkGroupOriginObjects();
+	
+	for (int dg = 0; dg<t_dgroups; dg++)
+		mDetailGroup[dg].GetGroupDimensions(1,1);
 	
 	// fix position of basic detail objects
 	/*for (int i = 0; i<t_dgroups; i++)

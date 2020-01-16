@@ -26,6 +26,7 @@ extern string ROOT;
 extern vector<WADFile> WADFiles;
 extern group *mGroup;
 extern group *sGroup;
+extern group *mDetailGroup;
 
 
 /* ===== GENERAL FUNCTIONS ===== */
@@ -209,7 +210,13 @@ void GetSettings(string cfgstr, vector<string> &SettingList, vector<string> &lsl
 		}
 		if(dev) { cout << endl; }
 	}
-
+	
+	// look for d_autoassign command in advance
+	for (int i = 0; i < SettingList.size(); i+=2) {
+		if(SettingList[i]=="d_autoassign" && SettingList[i+1]=="1")
+		gFile->d_autoassign = 1;
+	}
+	
 	if (dev) {
 		int found_arcs = 0;
 		cout << endl << "All found phrases and values:\n";
@@ -474,6 +481,10 @@ void ctable::FillUnset(ctable &Filler)
 	if (p_evenout<0)	p_evenout	= Filler.p_evenout;
 	if (c_enable<0)		c_enable	= Filler.c_enable;
 	if (texmode<0)		texmode		= Filler.texmode;
+	if (d_carve<0)		d_carve		= Filler.d_carve;
+	if (d_autoassign<0)	d_autoassign= Filler.d_autoassign;
+	if (d_circlemode<0)d_circlemode= Filler.d_circlemode;
+	if (flatcircle<0)	flatcircle	= Filler.flatcircle;
 	
 	if (!scale.IsSet)		scale		= Filler.scale;
 	if (!scale_src.IsSet)	scale_src	= Filler.scale_src;
@@ -483,6 +494,7 @@ void ctable::FillUnset(ctable &Filler)
 	if (!d_pos_rand.IsSet)	d_pos_rand	= Filler.d_pos_rand;
 	if (!d_rotz_rand.IsSet)	d_rotz_rand	= Filler.d_rotz_rand;
 	if (!d_movey_rand.IsSet)d_movey_rand= Filler.d_movey_rand;
+	if (!d_scale_rand.IsSet)d_scale_rand= Filler.d_scale_rand;
 	if (!p_scale.IsSet)		p_scale		= Filler.p_scale;
 }
 
@@ -492,7 +504,8 @@ void ctable::FillDefaults()
 	offset 		= 0;
 	res 		= 8;
 	obj 		= 0;
-	map 		= 1;
+	map 		= 0;
+	rmf			= 1;
 	type 		= 0;
 	shift 		= 5;
 	tri 		= 0;
@@ -526,8 +539,12 @@ void ctable::FillDefaults()
 	d_draw_rand	= 0;
 	heightmode 	= 0;
 	texmode 	= 0;
+	d_carve 	= 0;
+	d_autoassign= 0;
 	p_expand 	= 0;
 	p_evenout	= 0;
+	flatcircle	= 0;
+	d_circlemode = 0;
 }
 
 void ctable::Print()
@@ -541,6 +558,7 @@ void ctable::Print()
 	cout << "   offsetNO \t" << offset_NO << endl;
 	cout << "   res \t\t" << res << endl;
 	cout << "   obj \t\t" << obj << endl;
+	cout << "   rmf \t\t" << rmf << endl;
 	cout << "   map \t\t" << map << endl;
 	cout << "   type \t" << type << endl;
 	cout << "   shift \t" << shift << endl;
@@ -548,6 +566,8 @@ void ctable::Print()
 	cout << "   round \t" << round << endl;
 	cout << "   height \t" << height << endl;
 	cout << "   heightmode \t" << heightmode << endl;
+	cout << "   d_carve \t" << d_carve << endl;
+	cout << "   d_autoassign \t" << d_autoassign << endl;
 	cout << "   texmode \t" << texmode << endl;
 	cout << "   ramp \t" << ramp << endl;
 	cout << "   p_cornerfix \t" << cornerfix << endl;
@@ -556,6 +576,7 @@ void ctable::Print()
 	cout << "   p_scale \t" << p_scale << endl;
 	cout << "   p_expand \t" << p_expand << endl;
 	cout << "   p_evenout \t" << p_evenout << endl;
+	cout << "   flatcircle \t" << flatcircle << endl;
 	cout << "   ramptex \t" << ramptex << endl;
 	cout << "   splinefile \t" << path << endl;
 	cout << "   bound \t" << bound << endl;
@@ -579,10 +600,12 @@ void ctable::Print()
 	cout << "   d_pos_rand \t" << d_pos_rand << endl;
 	cout << "   d_rotz_rand \t" << d_rotz_rand << endl;
 	cout << "   d_movey_rand \t" << d_movey_rand << endl;
+	cout << "   d_scale_rand \t" << d_scale_rand << endl;
 	cout << "   d_autoname \t" << d_autoname << endl;
 	cout << "   d_draw \t" << d_draw << endl;
 	cout << "   d_skip \t" << d_skip << endl;
 	cout << "   d_draw_rand \t" << d_draw_rand << endl;
+	cout << "   d_circlemode \t" << d_circlemode << endl;
 	cout << "   nulltex \t" << nulltex << endl;
 	cout << "   spike_height \t" << spike_height << endl;
 	cout << "   c_enable \t" << c_enable << endl;
@@ -659,20 +682,36 @@ void createTableC()
 		if 		(a==0&&cTable[0].type<0) 	cTable[0].type = dTable[0].type;	// if first type is 0, set to PI
 		else if (a>0&&cTable[a].type<0) 	cTable[a].type = cTable[a-1].type; // if x-th type is 0, type is same as previous type
 		
+		// d_carve
+		if 		(a==0&&cTable[0].d_carve<0) 	cTable[0].d_carve = dTable[0].d_carve;
+		else if (a>0&&cTable[a].d_carve<0) 	cTable[a].d_carve = cTable[a-1].d_carve;
+		
+		// d_autoassign (unnecessary at the moment)
+		if 		(a==0&&cTable[0].d_autoassign<0) 	cTable[0].d_autoassign = dTable[0].d_autoassign;
+		else if (a>0&&cTable[a].d_autoassign<0) 	cTable[a].d_autoassign = cTable[a-1].d_autoassign;
+		
 		// obj
-		if 		(a==0&&cTable[0].obj<0) 	cTable[0].obj = dTable[0].obj;	// if first type is 0, set to PI
-		else if (a>0&&cTable[a].obj<0) 		cTable[a].obj = cTable[a-1].obj; // if x-th type is 0, type is same as previous type
+		if 		(a==0&&cTable[0].obj<0) 	cTable[0].obj = dTable[0].obj;
+		else if (a>0&&cTable[a].obj<0) 		cTable[a].obj = cTable[a-1].obj;
 		
 		// map
 		if 		(a==0&&cTable[0].map<0) 	cTable[0].map = dTable[0].map;
 		else if (a>0&&cTable[a].map<0) 		cTable[a].map = cTable[a-1].map;
 		
-		// rad & offset
-		if 		(cTable[a].rad==0) 			cTable[a].rad = sGroup[a].Dimensions.yb+cTable[a].offset;	// if first rad is 0, set rad to biggest map-y coord + offset
-		else 								cTable[a].rad += cTable[a].offset;
-		float size = sGroup[a].Dimensions.yb - sGroup[a].Dimensions.ys;
+		// rmf
+		if 		(a==0&&cTable[0].rmf<0) 	cTable[0].rmf = dTable[0].rmf;
+		else if (a>0&&cTable[a].rmf<0) 		cTable[a].rmf = cTable[a-1].rmf;
 		
-		// if (cTable[a].type<2) // prevent arc radius smaller than 0 or object size if arc type is PI or GRID Circle (paths can have negative source-object coordinates)
+		// rad & offset
+		float MaxY = sGroup[a].Dimensions.yb;
+		float MinY = sGroup[a].Dimensions.ys;
+		float size = MaxY - MinY;
+		if(size==0) { MaxY = mDetailGroup->Dimensions.yb; MinY = mDetailGroup->Dimensions.ys; size = MaxY - MinY; }
+		
+		if 		(cTable[a].rad==0) 			cTable[a].rad = MaxY+cTable[a].offset;	// if first rad is 0, set rad to biggest map-y coord + offset
+		else 								cTable[a].rad += cTable[a].offset;
+		
+		// if (cTable[a].type<2) // prevent arc radius smaller than 0 or ect size if arc type is PI or GRID Circle (paths can have negative source-ect coordinates)
 		if ( cTable[a].rad-size <= 0) cTable[a].rad = size; //+cTable[a].offset
 		if ( cTable[a].type==2 )
 		{
@@ -687,7 +726,8 @@ void createTableC()
 		sGroup[a].SizeY = size;
 		
 		// original radius offset
-		cTable[a].offset_NO = (cTable[a].rad-(sGroup[a].SizeY/2)) - (mGroup->Dimensions.yb-(mGroup->SizeY/2));   //cTable[a].rad - (sGroup[a].SizeY/2); //mGroup->Dimensions.yb; // sGroup[a].Origin.y
+		cTable[a].offset_NO = (cTable[a].rad-(size/2)) - (mGroup->Dimensions.yb-(mGroup->SizeY/2));
+		if(sGroup[a].t_brushes==0) cTable[a].offset_NO = (cTable[a].rad-(size/2)) - (mDetailGroup->Dimensions.yb-(mDetailGroup->SizeY/2));
 		
 		//res
 		if (cTable[a].type==0) { // PI Circle Type
@@ -922,6 +962,10 @@ void createTableC()
 		if 		(a==0&&cTable[0].d_skip<0) 	cTable[0].d_skip = dTable[0].d_skip;
 		else if (a>0&&cTable[a].d_skip<0) 	cTable[a].d_skip = cTable[a-1].d_skip;
 
+		
+		// d_circlemode
+		if 		(a==0&&cTable[0].d_circlemode<0) 	cTable[0].d_circlemode = dTable[0].d_circlemode;
+		else if (a>0&&cTable[a].d_circlemode<0) 	cTable[a].d_circlemode = cTable[a-1].d_circlemode;
 
 		// d_draw_rand
 		if 		(a==0&&cTable[0].d_draw_rand<0) cTable[0].d_draw_rand = dTable[0].d_draw_rand;
@@ -933,6 +977,10 @@ void createTableC()
 		else if (a>0&&cTable[a].p_evenout<0) 	cTable[a].p_evenout = cTable[a-1].p_evenout;
 
 		
+		// flatcircle
+		if 		(a==0&&cTable[0].flatcircle<0) cTable[0].flatcircle = dTable[0].flatcircle;
+		else if (a>0&&cTable[a].flatcircle<0) 	cTable[a].flatcircle = cTable[a-1].flatcircle;
+
 		//if (dev) cout << "     Arc " << a << " rad: " << cTable[a].rad << "\t offset: " << cTable[a].offset << "\t type: " << cTable[a].type << "\t res: " << cTable[a].res << "\t shift: " << cTable[a].shift << "\t height: " << cTable[a].height /*<< "\t tri: " << cTable[a].tri << "\t ramp: " << cTable[a].ramp << "\t round: " << cTable[a].round*/ << endl;
 		if (dev) { cTable[a].Print(); getch(); }
 	}

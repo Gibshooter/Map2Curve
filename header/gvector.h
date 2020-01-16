@@ -13,6 +13,9 @@ struct gvector
 	float x = 0.0;
 	float y = 0.0;
 	float z = 0.0;
+	float px = 0.0;
+	float py = 0.0;
+	float pz = 0.0;
 	bool IsHor = 0;
 	bool IsNeg = 0; // orientation of tex vector
 
@@ -30,6 +33,7 @@ struct gvector
 	gvector () {}
 	gvector (vertex p1, vertex p2);
 	gvector (float a, float b, float c) { x = a; y = b; z = c; }
+	gvector (const gvector &Vec) { *this = Vec; }
 	~gvector() {}
 };
 

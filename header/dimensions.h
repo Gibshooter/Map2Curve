@@ -19,7 +19,13 @@ struct dimensions
 	float zb = 0;
 	
 	void set(float a, float b, float c);
+	void set(float xyz[6]);
+	void set(float as, float ab, float bs, float bb, float cs, float cb);
 	void expand(int size);
+	
+	dimensions(float as, float ab, float bs, float bb, float cs, float cb);
+	dimensions() {}
+	~dimensions() {}
 };
 
 dimensions DimensionCombine(dimensions D1, dimensions D2);

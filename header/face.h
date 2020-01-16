@@ -97,15 +97,45 @@ struct face
 	void RefreshTent(face &Base);
 	void RotateVertices(float x, float y, float z);
 	void MiniShift();
-	void ConvertToSheared(bool IsWedge2, bool IsInside, bool Reverse, brush &Brush);
+	void ConvertToShearedTri(bool IsWedge2, bool IsInside, bool Reverse, brush &Brush);
+	void ConvertToSheared();
+	void SortVertices(gvector nVec);
+	int IsFaceBeyondPlane(gvector nVec);
+	int CarveFace(gvector Plane);
+	void AddNewVertex(vertex N);
+	void SetFace(int vc, vertex Verts[], string Tex)
+	{
+		vcount = vc;
+		Texture = Tex;
+		Vertices = new vertex[vcount];
+		for(int v=0; v<vcount; v++)
+		{
+			vertex &V = Vertices[v];
+			V = Verts[v];
+		}
+		GetNormal();
+	}
 	
 	face () {}
+	face (int vc, vertex Verts[], string Tex)
+	{
+		vcount = vc;
+		Texture = Tex;
+		Vertices = new vertex[vcount];
+		for(int v=0; v<vcount; v++)
+		{
+			vertex &V = Vertices[v];
+			V = Verts[v];
+		}
+		GetNormal();
+	}
 	~face() {
 		delete[] Vertices;
 		delete[] VerticesC;
 	}
 };
 
+void WriteFaceMAP(ostream &ostr, face &Face);
 ostream &operator<<(ostream &ostr, face &Face);
 
 /* ===== FACE FUNCTIONS ===== */
@@ -123,7 +153,34 @@ bool IsFaceParallel(face &F1, face &F2);
 bool DoFacesShareVerts(face &F1, face &F2, int deciplaces);
 bool IsVertexOnFace(face &Face, vertex &V, int deci);
 double GetDistFaceVertex(face &Face, vertex &V);
+bool IsVertexOnPlane(gvector &Normal, vertex &V, int deci);
+double GetDistPlaneVertex(gvector &Normal, vertex &V);
+bool DoFacesShareVertices(face &F1, face &F2);
+
+
+
+
+
 
 
 
 #endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

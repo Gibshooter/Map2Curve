@@ -244,7 +244,7 @@ void path::Move(float x, float y, float z)
 
 void path_set::Scale(tform n)
 {
-	GetDimensions();
+	GetSplineSetDimensions();
 	
 	for (int p=0;p<t_paths;p++)
 	{
@@ -252,7 +252,7 @@ void path_set::Scale(tform n)
 	}
 }
 
-void path_set::GetDimensions()
+void path_set::GetSplineSetDimensions()
 {
 	bool setBox = 0;
 	// get path origin
@@ -722,19 +722,21 @@ void circle::reverse(int res) {
 		swap(Vertices[i],Vertices[res-1-i]);
 }
 
-void circle::build_circlePi(int res, float rad, float height) {
+void circle::build_circlePi(int res, float rad, float height, bool flat) {
 	
+	bool dev = 0;
 	Vertices = new vertex[res+1];
 	//tverts = res+1;
 	
 	//cout << "Kreis Koordinaten mit PI konstruieren..." << endl;
 	//cout << "Steps (360/" << res << ") = " << 360.0/res << endl;
 	float steps = 360.0/res;
+	float step_half = 0; if(flat) step_half = steps/2;
 	float alpha;
 	
 	for (int i = (res/4), j, k=0; i < res+(res/4)+1; i++) {
 		
-		alpha = ((i * steps)*PI/180.0);
+		alpha = (( (i * steps)+step_half ) *PI/180.0);
 		//cout << "i[" << i << "] step: " << i * steps << ", \tAlpha = " << alpha << endl;
 		if (k==0) j = res; else j = k-1;
 		Vertices[j].x = rad*(cos(alpha));
@@ -750,6 +752,23 @@ void circle::build_circlePi(int res, float rad, float height) {
 		//cout << "\t - X (" << Vertices[j].x << ")\t rad["<<rad<<"]*(cos(alpha)["<<cos(alpha)<<"])\t | Y (" << Vertices[j].y << ")\t rad["<<rad<<"]\t*(sin(alpha)["<<sin(alpha)<<"])" << endl;
 	}
 	
+	if(flat&&step_half!=0)
+	{
+		// size difference between normal and "flat" circle
+		float rad_flat = rad * cos(step_half*PI/180.0);
+		float m = rad / rad_flat;
+		if (dev) cout << " rad " << rad << " rad_flat " << rad_flat << " m " << m << endl;
+		
+		// if starting angle > 0 scale circle to original radius again
+		if(m!=0&&IsValid(m))
+		for (int i = 0; i<res+1; i++) {
+			if (dev) cout << " v " << i << Vertices[i];
+			Vertices[i].x *= m;
+			Vertices[i].y *= m;
+			if (dev) cout << " new " << Vertices[i] << endl;
+		}
+	}
+		
 	reverse(res);
 	//for (int i = 0; i<res+1; i++)
 	//	cout << " Vertices["<<i<<"]" << Vertices[i] << endl;

@@ -17,19 +17,178 @@ using namespace std;
 extern vector<string> slist;
 extern file *gFile;
 
+
+ostream &operator<<(ostream &ostr, entity &E)
+{
+	ostr << endl << " *** Printing Entity ***" << endl;
+	ostr << "   classname \t" << E.key_classname << endl;
+	ostr << "   targetname \t" << E.key_targetname << endl;
+	ostr << "   scale \t" << E.key_scale << endl;
+	ostr << "   Origin \t" << E.Origin << endl;
+	ostr << "   IsDetail \t" << E.IsDetail << endl;
+	ostr << "   IsOrigin \t" << E.IsOrigin << endl;
+	ostr << "   Angles \t" << E.Angles << endl;
+	ostr << "   cID \t" << E.cID << endl;
+	ostr << "   dID \t" << E.dID << endl;
+	ostr << "   eID \t" << E.eID << endl;
+	ostr << "   Draw \t" << E.draw << endl;
+	ostr << "   SecID \t" << E.SecID << endl;
+	ostr << "   Brushes \t" << E.t_brushes << endl;
+	
+	ostr << "   KeyTypes" << endl;
+	for(int i=0; i<E.KeyTypes.size(); i++)
+		ostr << "     #" <<i << " " << E.KeyTypes[i] << endl;
+	
+	ostr << "   Keyvalues " << endl;
+	for(int i=0; i<E.Keys_Original.size(); i++)
+		ostr << "     #" <<i << " ["<<E.Keys_Original[i].name<<"] ["<<E.Keys_Original[i].value<<"]"<< endl;
+	
+	ostr << endl;
+	return ostr;
+}
+
+
+/* ===== KEY METHODS ===== */
+void ReplaceKeyInList(vector<key> &List, string candidate, string replace)
+{
+	for(int i=0; i<List.size(); i++)
+	{
+		string &k_name = List[i].name;
+		string &k_value = List[i].value;
+		if(k_name==candidate) { k_value = replace; break; }
+	}
+}
+
 /* ===== ENTITY METHODS ===== */
 
+/*brush* entity::ReturnEntityOriginBrush() // Not necessary
+{
+	entity &E = *this;
+	for (int b=0; b<E.t_brushes; b++)
+	{
+		brush &B = Brushes[b];
+		if(B.IsOriginBrush())
+			return &B;
+	}
+	return nullptr;
+}*/
+
+bool entity::IsKeyType(keytype Candi)
+{
+	entity &Entity = *this;
+	for (int i=0; i<KeyTypes.size(); i++) 
+	{
+		keytype &KT = KeyTypes[i];
+		if(KT==Candi) return 1;
+		else return 0;
+	}
+}
+
+bool entity::IsOriginEntity()
+{
+	bool dev = 0;
+	entity &Entity = *this;
+	
+	if(Entity.key_classname=="info_target" && Entity.key_targetname=="ORIGIN") {
+		IsOrigin = 1;
+		return 1;
+	}
+	else return 0;
+}
+
+bool entity::CarveEntity(gvector Plane)
+{
+	bool dev = 0;
+	entity &E = *this;
+	
+	// check if entities origin is beyond the given plane
+	vertex POrigin(Plane.px,Plane.py,0);
+	vertex EOrigin(E.Origin.x,E.Origin.y,0);
+	gvector Hypo(POrigin, EOrigin);
+	float AdjaLen = GetAdjaLen(Hypo,Plane);
+	if(AdjaLen>0) { E.draw=0; }
+	
+	if(!E.draw) { // Entity is completely out of bound and can be discarded!
+		return 1;
+	} else { // Entity is in front of Plane and therefor not discarded/carved!
+		return 0;
+	}
+}
+
+// new key search function since addition of RMF format
 void entity::GetKeyValues()
 {
 	bool dev = 0;
-	string phrase[] = { "classname", "angles", "origin", "targetname", "target" };
-	string phrase2[] = { "d_enable", "d_pos", "d_autopitch", "d_autoyaw", "d_separate", "d_autoname", "d_pos_rand", "d_rotz_rand", "d_movey_rand", "d_draw", "d_skip", "d_draw_rand" };
+	if(dev) cout << " Looking or KeyValues of an Entity..." << endl;
+	entity &Entity = *this;
+	int start = Entity.content.find("\"classname", 0);
+	vector<string> Temp_Keys;
+	vector<string> Temp_Values;
+	string &C = Entity.content;
+	
+	// search and save all keys and their values
+	if(start!=-1)
+	{
+		int last = start;
+		while(last!=-1)
+		{
+			// Get Key
+			int end = C.find("\"", last+1);
+			string Found_Key = C.substr(last+1, end-last-1);
+			if(dev) cout << " Found_Key " << Found_Key << endl;
+			if(Found_Key.size()>0)
+			{
+				Temp_Keys.push_back(Found_Key);
+				
+				// Get Value if key was valid
+				start = end+3; if(dev) cout << "   start " << start << " [" << C[start] << "]" << endl;
+				end = C.find("\"\n", start); if(dev) cout << "   end " << end << " [" << C[end] << "]" << endl;
+				string Found_Value = C.substr(start, end-start);
+				if(dev) cout << "   Found_Value " << Found_Value << endl;
+				Temp_Values.push_back(Found_Value);
+				last = end+2; if(dev) cout << "   last " << last << " [" << C[last] << "]" << endl;
+			}
+			else
+			{
+				// if key was empty, go to end of line
+				cout << "   Key was empty, going to end of line!" <<endl << endl;
+				last = C.find("\n", end)+1;
+			}
+			if(last==-1||C[last]=='}'||C[last]=='{') { if(dev) cout << " END of Entity Keyvalues at Pos " << last << " [" << C[last] << "]" << endl; break; }
+			if(dev) getch();
+		}
+	}
+	
+	// add clean keyvalues to entities keyvaluelist (skip on all m2c_ keys)
+	if(dev) cout<< endl << " clean keyvalues..." << endl;
+	for(int i=0; i<Temp_Keys.size(); i++)
+	{
+		string &TempKey = Temp_Keys[i];
+		string &TempVal = Temp_Values[i];
+		if(TempKey.find("m2c_",0)==-1) 
+		{
+			key ck;
+			ck.name = TempKey;
+			ck.value = TempVal;
+			Entity.Keys_Original.push_back(ck);
+			if(dev) cout<< "   key " << i << " " << ck.name << " \t " << ck.value << endl;
+		}
+	}
+	if(dev) getch();
+}
+
+// this is a very outdated function. too lazy to update it though!
+void entity::GetKeyValues_M2C()
+{
+	bool dev = 0;
+	string phrase[] = { "classname", "angles", "origin", "targetname", "target", "scale" };
+	string phrase2[] = { "d_enable", "d_pos", "d_autopitch", "d_autoyaw", "d_separate", "d_autoname", "d_pos_rand", "d_rotz_rand", "d_movey_rand", "d_draw", "d_skip", "d_draw_rand", "d_carve", "d_scale_rand", "d_circlemode" };
 	
 	int p1 = (sizeof(phrase)/sizeof(*phrase));
 	int p2 = slist.size(); //(sizeof(slist)/sizeof(*slist));
 	int p3 = (sizeof(phrase2)/sizeof(*phrase2));
 	if (dev) cout << " Getting Keyvalues of Entity (type" << type << "). Phrases: " << p1 << "+"<<p2<<"="<<p1+p2<<"..."<<endl;
-	// in this entity look for all possible settings and a few 
+	// in this entity look for all possible settings
 	for (int i = 0, j = 0, k = 0; i<p1+p2+p3; i++)
 	{
 		string search_phrase, phrase_short;
@@ -59,9 +218,10 @@ void entity::GetKeyValues()
 				Keys[k].value = content.substr( v_start, v_end-v_start );
 				if (dev) cout << "     Key " << Keys[k].name<<endl;
 				if (dev) cout << "     Value " << Keys[k].value<<endl;
-				if (Keys[k].name=="classname") key_classname = Keys[k].value;
-				if (Keys[k].name=="target") key_target = Keys[k].value;
-				if (Keys[k].name=="targetname") key_targetname = Keys[k].value;
+				if (Keys[k].name=="classname") 	key_classname = Keys[k].value;
+				if (Keys[k].name=="target") 	{ key_target = Keys[k].value;		/*KeyTypes.push_back(KT_TARGET);*/ }
+				if (Keys[k].name=="targetname") { key_targetname = Keys[k].value;	/*KeyTypes.push_back(KT_TARGETNAME);*/ }
+				if (Keys[k].name=="scale") 		{ key_scale = stof(Keys[k].value);	KeyTypes.push_back(KT_SCALE); }
 			}
 		}
 		if (i>=p1+p3) j++;
@@ -78,19 +238,22 @@ void entity::GetKeyValues()
 		if (dev) cout << "   Key #"<<k<< " Name: " << name << " Value " << value <<endl;
 		
 		// key values concerning detail groups are stored in the entity itself rather than in a contruction table
-			if (name=="d_enable") 	if(value!="-2") d_enable = stoi(value);
-			if (name=="d_pos") 	if(value!="UNSET") d_pos 	= stof(value);
-			if (name=="d_autopitch")if(value!="-2") d_autopitch = stoi(value);
-			if (name=="d_autoyaw") 	if(value!="-2") d_autoyaw 	= stoi(value);
-			if (name=="d_separate") if(value!="-2") d_separate 	= stoi(value);
-			if (name=="d_autoname") if(value!="-2") d_autoname 	= stoi(value);
-			if (name=="d_pos_rand") if(value!="-2") d_pos_rand.set(value);
-			if (name=="d_rotz_rand") if(value!="-2") d_rotz_rand.set(value);
-			if (name=="d_movey_rand") if(value!="-2") d_movey_rand.set(value);
-			if (name=="d_draw") 	if(value!="-2") d_draw 		= stoi(value);
-			if (name=="d_skip") 	if(value!="-2") d_skip 		= stoi(value);
-			if (name=="d_draw_rand") if(value!="-2") d_draw_rand 	= stoi(value);
-			
+		if (name=="d_enable") 		d_enable 		= stoi(value);
+		if (name=="d_pos") 	 		d_pos 			= stof(value);
+		if (name=="d_autopitch") 	d_autopitch 	= stoi(value);
+		if (name=="d_autoyaw") 	 	d_autoyaw 		= stoi(value);
+		if (name=="d_separate")  	d_separate 		= stoi(value);
+		if (name=="d_autoname")  	d_autoname 		= stoi(value);
+		if (name=="d_draw") 	 	d_draw 			= stoi(value);
+		if (name=="d_skip") 	 	d_skip 			= stoi(value);
+		if (name=="d_draw_rand")  	d_draw_rand		= stoi(value);
+		if (name=="d_carve") 	 	d_carve			= stoi(value);
+		if (name=="d_circlemode")	d_circlemode	= stoi(value);
+		if (name=="d_pos_rand")  	d_pos_rand.set(value);
+		if (name=="d_rotz_rand")  	d_rotz_rand.set(value);
+		if (name=="d_movey_rand")  	d_movey_rand.set(value);
+		if (name=="d_scale_rand")  	d_scale_rand.set(value);
+		
 		if (name=="angles"||name=="origin") {
 			if (value.length()>2)
 			SplitString(value," ", Values);
@@ -103,13 +266,14 @@ void entity::GetKeyValues()
 		if (Values.size()>2)
 		{
 			if (name=="angles") {
-				//rot.SetAngles( stof(Values[2]), stof(Values[0]), stof(Values[1]) );
 				Euler NewAngles(stof(Values[2]), stof(Values[0]), stof(Values[1])); // Keyvalue Order (Y Z X) -> [ 1 2 0 ]
 				RotateEntity(NewAngles,0);
 				Angles = NewAngles;
+				KeyTypes.push_back(KT_ANGLES);
 			}
 			if (name=="origin") {
 				Origin.x = stof(Values[0]); Origin.y = stof(Values[1]); Origin.z = stof(Values[2]);
+				//KeyTypes.push_back(KT_ORIGIN);
 			}
 		}
 	}
@@ -361,37 +525,42 @@ void entity::RotateEntity(Euler RotAngles, bool UpdateEuler)
 
 void entity::CopySimple(entity &Source)
 {
-	content = Source.content;
-	head_end = Source.head_end;
-	eID = Source.eID;
-	dID = Source.dID;
-	SecID = Source.SecID;
-	type = Source.type;
-	IsDetail = Source.IsDetail;
-	Angles = Source.Angles;
-	AMatrix = Source.AMatrix;
-	Origin = Source.Origin;
-	key_classname = Source.key_classname;
-	key_target = Source.key_target;
-	key_targetname = Source.key_targetname;
-	draw = Source.draw;
+	content 		= Source.content;
+	head_end 		= Source.head_end;
+	eID 			= Source.eID;
+	dID 			= Source.dID;
+	SecID 			= Source.SecID;
+	type 			= Source.type;
+	IsDetail 		= Source.IsDetail;
+	Angles 			= Source.Angles;
+	AMatrix 		= Source.AMatrix;
+	Origin 			= Source.Origin;
+	key_classname 	= Source.key_classname;
+	key_target 		= Source.key_target;
+	key_targetname 	= Source.key_targetname;
+	draw 			= Source.draw;
+	IsOrigin 		= Source.IsOrigin;
+	SpawnFlags 		= Source.SpawnFlags;
 	
-	d_enable = Source.d_enable;
-	d_autopitch = Source.d_autopitch;
-	d_autoyaw = Source.d_autoyaw;
-	d_separate = Source.d_separate;
-	d_pos = Source.d_pos;
-	d_autoname = Source.d_autoname;
-	d_pos_rand = Source.d_pos_rand;
-	d_rotz_rand = Source.d_rotz_rand;
-	d_movey_rand = Source.d_movey_rand;
-	d_draw = Source.d_draw;
-	d_skip = Source.d_skip;
-	d_draw_rand = Source.d_draw_rand;
+	d_enable 		= Source.d_enable;
+	d_autopitch 	= Source.d_autopitch;
+	d_autoyaw 		= Source.d_autoyaw;
+	d_separate 		= Source.d_separate;
+	d_pos 			= Source.d_pos;
+	d_autoname 		= Source.d_autoname;
+	d_pos_rand 		= Source.d_pos_rand;
+	d_rotz_rand 	= Source.d_rotz_rand;
+	d_movey_rand 	= Source.d_movey_rand;
+	d_draw 			= Source.d_draw;
+	d_skip 			= Source.d_skip;
+	d_draw_rand 	= Source.d_draw_rand;
+	d_scale_rand 	= Source.d_scale_rand;
+	d_carve 		= Source.d_carve;
+	d_circlemode	= Source.d_circlemode;
 	
-	Keys.resize(Source.Keys.size());
-	for (int k = 0; k<Keys.size(); k++)
-		Keys[k] = Source.Keys[k];
+	Keys 			= Source.Keys;
+	Keys_Original 	= Source.Keys_Original;
+	KeyTypes		= Source.KeyTypes;
 }
 
 void entity::ScaleOrigin(float n, vertex SOrigin)

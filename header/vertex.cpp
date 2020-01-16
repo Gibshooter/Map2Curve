@@ -56,6 +56,18 @@ void vertex::scale(float n)
 	}
 }
 
+void vertex::ScaleOrigin(float n, vertex Origin)
+{
+	if (n!=0)
+	{
+		this->move(-Origin.x, -Origin.y, -Origin.z);
+		
+		this->scale(n);
+		
+		this->move(Origin.x, Origin.y, Origin.z);
+	}
+}
+
 void vertex::rotate(float degx, float degy, float degz)
 {
 	if(degx!=0||degy!=0||degz!=0)
@@ -190,6 +202,56 @@ bool IsVertexInList(vertex &V, vertex *VList, int vcount, bool UsePrecision, int
 	return false;
 }
 
+bool IsVertexInList(vertex &V, vector<vertex> VList, bool UsePrecision, int deci)
+{
+	bool dev = 0;
+	int vcount = VList.size();
+	if (dev) cout << "VINLIST Checking if Vertex " << V << " is in VList with length " << vcount << ". Precision 0/1 (" << UsePrecision << ") up to " << deci << " places..." << endl;
+	for (int v = 0; v<vcount; v++)
+	{
+		vertex &VC = VList[v];
+		if (dev) cout << "VINLIST  current VList Entry " << v << VC << endl;
+		if (  UsePrecision  )
+		{
+			if (  CompareVerticesDeci(V, VC, deci)  )
+			{
+				if (dev) cout << "VINLIST   MATCH! Vertex " << V << " is same as current Entry " << v << VC << endl << endl;
+				return true;
+			}
+		}
+		else if (  !UsePrecision  )
+		{
+			if (  CompareVertices(V,VC)  )
+			{
+				if (dev) cout << "VINLIST   MATCH! Vertex " << V << " is same as current Entry " << v << VC << endl << endl;
+				return true;
+			}
+		}
+	}
+	if (dev) cout << "VINLIST  Vertex " << V << " was NOT found in this VList!" << endl << endl;
+	return false;
+}
+
+bool IsVertexXYInList(vertex &V, vector<vertex> VList, bool UsePrecision, int deci)
+{
+	int vcount = VList.size();
+	for (int v = 0; v<vcount; v++)
+	{
+		vertex &VC = VList[v];
+		if (  UsePrecision  )
+		{
+			if (  CompareVerticesXYDeci(V, VC, deci)  )
+				return true;
+		}
+		else if (  !UsePrecision  )
+		{
+			if (  CompareVerticesXY(V,VC)  )
+				return true;
+		}
+	}
+	return false;
+}
+
 vertex Add(vertex V, gvector Vec)
 {
 	vertex N;
@@ -223,11 +285,30 @@ bool CompareVerticesDeci(vertex V0, vertex V1, int deciplace)
 	bool dev = 0;
 	int d = pow(10, deciplace);
 	if (d==0) d=1;
-	if (dev) cout << "       Comparing Vertices Deciplaces "<<deciplace<<" ("<<d<<") V0 " << V0 << " V1 " << V1 << endl;
+	int x1 = round(V0.x*d), x2 = round(V1.x*d);
+	int y1 = round(V0.y*d), y2 = round(V1.y*d);
+	int z1 = round(V0.z*d), z2 = round(V1.z*d);
+	if (dev) cout << "VCOMPARE Deci "<<deciplace<<" ("<<d<<") V0 [" << x1 << "|" << y1 << "|" << z1 << "] V0 [" << x2 << "|" << y2 << "|" << z2 << "] " << endl;
 	if (
-	floorf(V0.x*d)/d==floorf(V1.x*d)/d&&
-	floorf(V0.y*d)/d==floorf(V1.y*d)/d&&
-	floorf(V0.z*d)/d==floorf(V1.z*d)/d)
+	x1==x2&&
+	y1==y2&&
+	z1==z2)
+		return true;
+	else
+		return false;
+}
+
+bool CompareVerticesXYDeci(vertex V0, vertex V1, int deciplace)
+{
+	bool dev = 0;
+	int d = pow(10, deciplace);
+	if (d==0) d=1;
+	int x1 = round(V0.x*d), x2 = round(V1.x*d);
+	int y1 = round(V0.y*d), y2 = round(V1.y*d);
+	if (dev) cout << "VCOMPARE Deci "<<deciplace<<" ("<<d<<") V0 [" << x1 << "|" << y1 << "] V0 [" << x2 << "|" << y2 << "] " << endl;
+	if (
+	x1==x2&&
+	y1==y2)
 		return true;
 	else
 		return false;

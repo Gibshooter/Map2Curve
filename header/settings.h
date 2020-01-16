@@ -43,6 +43,7 @@ struct ctable {
 	int res 		= -1;
 	int obj 		= -1;
 	int map 		= -1;
+	int rmf 		= -1;
 	int type 		= -1; // 0 = PI, 1 = QUAKE
 	int shift 		= -1; // hor shift mode; 0 = per section, 1 = per Brush, 2= per Texture
 	int tri 		= -1;
@@ -82,6 +83,7 @@ struct ctable {
 	tform d_pos_rand;
 	tform d_rotz_rand;
 	tform d_movey_rand;
+	tform d_scale_rand;
 	int d_draw = -1;
 	int d_draw_rand = -1;
 	int d_skip = -1;
@@ -89,6 +91,10 @@ struct ctable {
 	float spike_height = -1;
 	int heightmode = -1; // 0 = Linear, 1 = Smooth, 2 = Spline, 3 = Random Jagged, 4 = Random Smooth
 	int texmode = -1;
+	int d_carve = -1;
+	int d_autoassign = -1;
+	int d_circlemode = -1;
+	int flatcircle = -1;
 	
 	void Print();
 	void FillUnset(ctable &Filler);
@@ -171,13 +177,13 @@ struct setting_list
 		// bools
 		if (Settings[4].IsSet)Table.obj 			= Settings[4].val_bool;
 		if (Settings[48].IsSet)Table.map 			= Settings[48].val_bool;
+		if (Settings[56].IsSet)Table.rmf 			= Settings[56].val_bool;
 		if (Settings[8].IsSet)Table.tri 			= Settings[8].val_bool;
 		if (Settings[9].IsSet)Table.round 			= Settings[9].val_bool;
 		if (Settings[12].IsSet)Table.cornerfix		= Settings[12].val_bool;
 		if (Settings[13].IsSet)Table.preverse		= Settings[13].val_bool;
 		if (Settings[14].IsSet)Table.ramptex  		= Settings[14].val_bool;
 		if (Settings[15].IsSet)Table.psplit  		= Settings[15].val_bool;
-		if (Settings[22].IsSet)Table.bound 			= Settings[22].val_bool;
 		if (Settings[25].IsSet)Table.transit_tri	= Settings[25].val_bool;
 		if (Settings[26].IsSet)Table.transit_round	= Settings[26].val_bool;
 		if (Settings[27].IsSet)Table.gaps			= Settings[27].val_bool;
@@ -192,8 +198,10 @@ struct setting_list
 		if (Settings[11].IsSet)Table.ramp 			= Settings[11].val_bool;
 		if (Settings[47].IsSet)Table.p_evenout 		= Settings[47].val_bool;
 		if (Settings[49].IsSet)Table.c_enable 		= Settings[49].val_bool;
+		if (Settings[54].IsSet)Table.flatcircle		= Settings[54].val_bool;
 				
 		// integers
+		if (Settings[22].IsSet)Table.bound 			= Settings[22].val_int;
 		if (Settings[2].IsSet)Table.res 			= Settings[2].val_int;
 		if (Settings[3].IsSet)Table.type 			= Settings[3].val_int;
 		if (Settings[5].IsSet)Table.shift 			= Settings[5].val_int;
@@ -201,6 +209,9 @@ struct setting_list
 		if (Settings[43].IsSet)Table.d_skip			= Settings[43].val_int;
 		if (Settings[44].IsSet)Table.heightmode		= Settings[44].val_int;
 		if (Settings[50].IsSet)Table.texmode		= Settings[50].val_int;
+		if (Settings[51].IsSet)Table.d_carve		= Settings[51].val_int;
+		if (Settings[52].IsSet)Table.d_autoassign	= Settings[52].val_int;
+		if (Settings[53].IsSet)Table.d_circlemode	= Settings[53].val_int;
 		
 		// floats
 		if (Settings[0].IsSet)Table.rad 			= Settings[0].val_float;
@@ -228,6 +239,7 @@ struct setting_list
 		if (Settings[39].IsSet)Table.d_rotz_rand	= Settings[39].val_tform;
 		if (Settings[40].IsSet)Table.d_movey_rand	= Settings[40].val_tform;
 		if (Settings[45].IsSet)Table.p_scale		= Settings[45].val_tform;
+		if (Settings[55].IsSet)Table.d_scale_rand	= Settings[55].val_tform;
 	}
 	
 	void Print()

@@ -53,6 +53,7 @@ void WriteTextToFile(string L_FilePath, string Text);
 void SplitStrAtDelim(string Str, char Delim, vector<string> &Lines);
 void SplitString(string value,string delimiter, vector<string> &Target);
 bool ContainsInvalids(string Subject, string Valids);
+void ReplaceInList(vector<string> &List1, vector<string> &List2, string L1_candidate, string L2_replace);
 
 /* ===== MISC NUMBER FUNCTIONS ===== */
 
@@ -65,6 +66,7 @@ bool IsValid(float n);
 bool IsNULL(double n);
 bool CompareFloatDeci(float N1, float N2, int deciplace);
 float GetRandInRange(float min, float max);
+int IsBorderliner(float n, int prec);
 
 /* ===== SMALL MATH FUNCTIONS ===== */
 

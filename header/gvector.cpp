@@ -169,7 +169,6 @@ float GetOppoLen (gvector Hypo, gvector Vec)
 	
 	float result = AlphaSin * HypoLen;
 	if (!IsValid(result)) result = 0;
-	
 	return result;
 }
 

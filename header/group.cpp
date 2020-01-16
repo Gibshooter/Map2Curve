@@ -42,6 +42,183 @@ ostream &operator<<(ostream &ostr, group &g)
 	ostr << endl;
 }
 
+void group::WeldGroupVertices(bool WeldGaps)
+{
+	bool dev = 0;
+	group &Group = *this;
+	int g = Group.gID;
+	if(dev) cout << " Welding Brushes " << WeldGaps << endl;
+	
+	if(!WeldGaps)
+	{
+		vector<vertex> agents;
+		// if sec ID isnt odd numbered, add all brush vertices to agent list
+		for(int b=0; b<Group.t_brushes; b++)
+		{
+			brush &Brush = Group.Brushes[b];
+			if(  Brush.SecID % 2 == 0  ) // only even numbered section brushes
+			for(int f=0; f<Brush.t_faces; f++)
+			{
+				face &Face = Brush.Faces[f];
+				for(int v=0; v<Face.vcount; v++)
+				{
+					vertex &V = Face.Vertices[v];
+					V.SecID = Brush.SecID;
+					V.SegID = Brush.SegID;
+					if(V.carved)
+					agents.push_back(V);
+				}
+			}
+		}
+		
+		// detail brushes
+		// weld all vertices to agents, if they share the same position (precision!)
+		for(int b=0; b<Group.t_brushes; b++)
+		{
+			brush &Brush = Group.Brushes[b];
+			if( Brush.SecID % 2 != 0 )
+			for(int f=0; f<Brush.t_faces; f++)
+			{
+				face &Face = Brush.Faces[f];
+				for(int v=0; v<Face.vcount; v++)
+				{
+					vertex &V = Face.Vertices[v];
+					for (int a=0; a<agents.size(); a++)
+					{
+						vertex &A = agents[a];
+						if(( A.SegID==Brush.SegID ) && ( A.SecID==Brush.SecID-1||A.SecID==Brush.SecID+1 ))
+						if( CompareVerticesDeci(V, A, 2) )
+						{
+							if(dev) cout << setprecision(8) << " Welding Detail Brush " <<b<<" F " << f << " V " << v << V << " sec " << Brush.SecID << " seg " << Brush.SegID << " to Agent " << a << A << " sec " << A.SecID << " seg " << A.SegID << endl;
+							V.x = A.x;
+							V.y = A.y;
+							V.z = A.z;
+							break;
+						}
+					}
+				}
+			}
+		}
+	}
+	else
+	{
+		vector<vertex> agents;
+		// if gaps are active, every section is an agent, all gaps will be welded
+		for(int b=0; b<Group.t_brushes; b++)
+		{
+			brush &Brush = Group.Brushes[b];
+			for(int f=0; f<Brush.t_faces; f++)
+			{
+				face &Face = Brush.Faces[f];
+				for(int v=0; v<Face.vcount; v++)
+				{
+					vertex &V = Face.Vertices[v];
+					V.SecID = Brush.SecID;
+					V.SegID = Brush.SegID2;
+					agents.push_back(V);
+				}
+			}
+		}
+		
+		// weld gaps to agents
+		for(int b=0; b<Group.t_brushes; b++)
+		{
+			brush &Brush = Group.Brushes[b];
+			if( Brush.Gap!=nullptr )
+			{
+				brush &Gap = *Brush.Gap;
+				for(int f=0; f<Gap.t_faces; f++)
+				{
+					face &Face = Gap.Faces[f];
+					for(int v=0; v<Face.vcount; v++)
+					{
+						vertex &V = Face.Vertices[v];
+						for (int a=0; a<agents.size(); a++)
+						{
+							vertex &A = agents[a];
+							if(( A.SegID==Gap.SegID ) && ( A.SecID==Gap.SecID||A.SecID==Gap.SecID-1 ))
+							if( !CompareVertices(V,A) )
+							if( CompareVerticesDeci(V, A, 2) )
+							{
+								if(dev) cout << " Welding Gap  Brush " << setprecision(8) <<b<<" F " << f << " V " << v << V << " sec " << Gap.SecID << " seg " << Gap.SegID << " to Agent " << a << A << " sec " << A.SecID << " seg " << A.SegID << endl;
+								V.x = A.x;
+								V.y = A.y;
+								V.z = A.z;
+								break;
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+void group::FillUnsetKeySettings()
+{
+	group &Group = *this;
+	int g = Group.gID;
+	
+	if(d_autoyaw<0)     Group.d_autoyaw 		= cTable[g].d_autoyaw;
+	if(d_autopitch<0) 	Group.d_autopitch		= cTable[g].d_autopitch;
+	if(d_enable<0) 		Group.d_enable			= cTable[g].d_enable;
+	if(d_circlemode<0) 	Group.d_circlemode		= cTable[g].d_circlemode;
+	
+	if(d_pos<0) 		Group.d_pos				= cTable[g].d_pos;
+	if(d_separate<0) 	Group.d_separate		= cTable[g].d_separate;
+	if(d_autoname<0) 	Group.d_autoname		= cTable[g].d_autoname;
+	if(d_draw<0) 		Group.d_draw			= cTable[g].d_draw;
+	if(d_draw_rand<0) 	Group.d_draw_rand		= cTable[g].d_draw_rand;
+	if(d_skip<0) 		Group.d_skip			= cTable[g].d_skip;
+	if(d_carve<0) 		Group.d_carve			= cTable[g].d_carve;
+	
+	if (!Group.d_pos_rand.IsSet) 	Group.d_pos_rand	= cTable[g].d_pos_rand;
+	if (!Group.d_rotz_rand.IsSet) 	Group.d_rotz_rand	= cTable[g].d_rotz_rand;
+	if (!Group.d_movey_rand.IsSet) 	Group.d_movey_rand	= cTable[g].d_movey_rand;
+	if (!Group.d_scale_rand.IsSet) 	Group.d_scale_rand	= cTable[g].d_scale_rand;
+}
+
+void group::MarkGroupOriginObjects()
+{
+	group &Group = *this;
+	for(int b=0; b<Group.t_brushes; b++)
+	{
+		brush &Brush = Brushes[b];
+		Brush.IsOriginBrush();
+		if(Brush.IsOrigin) Group.HasOrigin=1;
+	}
+	for(int e=0; e<Group.t_ents; e++)
+	{
+		entity &Entity = Entities[e];
+		Entity.IsOriginEntity();
+		if(Entity.IsOrigin) Group.HasOrigin=1;
+	}
+}
+
+void group::GetGroupOriginCustom()
+{
+	group &Group = *this;
+	for(int b=0; b<Group.t_brushes; b++)
+	{
+		brush &Brush = Brushes[b];
+		if(Brush.IsOrigin)
+		{
+			Brush.GetBrushDimensions(1);
+			Group.Origin = Brush.Origin;
+			break;
+		}
+	}
+	for(int e=0; e<Group.t_ents; e++)
+	{
+		entity &Entity = Entities[e];
+		if(Entity.IsOrigin)
+		{
+			Group.Origin = Entity.Origin;
+			break;
+		}
+	}
+}
+
 void group::Move(float x, float y, float z, bool LockBrushShifts)
 {
 	for (int b = 0; b<t_brushes; b++) // Brushes
@@ -87,6 +264,23 @@ void group::RotOriginSecs(vector<float> &RotX, vector<float> &RotY, vector<float
 		Entity.Origin.rotateOrigin(RotX[sec], RotY[sec], RotZ[sec], Origin[sec]);
 		Euler RotAngles(RotX[sec], RotY[sec], RotZ[sec]);
 		Entity.RotateEntity(RotAngles,1);
+	}
+}
+
+void group::ScaleOriginSecs(vector<float> &Scale, vector<vertex> &Origin)
+{
+	for (int b = 0; b<t_brushes; b++) // Brushes
+	{
+		brush &Brush = Brushes[b];
+		int sec = Brush.SecID;
+		Brush.ScaleOrigin(Scale[sec], Origin[sec]);
+	}
+	for (int e = 0; e<t_ents; e++) // Entities
+	{
+		entity &Entity = Entities[e];
+		int sec = Entity.SecID;
+		Entity.Origin.ScaleOrigin(Scale[sec], Origin[sec]);
+		Entity.key_scale *= Scale[sec];
 	}
 }
 
@@ -307,6 +501,13 @@ void group::ReconstructMap()
 	// Vertex List #2 based on Reconstructed Vertices
 	if (dev) cout << " Vertex List #2 based on Reconstructed Vertices..." << endl;
 	mGroup->GetGroupVertexList();
+	
+	for(int b=0; b<mGroup->t_brushes; b++)
+		for(int f=0; f<mGroup->Brushes[b].t_faces; f++) {
+			face &Face = mGroup->Brushes[b].Faces[f];
+			//Face.GetNormal(); // not necessary
+			Face.SortVertices(Face.Normal);
+		}
 }
 
 // reconstruct working source objects that were copied from the previously reconstructed source map
@@ -615,7 +816,7 @@ void group::GetBrushBodyFaceLengths()
 				
 				if (Face.fID==2)
 				{
-					if (cTable[g].type==1)
+					if (cTable[g].type==1||(cTable[g].type==0&&cTable[g].flatcircle==1))
 						Face.LengthO = OFaceLen;
 					else
 						Face.LengthO = GetVecLen( GetVector(  Face.Vertices[0], Face.Vertices[1]  ));
@@ -625,7 +826,6 @@ void group::GetBrushBodyFaceLengths()
 					else
 					Face.LengthN = Face.LengthO;
 					//if (Brush.IsWedge) cout << "   Brush # "<<b<<" Face #" <<f<< " Tex: "<<Face.Texture << " Face Len " << Face.LengthN << endl;
-					
 					if(dev)if (b==0) cout << "Face #" <<f<< " Tex: "<<Face.Texture << "\nPitchO: " << Face.PitchO << "\nPitchN: " << Face.PitchN << "\nDifference O/N: " << Face.PitchN-Face.PitchO << endl << endl;
 				}
 			}
@@ -816,7 +1016,7 @@ void group::GetFaceGroups()
 	
 	int last = 1;
 	vector<string> uniqTexList;
-	if (cTable[g].shift!=0)
+	if (Group.t_brushes>0 && Group.valid && cTable[g].shift!=0)
 	{
 		if (cTable[g].shift==3||cTable[g].shift==5)
 		for (int b = 0; b <Group.t_brushes; b++)
@@ -1018,7 +1218,7 @@ void group::ShearVectors()
 	group &Group = *this;
 	int g = Group.gID;
 	
-	Group.MarkInsideSecBrushes();
+	//Group.MarkInsideSecBrushes(); // not necessary atm
 	
 	for (int b = 0; b<Group.t_brushes; b++) {
 		brush &Brush = Group.Brushes[b];
@@ -1035,9 +1235,18 @@ void group::ShearVectors()
 			{
 				face &Face = Brush.Tri[bt].Faces[f];
 				//cout << " Brush " <<b<<" Tri " << bt << " Face " << f << " NULL " << Face.IsNULL << " ID " << Face.fID << " Orient " << Face.Orient << endl;
-				bool reverse = 0; if( cTable[g].preverse && (cTable[g].type==2||cTable[g].type==3) ) reverse = 1;
+				//bool reverse = 0; if( cTable[g].preverse && (cTable[g].type==2||cTable[g].type==3) ) reverse = 1;
 				if(!Face.IsNULL&&Face.draw&&Face.fID==2&&Face.Orient!=6&&Face.Texture!="NULL"&&Face.Texture!=def_nulltex)
-					Face.ConvertToSheared(Brush.Tri[bt].IsWedge2, IsSecInside[sec], reverse, Brush);
+					Face.ConvertToShearedTri(Brush.Tri[bt].IsWedge2, 0, 0, Brush); //IsSecInside[sec] // (not necessary atm)
+			}
+		}
+		else if( Brush.Tri==nullptr&&sec>=Group.range_start&&sec<Group.range_end )
+		{
+			for (int f = 0; f<Brush.t_faces; f++)
+			{
+				face &Face = Brush.Faces[f];
+				if(!Face.IsNULL&&Face.draw&&Face.fID==2&&Face.Orient!=6&&Face.Texture!="NULL"&&Face.Texture!=def_nulltex)
+					Face.ConvertToSheared();
 			}
 		}
 	}
@@ -1122,7 +1331,7 @@ void group::RotateVectors()
 		//cout << "steps_grid_base["<<i<<"]" << steps_grid_base[i] << endl;
 	}
 	
-	// rotation steps for GRID PATH circles
+	// rotation steps for simple splines
 	if (cTable[g].type==2||cTable[g].type==3)
 	{
 		// Get Rotation for Body Faces from one Body Face of this Brush that is suited (has 4 vertices)
@@ -1178,16 +1387,18 @@ void group::RotateVectors()
 			
 			if (cTable[g].type==0) // PI CIRCLES
 			{
+				float step_half = 0;
+				if(cTable[g].flatcircle==1) step_half = steps/2;
 				if (Face.fID<=1)
 				{
 					if (Face.fID==0) { // BASE FACES
 						//cout << "Face " << f <<" ID == 0" << ", texture is: " << Face.Texture << endl;
-						if (sec>0) deg = steps*sec;
+						if (sec>0) deg = (steps*sec)-step_half;
 						Face.VecX.rotate(0,0,deg);
 						Face.VecY.rotate(0,0,deg);
 					} else { // HEAD FACES
 						//cout << "Face " << f <<" ID == 1" << ", texture is: " << Face.Texture << endl;
-						deg = steps*(sec+1);
+						deg = (steps*(sec+1))-step_half;
 						Face.VecX.rotate(0,0,deg);
 						Face.VecY.rotate(0,0,deg);
 						//Face.Centroid.rotate(0,0,deg);
@@ -1196,21 +1407,21 @@ void group::RotateVectors()
 					// Gaps
 					if (cTable[g].gaps>0) {
 						face &GapFace = Gap.Faces[f];
-						if (sec>0) deg = steps*sec;
+						if (sec>0) deg = (steps*sec)-step_half;
 						GapFace.VecX.rotate(0,0,deg);
 						GapFace.VecY.rotate(0,0,deg);
 					}
 				} else {// BODY FACES
 					//cout << "Face " << f <<" ID == 2" << endl;
-					if (sec==0) { deg = steps/2.0; }
-					else 		{ deg = (steps*sec) + (steps/2.0); }
+					if (sec==0) { deg = (steps/2.0)-step_half; }
+					else 		{ deg = ((steps*sec) + (steps/2.0)) - step_half; }
 					Face.VecH->rotate(0,0,deg);
 					Face.VecV->rotate(0,0,deg);
 					
 					// Gaps
 					if (cTable[g].gaps>0) {
 						face &GapFace = Gap.Faces[f];
-						deg = steps*sec;
+						deg = (steps*sec)-step_half;
 						GapFace.VecX.rotate(0,0,deg);
 						GapFace.VecY.rotate(0,0,deg);
 					}
@@ -1316,7 +1527,7 @@ void group::GetHorLengths()
 
 	// get longest edge lengths for texture groups
 	if(dev) cout << " get longest edge lengths for texture groups..." << endl;
-	//if (cTable[g].shift!=0)
+	if (Group.valid && Group.t_brushes>0)
 	{
 		int hgc = Group.hGroupsCount;
 		Group.hEdgeLen_temp.resize(hgc);
@@ -1544,6 +1755,97 @@ void group::GetHorLengths()
 	}
 }
 
+// Intersection planes for each group section
+void group::CreateIsects()
+{
+	bool dev = 0;
+	group &Group = *this;
+	int g = Group.gID;
+	int size = cTable[g].res;
+	if(dev) cout << endl << " Creating Intersection Plane List #"<<g<<" size "<< size << "..." << endl;
+	
+	vector<gvector> &List = SecIsect;
+	List.resize(size*2);
+	//path_set &Set = gFile->PathList[g];
+	
+	// Pi Circle
+	if (cTable[g].type==0)
+	{
+		float step = 360.0/size;
+		float step_half = 0; if(cTable[g].flatcircle==1) step_half = step/2;
+		for (int i=0,j=0; i<size; i++)
+		{
+			gvector Vec1(-1,0,0);
+			gvector Vec2(1,0,0);
+			Vec1.rotate(0,0,(-step*i)+step_half);
+			Vec2.rotate(0,0,(-step*(i+1))+step_half);
+			
+			List[j] = Vec1;
+			List[j+1] = Vec2;
+			
+			if(dev) cout << " Sec " <<i<< " List #"<<j<<" "<< List[j] << " | " << List[j+1] << endl;
+			j+=2;
+		}
+	}
+	// Grid Circle
+	else if (cTable[g].type==1)
+	{
+	}
+	// Custom Spline Simple
+	else if (cTable[g].type==2)
+	{
+	}
+	// Custom Spline Intersect
+	else if (cTable[g].type==3)
+	{
+	}
+	
+	if(dev) {
+		cout << " Final Intersection Plane List: " << endl;
+		for(int i=0; i<List.size(); i+=2)
+			cout << " #" <<i << " "<< List[i] << " \t(Yaw " << GetVecAlign(List[i],0) << ") \t| " << List[i+1] << " \t(Yaw " << GetVecAlign(List[i+1],0) << ") " << endl;
+		getch();
+	}
+}
+
+void group::CarveGroupSections()
+{
+	bool dev = 0;
+	group &Group = *this;
+	int g = Group.gID;
+	
+	// Brushes
+	if(dev) cout << endl << "###### GROUP Carving Brushes..." << endl;
+	for(int b=0; b<t_brushes; b++)
+	{
+		brush &Brush = Brushes[b];
+		int sec = Brush.SecID;
+		if (sec < bGroup[g].range_end && sec >= bGroup[g].range_start && Brush.draw)
+		{
+			if(dev) cout << "###### GROUP Brush " << b << " sec " << sec << " Plane #" << sec*2 << " " << SecIsect[sec*2] << endl;
+			Brush.CarveBrush(SecIsect[sec*2]);
+			
+			if(Brush.draw) { // in case first carving was successful, do the second
+			if(dev) cout << "###### GROUP Brush " << b << " sec " << sec << " Plane #" << (sec*2)+1 << " " << SecIsect[(sec*2)+1] << endl;
+			Brush.CarveBrush(SecIsect[(sec*2)+1]);
+			}
+		}
+	}
+	
+	// entities
+	for(int e=0; e<t_ents; e++)
+	{
+		entity &Entity = Entities[e];
+		int sec = Entity.SecID;
+		
+		Entity.CarveEntity(SecIsect[sec*2]);
+		
+		if(Entity.draw) // in case first carving was successful, do the second
+		Entity.CarveEntity(SecIsect[(sec*2)+1]);
+	}
+	if(dev) { cout << "###### GROUP END " << endl<<endl; getch(); }
+}
+
 // create height Table for smooth ramp generation
 void group::CreateHeightTable()
 {
@@ -1740,8 +2042,8 @@ void group::Build()
 	group &SrcGroup = sGroup[g];
 	
 	bool SHOW_LINES = 0;
-	canvas *Canva;
-	if (SHOW_LINES) Canva = new canvas(200, 50);
+	//canvas *Canva;
+	//if (SHOW_LINES) Canva = new canvas(200, 50);
 	
 	if (dev)cout << " Building "<<Group.t_brushes<<" brushes | res " << cTable[Group.gID].res << " | sections " << Group.sections << " | segments " << Group.segments << endl;
 	for (int b=0; b<Group.t_brushes; b++)
@@ -1880,15 +2182,15 @@ void group::Build()
 					c++;
 				}
 				
-				if(SHOW_LINES)
-				for (int i=0;i<Face.vcount-1; i++) 
-					 { Canva->CreateLine(0.1, Face.Vertices[i], Face.Vertices[i+1]); }
+				//if(SHOW_LINES)
+				//for (int i=0;i<Face.vcount-1; i++) 
+				//	 { Canva->CreateLine(0.1, Face.Vertices[i], Face.Vertices[i+1]); }
 			}
-			if(SHOW_LINES) Canva->Print();
+			//if(SHOW_LINES) Canva->Print();
 			if (dev) getch();
 		}
 	}
-	if(SHOW_LINES) delete Canva;
+	//if(SHOW_LINES) delete Canva;
 	// DEV INFO
 	if (0)
 	for (int b=0; b<Group.t_brushes; b++)
@@ -1916,7 +2218,7 @@ void group::CheckBrushValidity()
 		if (!valid) Group.invalids++;
 	}
 	
-	if (Group.t_brushes-Group.invalids<=0) {
+	if (Group.t_brushes>0&&Group.t_brushes-Group.invalids<=0) {
 		Group.valid = 0;
 		Group.ValidMesh = 0;
 	}
@@ -1981,9 +2283,12 @@ void group::Copy(group &Source)
 	d_draw		= Source.d_draw;
 	d_skip		= Source.d_skip;
 	d_draw_rand	= Source.d_draw_rand;
-	d_pos_rand= Source.d_pos_rand;
+	d_pos_rand	= Source.d_pos_rand;
 	d_rotz_rand = Source.d_rotz_rand;
 	d_movey_rand= Source.d_movey_rand;
+	d_scale_rand= Source.d_scale_rand;
+	d_carve		= Source.d_carve;
+	d_circlemode= Source.d_circlemode;
 	
 	for (int b=0, s=0; b<Source.t_brushes; b++)
 	{
@@ -2013,9 +2318,12 @@ void group::CopyProps(group &Source)
 	d_pos_rand= Source.d_pos_rand;
 	d_rotz_rand = Source.d_rotz_rand;
 	d_movey_rand= Source.d_movey_rand;
+	d_scale_rand= Source.d_scale_rand;
+	d_carve		= Source.d_carve;
+	d_circlemode= Source.d_circlemode;
 }
 
-void group::GetOrigin()
+void group::GetGroupOrigin()
 {
 	dimensions &D = Dimensions;
 	Origin.x = D.xb-((D.xb-D.xs)/2);
@@ -2023,33 +2331,37 @@ void group::GetOrigin()
 	Origin.z = D.zb-((D.zb-D.zs)/2);
 }
 
-void group_set::GetDimensions(bool Overwrite)
+void group_set::GetGroupSetDimensions(bool Overwrite)
 {
+	bool dev = 0;
+	if(dev) cout << endl << " Getting Group SET Dimensions..." << endl;
 	bool setBox = 0;
 	dimensions &DS = Dimensions;
 	for(int d=0; d<t_groups; d++)
 	{
 		group &dGroup = Groups[d];
 		
-		dGroup.GetDimensions(Overwrite);
+		dGroup.GetGroupDimensions(Overwrite,0);
 		dimensions &D = dGroup.Dimensions;
 		
-		if (!setBox) { DS.set(D.xs,D.ys,D.zs); setBox = 1; } // set initial dimensions to first group vertex per default
+		if (!setBox) { DS.set(D.xs,D.xb,D.ys,D.yb,D.zs,D.zb); setBox = 1; if(dev) cout << " No dimensions, adding first " << D << endl; } // set initial dimensions to first group vertex per default
 		else
 		{
-			if (D.xs < DS.xs) DS.xs = D.xs;
-			if (D.xb > DS.xb) DS.xb = D.xb;
-			if (D.ys < DS.ys) DS.ys = D.ys;
-			if (D.yb > DS.yb) DS.yb = D.yb;
-			if (D.zs < DS.zs) DS.zs = D.zs;
-			if (D.zb > DS.zb) DS.zb = D.zb;
+			if (D.xs < DS.xs) {DS.xs = D.xs; if(dev) cout << " new s X: " << DS.xs << " DS.xs " << DS.xs << endl; }
+			if (D.xb > DS.xb) {DS.xb = D.xb; if(dev) cout << " new b X: " << DS.xb << " DS.xb " << DS.xb << endl; }
+			if (D.ys < DS.ys) {DS.ys = D.ys; if(dev) cout << " new s Y: " << DS.ys << " DS.ys " << DS.ys << endl; }
+			if (D.yb > DS.yb) {DS.yb = D.yb; if(dev) cout << " new b Y: " << DS.yb << " DS.yb " << DS.yb << endl; }
+			if (D.zs < DS.zs) {DS.zs = D.zs; if(dev) cout << " new s Z: " << DS.zs << " DS.zs " << DS.zs << endl; }
+			if (D.zb > DS.zb) {DS.zb = D.zb; if(dev) cout << " new b Z: " << DS.zb << " DS.zb " << DS.zb << endl; }
 		}
 	}
+	if(dev) cout << endl;
 }
 
-void group::GetDimensions(bool Overwrite)
+void group::GetGroupDimensions(bool Overwrite, bool CustomOrigin)
 {
 	bool dev = 0;
+	if(dev) cout << endl << " Getting GROUP Dimensions..." << endl;
 	dimensions &D = Dimensions;
 	bool setBox = 0;
 	for (int b = 0; b<t_brushes; b++)
@@ -2067,15 +2379,15 @@ void group::GetDimensions(bool Overwrite)
 					{
 						vertex &V = Face.Vertices[v];
 						
-						if (!setBox) { D.set(V.x,V.y,V.z); setBox = 1; } // set initial dimensions to first group vertex per default
+						if (!setBox) { D.set(V.x,V.y,V.z); setBox = 1; if(dev) cout << " No dimensions, adding first " << V << endl; } // set initial dimensions to first group vertex per default
 						else
 						{
-							if (V.x < D.xs) D.xs = V.x;
-							if (V.x > D.xb) D.xb = V.x;
-							if (V.y < D.ys) D.ys = V.y;
-							if (V.y > D.yb) D.yb = V.y;
-							if (V.z < D.zs) D.zs = V.z;
-							if (V.z > D.zb) D.zb = V.z;
+							if (V.x < D.xs) {D.xs = V.x; if(dev) cout << " new s X: " << D.xs << " v " << v << V << endl; }
+							if (V.x > D.xb) {D.xb = V.x; if(dev) cout << " new b X: " << D.xb << " v " << v << V << endl; }
+							if (V.y < D.ys) {D.ys = V.y; if(dev) cout << " new s Y: " << D.ys << " v " << v << V << endl; }
+							if (V.y > D.yb) {D.yb = V.y; if(dev) cout << " new b Y: " << D.yb << " v " << v << V << endl; }
+							if (V.z < D.zs) {D.zs = V.z; if(dev) cout << " new s Z: " << D.zs << " v " << v << V << endl; }
+							if (V.z > D.zb) {D.zb = V.z; if(dev) cout << " new b Z: " << D.zb << " v " << v << V << endl; }
 						}
 						//cout << " dimensions taken from v" << v << V << " : " << D.xs << ", " << D.xb << ", " << D.ys << ", " << D.yb << ", " << D.zs << ", " << D.zb << endl;
 					}
@@ -2129,12 +2441,20 @@ void group::GetDimensions(bool Overwrite)
 			}
 		}
 	}
-	Origin.x = D.xb-((D.xb-D.xs)/2);
-	Origin.y = D.yb-((D.yb-D.ys)/2);
-	Origin.z = D.zb-((D.zb-D.zs)/2);
+	if(CustomOrigin&&HasOrigin)
+	{
+		GetGroupOriginCustom();
+	}
+	else
+	{
+		Origin.x = D.xb-((D.xb-D.xs)/2);
+		Origin.y = D.yb-((D.yb-D.ys)/2);
+		Origin.z = D.zb-((D.zb-D.zs)/2);
+	}
 	SizeY = D.yb-D.ys;
 	SizeZ = D.zb-D.zs;
 	if (IsSrcMap) IsSrcMap = 0;
-	if(dev) cout << " Origin of this object " << Origin << endl;
+	if(dev) cout << Dimensions << endl;
+	if(dev) cout << " Origin of this object " << Origin << endl << endl;
 }
 	

@@ -37,44 +37,55 @@ struct file {
 	vector<path_set> PathList;
 	int append = 0;
 	string target = "UNSET";
+	int d_autoassign = 0;
 	
 	vector<string> tTable_name; // texture information table
 	vector<int> tTable_width;
 	vector<int> tTable_height;
 	
-	void ExportToMap();
-	void ExportToMapO(string p);
+	// load and process map data
 	void GetInfo();
-	void ExportToObj();
-	void texturize(int g);
-	void buildArcs(int g);
-	void createGroupBrush(int g);
-	void Triangulate(int g);
-	void createFramework(int g);
-	void RampIt(int g);
-	void roundCoords(int g);
-	void LoadSpline(int g);
 	void CheckForCustomSource();
-	string GetMapEnts(string mapfile);
-	string GetMapWorld(string mapfile);
-	void TransformSource();
-	void TransformFinal(int g);
-	void createBounds(int g);
-	void DetailObj_Transform(int g);
-	void GetInternalMapSettings();
-	void FixDetailPos();
-
 	void LoadMap();
 	void LoadMap_DetailObj();
 	void LoadMap_GetEntities();
 	void LoadMap_GetTexInfo();
 	void LoadMap_GetTexInfoScanBrush(brush &Brush);
 	void LoadMap_ConvertWorld2Face();
+	void LoadSpline(int g);
+	void GetInternalMapSettings();
 	
+	// create curve data objects
 	void createGroupMap();
 	void createGroupSource();
-	void createDetailGroup(int g);
+	void createGroupBrush(int g);
 	void createDetailGroupSource();
+	void createDetailGroup(int g);
+	void createBounds(int g);
+	
+	// process detail objects
+	void FixDetailPos();
+	
+	// generate and process curve data
+	void TransformSource();
+	void createFramework(int g);
+	void buildArcs(int g);
+	void TransformDetailObj(int g);
+	void texturize(int g);
+	void Triangulate(int g);
+	void RampIt(int g);
+	void roundCoords(int g);
+	void WeldVertices(int g);
+	void TransformFinal(int g);
+	void FixBorderliner(int g);
+	
+	// export final curve data
+	void ExportToMap();
+	void ExportToMapO(string p);
+	void ExportToRMF();
+	void ExportToObj();
+	string GetMapEnts(string mapfile); // extracts the entity part of a map file string
+	string GetMapWorld(string mapfile); // extracts the worldspawn part of a map file string
 	
 	file (string p)	{
 		fullpath = p;
