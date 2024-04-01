@@ -27,26 +27,26 @@ CommandLine=
 Folders=
 IncludeVersionInfo=1
 SupportXPThemes=0
-CompilerSet=0
-CompilerSettings=00000000g0000000000000000
+CompilerSet=3
+CompilerSettings=00000001g0000000000000000
 UnitCount=32
 
 [VersionInfo]
 Major=0
-Minor=6
+Minor=8
 Release=0
-Build=2424
+Build=4434
 LanguageID=1033
 CharsetID=1252
 CompanyName=
-FileVersion=0.6.0.2424
+FileVersion=0.8.0.4434
 FileDescription=Map2Curve
 InternalName=
 LegalCopyright=
 LegalTrademarks=
 OriginalFilename=
 ProductName=
-ProductVersion=0.6.0.2424
+ProductVersion=0.8.0.4434
 AutoIncBuildNr=1
 SyncProduct=1
 
