@@ -73,11 +73,13 @@ struct file {
 	void TransformDetailObj(int g);
 	void texturize(int g);
 	void Triangulate(int g);
+	void ShearVectors(int g);
 	void RampIt(int g);
-	void roundCoords(int g);
+	void postProcessing(int g);
 	void WeldVertices(int g);
 	void TransformFinal(int g);
 	void FixBorderliner(int g);
+	void CreateDevAssets(int g);
 	
 	// export final curve data
 	void ExportToMap();
@@ -90,7 +92,6 @@ struct file {
 	file (string p)	{
 		fullpath = p;
 	}
-	~file() {}
 };
 
 

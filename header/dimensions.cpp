@@ -2,7 +2,6 @@
 
 #include <math.h>
 #include <ostream>
-//#include <iostream>
 
 using namespace std;
 

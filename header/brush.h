@@ -4,7 +4,6 @@
 #include "frames.h"
 #include "vertex.h"
 #include "face.h"
-//#include "utils.h"
 #include "dimensions.h"
 
 #include <math.h>
@@ -67,10 +66,10 @@ struct brush
 	void Copy(brush &Source);
 	void CopySimple(brush &Source);
 	void Scale(float n);
-	void ScaleOrigin(float n, vertex Origin);
-	void Move(float x, float y, float z, bool fixShifts);
+	void ScaleOrigin(float n, vertex Origin, int g);
+	void Move(float x, float y, float z, bool fixShifts, int g);
 	void Rot(float x, float y, float z);
-	void RotOrigin(float x, float y, float z, vertex Origin);
+	void RotOrigin(float x, float y, float z, vertex Origin, int g);
 	void MakeCuboid(dimensions Box, string Tex);
 	void MakeCube(float size, string Tex);
 	bool CheckValidity();
@@ -110,6 +109,7 @@ struct brush
 	bool IsOriginBrush();
 	void GetBrushDimensions(bool Overwrite);
 	void FixBorderliner(int prec);
+	void VecToBrush(gvector &Vec, gvector Normal, string Tex);
 	
 	brush* Gap = nullptr;
 	brush* Tri = nullptr;

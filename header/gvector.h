@@ -22,6 +22,8 @@ struct gvector
 	void mult(float n);
 	void div(float n);
 	void set(float n);
+	void set(vertex p1, vertex p2);
+	void set(vertex p1, vertex p2, vertex po);
 	float len();
 	gvector flip();
 	void rotate(float degx, float degy, float degz);
@@ -90,9 +92,6 @@ float GetOppoLen (gvector Hypo, float Alpha);
 float GetAdjaLen (float HypoLen, float Alpha);
 
 vertex GetLineIsect(vertex V1, vertex V2, gvector Vec1, gvector Vec2);
-
-
-
 
 
 

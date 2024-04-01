@@ -26,6 +26,7 @@ struct path_corner
 	int pID = 0;
 	float rot1 = 0;
 	float rot2 = 0;
+	float length = 0;
 	float Yaw = 0;
 	float Pitch = 0;
 	int Align = 0; // 0 = UP, 1 = RIGHT, 2 = DOWN, 3 = LEFT
@@ -50,7 +51,7 @@ struct path
 	void Expand(float n);
 	void EvenOut();
 	
-	~path () {delete[] Corners;}
+	//~path () { if(Corners!=nullptr) delete[] Corners; }
 };
 
 ostream &operator<<(ostream &ostr, path &p);
@@ -61,13 +62,11 @@ struct path_set
 	path *Paths = nullptr;
 	int t_paths = 0;
 	int t_corners = 0;
-	//int sections = 0; // res
 	bool valid = 1;
 	int Gaps = 0;
 	bool cornerFix = 0;
 	bool preverse = 0;
 	int type = 0;
-	//vector<float> heightTable;
 	float t_length = 0;
 	vertex Origin;
 	dimensions D;
@@ -76,6 +75,7 @@ struct path_set
 	void Scale(tform n);
 	void Analyze();
 	int CountSections();
+	void PathToDevAssets();
 	path_corner* GetCornerSecN(int i) // return corner that corresponds to a spline section index. a path of 5 verts only corresponds to 4 sections. last one is redundant
 	{
 		for (int p=0, tc=0; p<t_paths; p++)
@@ -87,7 +87,7 @@ struct path_set
 	}
 	
 	path_set () {}
-	~path_set () {delete[] Paths;}
+	~path_set () { if(Paths!=nullptr) delete[] Paths; }
 };
 
 ostream &operator<<(ostream &ostr, path_set &ps);
@@ -120,7 +120,7 @@ struct circle
 	void GetInVec(int g);
 
 	circle() {}
-	~circle() {delete[] Vertices;}
+	~circle() { if(Vertices!=nullptr) delete[] Vertices; }
 };
 
 ostream &operator<<(ostream &ostr, circle &c);
@@ -131,7 +131,7 @@ struct circleset
 	int tcircs = 0;
 	
 	circleset() {}
-	~circleset() {delete[] c;}
+	~circleset() { if(c!=nullptr) delete[] c; }
 };
 
 ostream &operator<<(ostream &ostr, circleset &cs);

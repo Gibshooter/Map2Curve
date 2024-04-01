@@ -6,6 +6,8 @@
 
 #define PI 3.14159265
 
+#define DEBUG 0
+
 using namespace std;
 
 struct gvector;
@@ -76,7 +78,6 @@ void vertex::rotate(float degx, float degy, float degz)
 		float radx = degx * PI / 180.0;
 		float rady = degy * PI / 180.0;
 		float radz = degz * PI / 180.0;
-		//cout << "rad [" << rad << "] deg (" << deg << ") ";
 		
 		if (degx!=0)
 		{
@@ -101,14 +102,16 @@ void vertex::rotate(float degx, float degy, float degz)
 			x = newX;
 			y = newY;
 		}
-		//cout << "X [" << newX << "]\t (" << x << ")\t Y [" << newY << "]\t (" << y << ")" << endl;
 	}
 }
 
 void vertex::rotateOrigin(float degx, float degy, float degz, vertex orig)
 {
+	#if DEBUG > 0
 	bool dev = 0;
 	if(dev) cout << " Rotating Vertex " << *this << "..." <<endl;
+	#endif
+	
 	if(degx!=0||degy!=0||degz!=0)
 	{
 		// subtract Origin first
@@ -143,7 +146,10 @@ void vertex::rotateOrigin(float degx, float degy, float degz, vertex orig)
 			y = newY;
 		}
 		
+		#if DEBUG > 0
 		if(dev) cout << "   New Vertex " << *this << endl;
+		#endif
+		
 		x += orig.x;
 		y += orig.y;
 		z += orig.z;
@@ -175,17 +181,27 @@ ostream &operator<<(ostream &ostr, vertex &v)
 
 bool IsVertexInList(vertex &V, vertex *VList, int vcount, bool UsePrecision, int deci)
 {
+	#if DEBUG > 0
 	bool dev = 0;
 	if (dev) cout << "      Checking if Vertex " << V << " is in VList with length " << vcount << ". Precision 0/1 (" << UsePrecision << ") up to " << deci << " places..." << endl;
+	#endif
+	
 	for (int v = 0; v<vcount; v++)
 	{
 		vertex &VC = VList[v];
+		
+		#if DEBUG > 0
 		if (dev) cout << "          current VList Entry " << v << VC << endl;
+		#endif
+		
 		if (  UsePrecision  )
 		{
 			if (  CompareVerticesDeci(V, VC, deci)  )
 			{
+				#if DEBUG > 0
 				if (dev) cout << "          MATCH! Vertex " << V << " is same as current Entry " << v << VC << endl;
+				#endif
+				
 				return true;
 			}
 		}
@@ -193,29 +209,47 @@ bool IsVertexInList(vertex &V, vertex *VList, int vcount, bool UsePrecision, int
 		{
 			if (  CompareVertices(V,VC)  )
 			{
+				#if DEBUG > 0
 				if (dev) cout << "          MATCH! Vertex " << V << " is same as current Entry " << v << VC << endl;
+				#endif
+				
 				return true;
 			}
 		}
 	}
+	
+	#if DEBUG > 0
 	if (dev) cout << "        Vertex " << V << " was NOT found in this VList!" << endl;
+	#endif
+	
 	return false;
 }
 
 bool IsVertexInList(vertex &V, vector<vertex> VList, bool UsePrecision, int deci)
 {
-	bool dev = 0;
 	int vcount = VList.size();
+	
+	#if DEBUG > 0
+	bool dev = 0;
 	if (dev) cout << "VINLIST Checking if Vertex " << V << " is in VList with length " << vcount << ". Precision 0/1 (" << UsePrecision << ") up to " << deci << " places..." << endl;
+	#endif
+	
 	for (int v = 0; v<vcount; v++)
 	{
 		vertex &VC = VList[v];
+		
+		#if DEBUG > 0
 		if (dev) cout << "VINLIST  current VList Entry " << v << VC << endl;
+		#endif
+		
 		if (  UsePrecision  )
 		{
 			if (  CompareVerticesDeci(V, VC, deci)  )
 			{
+				#if DEBUG > 0
 				if (dev) cout << "VINLIST   MATCH! Vertex " << V << " is same as current Entry " << v << VC << endl << endl;
+				#endif
+				
 				return true;
 			}
 		}
@@ -223,12 +257,19 @@ bool IsVertexInList(vertex &V, vector<vertex> VList, bool UsePrecision, int deci
 		{
 			if (  CompareVertices(V,VC)  )
 			{
+				#if DEBUG > 0
 				if (dev) cout << "VINLIST   MATCH! Vertex " << V << " is same as current Entry " << v << VC << endl << endl;
+				#endif
+				
 				return true;
 			}
 		}
 	}
+	
+	#if DEBUG > 0
 	if (dev) cout << "VINLIST  Vertex " << V << " was NOT found in this VList!" << endl << endl;
+	#endif
+	
 	return false;
 }
 
@@ -282,17 +323,21 @@ bool CompareVertices(vertex V0, vertex V1)
 
 bool CompareVerticesDeci(vertex V0, vertex V1, int deciplace)
 {
+	#if DEBUG > 0
 	bool dev = 0;
+	#endif
+	
 	int d = pow(10, deciplace);
 	if (d==0) d=1;
 	int x1 = round(V0.x*d), x2 = round(V1.x*d);
 	int y1 = round(V0.y*d), y2 = round(V1.y*d);
 	int z1 = round(V0.z*d), z2 = round(V1.z*d);
+	
+	#if DEBUG > 0
 	if (dev) cout << "VCOMPARE Deci "<<deciplace<<" ("<<d<<") V0 [" << x1 << "|" << y1 << "|" << z1 << "] V0 [" << x2 << "|" << y2 << "|" << z2 << "] " << endl;
-	if (
-	x1==x2&&
-	y1==y2&&
-	z1==z2)
+	#endif
+	
+	if ( x1==x2 && y1==y2 && z1==z2)
 		return true;
 	else
 		return false;
@@ -300,15 +345,20 @@ bool CompareVerticesDeci(vertex V0, vertex V1, int deciplace)
 
 bool CompareVerticesXYDeci(vertex V0, vertex V1, int deciplace)
 {
+	#if DEBUG > 0
 	bool dev = 0;
+	#endif
+	
 	int d = pow(10, deciplace);
 	if (d==0) d=1;
 	int x1 = round(V0.x*d), x2 = round(V1.x*d);
 	int y1 = round(V0.y*d), y2 = round(V1.y*d);
+
+	#if DEBUG > 0
 	if (dev) cout << "VCOMPARE Deci "<<deciplace<<" ("<<d<<") V0 [" << x1 << "|" << y1 << "] V0 [" << x2 << "|" << y2 << "] " << endl;
-	if (
-	x1==x2&&
-	y1==y2)
+	#endif
+	
+	if ( x1==x2 && y1==y2)
 		return true;
 	else
 		return false;
@@ -340,6 +390,71 @@ bool CompareVerticesXY(vertex V0, vertex V1)
 	) return true;
 	else return false;
 }
+
+// https://stackoverflow.com/questions/2792443/finding-the-centroid-of-a-polygon
+vertex GetCentroid2024(vertex *vertices, int &vertexCount, bool devinfo)
+{
+	#if DEBUG > 0
+	if (devinfo) cout << " Get Centroid 2024..." << endl;
+	#endif
+	
+	vertex centroid;
+	double cenx = 0, ceny=0;
+	
+	double signedArea = 0.0;
+	double x0 = 0.0; // Current vertex X
+	double y0 = 0.0; // Current vertex Y
+	double x1 = 0.0; // Next vertex X
+	double y1 = 0.0; // Next vertex Y
+	double a = 0.0;  // Partial signed area
+
+	// For all vertices except last
+	int i=0;
+	for (i=0; i<vertexCount-1; ++i)
+	{
+		x0 = vertices[i].x;
+		y0 = vertices[i].y;
+		x1 = vertices[i+1].x;
+		y1 = vertices[i+1].y;
+		a = x0*y1 - x1*y0;
+		signedArea += a;
+		cenx += (x0 + x1)*a; //centroid.x
+		ceny += (y0 + y1)*a; //centroid.y
+		#if DEBUG > 0
+		if (devinfo) cout << fixed << "   loop#"<<i<<" x0 "<<x0<<" y0 "<<y0<<" x1 "<<x1<<" y1 "<<y1<<" a "<<a<<" signed Area "<<signedArea<<" cen.x "<<cenx<<" cen.y "<<ceny<<endl;
+		#endif
+	}
+
+	// Do last vertex separately to avoid performing an expensive
+	// modulus operation in each iteration.
+	x0 = vertices[i].x;
+	y0 = vertices[i].y;
+	x1 = vertices[0].x;
+	y1 = vertices[0].y;
+	a = x0*y1 - x1*y0;
+	signedArea += a;
+	cenx += (x0 + x1)*a;
+	ceny += (y0 + y1)*a;
+	
+	#if DEBUG > 0
+	if (devinfo) cout << fixed << "   loop#"<<vertexCount<<" x0 "<<x0<<" y0 "<<y0<<" x1 "<<x1<<" y1 "<<y1<<" a "<<a<<" signed Area "<<signedArea<<" cen.x "<<cenx<<" cen.y "<<ceny<<endl;
+	#endif
+
+	signedArea *= 0.5;
+	cenx /= (6.0*signedArea);
+	ceny /= (6.0*signedArea);
+	
+	#if DEBUG > 0
+	if (devinfo) cout << fixed << "   final - signed Area*=0.5 "<<signedArea<<" cen.x/=6.0*signedArea "<<cenx<<" cen.y/=6.0*signedArea "<<ceny<<endl;
+	#endif
+
+	centroid.x = cenx;
+	centroid.y = ceny;
+
+	return centroid;
+}
+
+
 
 // Get Centroid of a Triangle
 vertex GetCenTri(vertex v1, vertex v2, vertex v3)
@@ -386,49 +501,84 @@ float GetFaceLen3 (vertex p0, vertex p1, vertex p2)
 // Get Centroid of a Bunch of Vertices
 vGroup GetCentroidV(vGroup Origin)
 {
+	#if DEBUG > 0
 	bool dev = 0;
 	
 	if (dev) cout << "Getting Centroid of Bunch of "<< Origin.size<< " Vertices..." << endl;
 	if (dev)
 	for (int i = 0; i<Origin.size; i++)
 	cout << " V " << i << Origin.Vertices[i] << endl;
-	
+	#endif
+
 	vGroup Temp(Origin.size-2);
 	vGroup Final;
 	
 	if (Origin.size>3)
 	{
+		#if DEBUG > 0
 		if (dev) cout << "  More than 3 vertices!" << endl;
+		#endif
+		
 		for (int i = 0; i<Origin.size-2; i++)
 		{
 			Temp.Vertices[i] = GetCenTri(Origin.Vertices[0], Origin.Vertices[i+1], Origin.Vertices[i+2]);
 		}
 		Final = GetCentroidV(Temp);
-		//Final.size = Temp.size-2;
+		
 		return Final;
 	}
 	else if (Origin.size==3)
 	{
+		#if DEBUG > 0
 		if (dev) cout << "  Exactely 3 vertices!" << endl;
+		#endif
+		
 		Final.size = 1;
 		Final.Vertices[0] = GetCenTri(Origin.Vertices[0], Origin.Vertices[1], Origin.Vertices[2]);
+		
 		return Final;
 	}
 	else if (Origin.size==2)
 	{
+		#if DEBUG > 0
 		if (dev) cout << "  Exactely 2 vertices!" << endl;
+		#endif
+		
 		Final.Vertices[0] = GetMVertex(Origin.Vertices[0], Origin.Vertices[1]);
+		
+		#if DEBUG > 0
 		if (dev) cout << "       centroid of these 2 vertices " << Origin.Vertices[0] << Origin.Vertices[1] <<" is " << Final.Vertices[0] << endl;
+		#endif
+		
 		Final.size = 1;
 		return Final;
 	}
 	else if (Origin.size==1)
 	{
+		#if DEBUG > 0
 		if (dev) cout << "  Exactely 1 vertices!" << endl;
+		#endif
+		
 		Final.size = 1;
 		Final.Vertices[0] = Origin.Vertices[0];
 		return Final;
 	}
+}
+
+vertex operator+(vertex &V, gvector &Vec)
+{
+	vertex VN;
+	VN.setall( V.x+Vec.x, V.y+Vec.y, V.z+Vec.z );
+	
+	return VN;
+}
+
+vertex operator-(vertex &V, gvector &Vec)
+{
+	vertex VN;
+	VN.setall( V.x-Vec.x, V.y-Vec.y, V.z-Vec.z );
+	
+	return VN;
 }
 
 

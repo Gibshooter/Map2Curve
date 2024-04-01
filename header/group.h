@@ -43,6 +43,9 @@ struct group {
 	int hGroupsCount = 0; // total horizontal texture groups
 	vector<face*> hSourceFace;
 	vector<face*> hSourceFace2;
+	vector<gvector> fGroupVecL; // DEV list of longest/shortest source vectors for each face group
+	vector<gvector> fGroupVecS; // DEV
+	vector<gvector> devFaceEdges; // DEV
 	vector<float> heightTable;
 	vector<float> heightTableSteps;
 	vector<gvector> SecIsect; // intersections for detail groups if d_carve is active
@@ -77,6 +80,8 @@ struct group {
 	int d_carve = -1;
 	int d_circlemode = -1;
 	
+	vector <brush*>DevAssets; // DEV a bunch of Brushes for developer purposes
+	
 	void MarkGroupOriginObjects();
 	void GetGroupDimensions(bool Overwrite, bool CustomOrigin);
 	void Move(float x, float y, float z, bool LockBrushShifts);
@@ -96,7 +101,7 @@ struct group {
 	void RoundBrushVertices(bool Override);
 	void Build();
 	void GetBrushBodyFaceLengths();
-	void GetHorLengths();
+	void GetHorLengths(); // Hor Texture Lengths/Shift Calculation
 	void RotateVectors();
 	void ShearVectors();
 	void GetGroupVertexList();
@@ -133,9 +138,23 @@ struct group {
 	void GetBrushTVecAligns();
 	void MarkInsideSecBrushes();
 	void GetGroupOriginCustom();
+	bool IsSecInRange(int secID);
+	
+	void GroupTexturize();
+	void GroupTexturizeHStretch();
+	void AddCustomShiftOffset();
 	
 	group() {}
-	~group() {delete[] Brushes; delete[] boundBox; delete[] Entities;}
+	~group()
+	{
+		delete[] Brushes;
+		delete[] boundBox;
+		delete[] Entities;
+		for(int i=0;i<DevAssets.size();i++)
+			delete DevAssets[i];
+		if(SecBaseFace!=nullptr)
+		delete[] SecBaseFace;
+	}
 };
 
 ostream &operator<<(ostream &ostr, group &g);

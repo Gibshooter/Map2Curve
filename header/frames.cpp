@@ -5,7 +5,6 @@
 #include "settings.h"
 
 #include <iostream>
-#include <conio.h>
 
 using namespace std;
 
@@ -13,6 +12,8 @@ extern group *sGroup;
 extern group *mGroup;
 extern ctable *cTable;
 extern group *bGroup;
+
+#define DEBUG 0
 
 // relevant to constr. frame and path file handling:
 // file::LoadSpline
@@ -68,9 +69,12 @@ void path::ScaleOrigin(tform n, vertex Origin)
 
 void path::Expand(float n)
 {
+	#if DEBUG > 0
 	bool dev = 0;
 	if(n!=0)
 	if(dev) cout << " Expanding Spline by "<<n<<" units ..." << endl;
+	#endif
+	
 	path_corner Back[t_corners];
 	for (int i=0;i<t_corners;i++)
 		Back[i] = Corners[i];
@@ -81,7 +85,11 @@ void path::Expand(float n)
 	for (int i=0;i<t_corners-1;i++)
 	{
 		path_corner &K  = Corners[i];
+		
+		#if DEBUG > 0
 		if(dev) cout << "   Knot " << i << "/" << t_corners << endl;
+		#endif
+		
 		if(i==0)
 		{
 			if(!IsCircle)
@@ -90,7 +98,10 @@ void path::Expand(float n)
 				gvector nCross = Normalize(  GetCross( GetVector(Back[1].pos,Back[0].pos), zVec )  );
 				nCross.mult(n); nCross.z = 0; nCross.flip();
 				Corners[0].pos.Add(nCross);
+				
+				#if DEBUG > 0
 				if(dev) cout << "     First Knot! Old Pos " << Back[0].pos << " Adding " << nCross << " = " << Corners[0].pos << endl;
+				#endif
 			}
 			else
 			{
@@ -112,7 +123,10 @@ void path::Expand(float n)
 			if (GetDot(nVec,Tester)<0) nVec.flip();
 			nVec.mult(n); nVec.z = 0;
 			Corners[i].pos.Add(nVec);
+			
+			#if DEBUG > 0
 			if(dev) cout << "     Old Pos " << Back[i].pos << " Adding " << nVec << " = " << Corners[i].pos << endl;
+			#endif
 			
 			if (i==t_corners-2)
 			{
@@ -122,28 +136,32 @@ void path::Expand(float n)
 					gvector nCross = Normalize(  GetCross( GetVector(Back[i+1].pos, Back[i].pos), zVec )  );
 					nCross.mult(n); nCross.z = 0; nCross.flip();
 					Corners[i+1].pos.Add(nCross);
+					
+					#if DEBUG > 0
 					if(dev) cout << "     Last Knot! Old Pos " << Back[i+1].pos << " Adding " << nCross << " = " << Corners[i+1].pos << endl;
+					#endif
 				}
 				else
 				{
-					/*gvector Vec1 = GetVector(Back[i].pos, Back[i+1].pos);
-					gvector Vec2 = GetVector(Back[1].pos, Back[0].pos);
-					gvector nVec = Normalize(  VecAdd(  Vec1, Vec2  )  );
-					nVec.mult(n); nVec.z = 0;
-					Corners[i+1].pos.Add(nVec);*/
 					Corners[i+1].pos = Corners[0].pos;
 				}
 			}
 		}
 	}
-	if(dev) getch();
+	
+	#if DEBUG > 0
+	if(dev) system("pause");
+	#endif
 }
 
 void path::EvenOut()
 {
+	#if DEBUG > 0
 	bool dev = 0;
 	// 1. Get shortest Section Length
 	if (dev) cout << " 1. Getting shortest Section Length... " << endl;
+	#endif
+	
 	float SecLen[t_corners-1];
 	gvector SecVec[t_corners-1];
 	float sLen = 0;
@@ -158,26 +176,40 @@ void path::EvenOut()
 		if(k==0) sLen = Len;
 		else if(Len<sLen) sLen = Len;
 	}
-	
 	float max = sLen * 1.75;
+
+	#if DEBUG > 0
 	if (dev) cout << "   Shortest Sec " << sLen << "(*1.2="<<sLen*1.2<<") Limit " << max << endl;
+	#endif
+
 	sLen *= 1.2; // make it a little longer maybe
 	
 	vector<path_corner> NewKnots;
+	
+	#if DEBUG > 0
 	if (dev) cout << " 2. Beginning to create new knots... " << endl;
+	#endif
+	
 	// 2. Begin to create new knots for sections that are at least 1.75 times bigger than the shortest(*1.2)
 	for (int k=0; k<t_corners-1; k++)
 	{
 		path_corner &Knot = Corners[k];
+		
+		#if DEBUG > 0
 		if (dev) cout << "   Old Knot #" << k << " Sec Length " << SecLen[k] << " Vec " << SecVec[k] << endl;
+		#endif
 		
 		NewKnots.push_back(Knot);
 		if(SecLen[k]>max) // section length greater than the limit
 		{
 			int subs = round( SecLen[k] / sLen ); // how many subdivisions?
 			float subLen = SecLen[k] / subs;
+			
+			#if DEBUG > 0
 			if (dev) cout << "     !!! Section length longer than the limit (" << max << ")" << endl;
 			if (dev) cout << "     Creating " << subs-1 << " subdivisions for this section with length " << subLen << endl;
+			#endif
+			
 			for(int s=0; s<subs-1; s++) // create new knots for this section based on the subdiv length
 			{
 				path_corner sub;
@@ -186,27 +218,38 @@ void path::EvenOut()
 				addVec.mult((s+1)*subLen);
 				sub.pos.Add(addVec);
 				NewKnots.push_back(sub);
+				
+				#if DEBUG > 0
 				if (dev) cout << "      New Knot #" << s << " pos " << sub.pos << " addVec " << addVec << endl;
+				#endif
 			}
 		}
-		//else NewKnots.push_back(Knot);
 	}
 	// add last knot, or else it won't get a chance :(
 	NewKnots.push_back(Corners[t_corners-1]);
 	
 	// 3. create path of new knots
+	#if DEBUG > 0
 	if (dev) cout << " 3. Creating path of new knots... " << endl;
+	#endif
+	
 	path_corner *nKnotPtr = new path_corner[NewKnots.size()];
 	for (int k=0; k<NewKnots.size(); k++)
 	{
 		path_corner &nKnot = NewKnots[k];
 		path_corner &pKnot = nKnotPtr[k];
 		pKnot = nKnot;
+		
+		#if DEBUG > 0
 		if (dev) cout << "   #"<<k<<" of New Knot Array " << pKnot.pos << " made from new knot " << nKnot.pos << endl;
+		#endif
 	}
 	
 	// 4. replace old knots
+	#if DEBUG > 0
 	if (dev) cout << " 4. Replacing old knots... " << endl;
+	#endif
+	
 	if (Corners!=nullptr) delete[] Corners;
 	Corners = nKnotPtr;
 	t_corners = NewKnots.size();
@@ -272,7 +315,6 @@ void path_set::GetSplineSetDimensions()
 				if (V.z < D.zs) D.zs = V.z;
 				if (V.z > D.zb) D.zb = V.z;
 			}
-			//cout << " dimensions taken from v" << v << V << " : " << D.xs << ", " << D.xb << ", " << D.ys << ", " << D.yb << ", " << D.zs << ", " << D.zb << endl;
 		}
 	}
 	Origin.x = D.xb-((D.xb-D.xs)/2);
@@ -292,55 +334,50 @@ int path_set::CountSections()
 	return Secs;
 }
 
-void path_set::Analyze()
+void path_set::PathToDevAssets()
 {
-	bool dev = 0;
 	path_set &List = *this;
 	
-	/*bool Recreate = 0;
-	int valid_paths = List.t_paths;
-	// Get rid of paths that only have one knot
 	for (int p = 0; p<List.t_paths; p++) // path loop
 	{
 		path &Path = List.Paths[p];
-		if (Path.t_corners<=1) {
-			Path.valid=0;
-			Recreate=1;
-			valid_paths--;
+		for (int c = 0; c<Path.t_corners-1; c++) // corner loop
+		{
+			path_corner &Corner1 = Path.Corners[c];
+			path_corner &Corner2 = Path.Corners[c+1];
+			gvector Edge; Edge.set(Corner1.pos, Corner2.pos, Corner1.pos);
+			
+			gvector Rot = Edge;
+			Rot.rotate(0,0,90);
+			Rot.Normalize();
+			brush* Brush = new brush;
+			
+			Brush->VecToBrush(Edge, Rot, "{BLUE");
+			
+			bGroup[List.gID].DevAssets.push_back(Brush);
+			
+			//cout << " Curve " << List.gID << " Path " << p << " C1# " << c << Corner1.pos << " C2# " << c+1 << Corner2.pos << " Edge " <<  Edge << " Edge2 " << Rot << " bGroup["<<List.gID<<"].DevAssets.size " << bGroup[List.gID].DevAssets.size()<< endl;
+			//system("pause");
 		}
 	}
-	if (Recreate&&valid_paths>0)
-	{
-		cout << "|    [WARNING] Spline contains single knots which had been discarded!" << endl;
-		path* CleanPaths = new path[valid_paths];
-		for (int po=0, pn=0; po<List.t_paths; po++) // path loop
-		{
-			path &PathOld = Paths[po];
-			if (PathOld.valid)
-			{
-				path &PathNew = CleanPaths[pn];
-				PathNew.Copy(PathOld);
-				pn++;
-			}
-		}
-		delete[] Paths;
-		Paths = CleanPaths; // replace old path pointer with new path pointer
-		t_paths = valid_paths;
-	} else if (valid_paths<=0) { 
-		valid = 0;
-		cout << "|    [ERROR] Spline only contains paths made of single knots!" << endl;
-	}*/
+}
+
+void path_set::Analyze()
+{
+	#if DEBUG > 0
+	bool dev = 0;
+	#endif
+
+	path_set &List = *this;
 	
 	for (int p = 0; p<List.t_paths; p++) // path loop
 	{
 		path &Path = List.Paths[p];
-		//cout << " Old corners: " << *this << endl;
 		if (cTable[gID].p_evenout>0) {
 			Path.EvenOut();
 			t_corners=0;
 			for (int p=0;p<t_paths;p++) t_corners += Paths[p].t_corners;
 		}
-		//cout << " new corners: " << *this << endl;
 	}
 	
 	//cout << " Analyzing Path Set with " << List.t_paths<< " paths in it... " << endl;
@@ -348,9 +385,6 @@ void path_set::Analyze()
 	{
 		path &Path = List.Paths[p];
 		// determine starting direction of this path (not needed ATM)
-		//float StartAngle = GetVecAlign( GetVector(Path.Corners[0].pos, Path.Corners[1].pos) ,0);
-		//if ( StartAngle>90&&StartAngle<270) {Path.direct = 0;} //cout << " Path direction is backwards!" << endl;}
-		//else cout << " Path direction is forwards! " << endl;
 		
 		if (cTable[gID].p_expand!=0) Path.Expand(cTable[gID].p_expand);
 		if (List.preverse) {Path.reverse();}
@@ -363,43 +397,52 @@ void path_set::Analyze()
 				path_corner &Corner1 = Path.Corners[c];
 				path_corner &Corner2 = Path.Corners[c+1];
 				
+				// flattened corners
+				path_corner C1 = Corner1; C1.pos.z = 0;
+				path_corner C2 = Corner2; C2.pos.z = 0;
+				
 				// Angle
-				gvector Edge = GetVector(Corner1.pos, Corner2.pos);
+				gvector Edge = GetVector(C1.pos, C2.pos);
 				Corner1.Yaw = GetVecAlign(Edge, 0);
 				Corner1.Pitch = GetVecAlign(Edge, 1);
 				float EdgeLen = GetVecLen(Edge);
-				Path.t_length+=EdgeLen;
+				Corner1.length = EdgeLen;
+				Path.t_length += EdgeLen;
+				
+				#if DEBUG > 0
 				if (dev) cout << " Path " << p<< " length " << EdgeLen << endl;
-				if (EdgeLen==0||!IsValid(EdgeLen)) {
+				#endif
+				
+				if (EdgeLen==0||!IsValid(EdgeLen))
+				{
 					valid=0;
 					cout << "|    [ERROR] Spline contains invalid knots! Path #"<<p<< ", Knot #" << c << Corner1.pos << ", section has invalid length: " << EdgeLen << endl;
 					break;
 				}
-				//cout << " Corner #"<<c<< " Name " << Corner1.name << " Yaw " << Corner1.Yaw << endl;
 				
 				// relative Height
 				Corner1.step = Corner2.pos.z-Corner1.pos.z;
-				//cout << " Path " << p << " Corner " << c << " of "<<Path.t_corners<<" step " << Corner1.step << " (Corner2.z "<<Corner2.pos.z<<" - Corner1.z "<<Corner1.pos.z<<")" << endl;
 				
 				if (c<Path.t_corners-2)
 				{
 					path_corner &Corner3 = Path.Corners[c+2];
 					gvector Edge2 = GetVector(Corner2.pos, Corner3.pos);
-					//cout << " Edge Angle " << GetVecAng(Edge, Edge2) << endl;
 					
 					// Determine whether next section is heading left or right
 					gvector Vec_Yaw = Edge2;
 					Vec_Yaw.rotate(0,0,-(Corner1.Yaw));
 					float Check_Yaw = GetVecAlign(Vec_Yaw,0);
 					if (Check_Yaw>180) Corner1.NextIsCW = 1;
-					//cout << "    Check_Yaw " <<Check_Yaw; if (Corner1.NextIsCW) cout << " Clockwise! " << endl; else cout << " Counter Clockwise! " << endl;
 				}
 			}
 			if (!valid) break;
 		}
 		t_length+=Path.t_length;
+
+		#if DEBUG > 0
 		if (dev) cout << "   PathSet total length " << t_length << endl;
-		if (dev) getch();
+		if (dev) system("pause");
+		#endif
 		
 		// determine section-align (0,90,180,270)
 		if ((List.type==2||List.type==3)&&valid)
@@ -418,7 +461,6 @@ void path_set::Analyze()
 		}
 		
 		// get worldalign of each section - changes if aligns of 2 sections differ by 90 or 180 degree
-		//cout << "Fix cutting edge rotations and mark gaps..." << endl;
 		if (List.type==2&&valid)
 		for (int c = 0; c<Path.t_corners-2; c++) // corner loop
 		{
@@ -430,7 +472,6 @@ void path_set::Analyze()
 			
 			bool AngleIs45 = 0;  if (CornerYaw==45||CornerYaw==135||CornerYaw==225||CornerYaw==315) AngleIs45=1;
 			bool AngleNIs45 = 0; if (CornerNYaw==45||CornerNYaw==135||CornerNYaw==225||CornerNYaw==315) AngleNIs45=1;
-			//cout << " Section #"<<c+1<<" has "; if (!AngleNIs45) cout <<"NO "; cout<<" 45 degree Angle! ("<< CornerNYaw <<")" << endl;
 			
 			float YawDiff = CornerYaw-CornerNYaw; if (YawDiff<0) YawDiff*=-1;
 			bool YawDiffIsClean = 0; if (YawDiff==90||YawDiff==270||YawDiff==45) YawDiffIsClean = 1;
@@ -447,99 +488,33 @@ void path_set::Analyze()
 			bool CornerNDistIsValid = 0; if (pow(CornerNDist,2)/2>=pow(size,2)) CornerNDistIsValid = 1;
 			bool Plain = 0; if (Corner.pos.z==CornerN.pos.z) Plain = 1;
 			bool PlainN = 0; if (CornerN.pos.z==CornerN2.pos.z) PlainN = 1;
-			//cout << "    Size: " << size << " CornerDist " << CornerDist << "( " << FlatPos << ", " << FlatPosN << ")" << " CornerDistIsValid " << CornerDistIsValid << " ( "<<pow(CornerDist,2)/2<< " >= " << pow(size,2)<<")" << endl;
-			//cout << "  Corner #" << c << " Align " << Corner.Align <<" Angle " << static_cast<int>(Corner.Yaw)<< " Align Next "<<CornerN.Align<<" Angle Next "<<CornerN.Yaw<<" Difference "<< Diff <<" rot1 " << Corner.rot1 << " rot2 " << Corner.rot2;
-			//cout << "  Corner #" << c << " Yaw "<< static_cast<int>(Corner.Yaw);
-			//cout << " #"<<c<<" YawDiff " << static_cast<int>(YawDiff) << " Yaw " << static_cast<int>(Corner.Yaw) << " AngleIs45 " << AngleIs45 << " YawN " << static_cast<int>(CornerN.Yaw) << " AngleNIs45 " << AngleNIs45 << endl;
-			//cout << "    Section #"<<c<< " Name " << Corner.name << " Diff " << Diff << " ("<<CornerN.Align<<"-"<<Corner.Align<<") " << " has "; if (!AngleIs45) cout <<"NO "; cout<<" 45 degree Angle! ("<< CornerYaw <<") Next is "; if (Corner.NextIsCW) cout<< " CLOCKWISE! " << endl; else cout <<" NOT CLOCKWISE!" << endl;
+			
 			if (Diff==1||Diff==3)
 			{
-				/*
-				if (AngleIs45&&AngleNIs45&&YawDiffIsClean)
-				{
-					if (!Corner.NextIsCW)
-					CornerN.rot1 -= 90;
-					else
-					Corner.rot2 -= 90;
-				}
-				else if (!AngleIs45&&AngleNIs45&&!Corner.NextIsCW)
-				{
-					CornerN.rot1 -= 90;
-				}
-				//else if (!AngleIs45&&AngleNIs45&&Corner.NextIsCW)
-				//{
-				//	CornerN.rot1 += 90;
-				//}
-				else if (AngleIs45&&!AngleNIs45&&Corner.NextIsCW)
-				{
-					Corner.rot2 -= 90;
-				}
-				else if (!AngleIs45&&!AngleNIs45)
-				{
-					if (List.cornerFix || (!List.cornerFix&&Corner.NextIsCW))
-					{
-						// if world align of 2 sections differs by 90 degree
-						Corner.NextIsGap90 = 1;
-						List.Gaps++;
-						//cout << "  Corner #"<<c<<" Diff 90 deg, ADDING GAP! Gaps now: " << List.Gaps << " cornerfix" << List.cornerFix << endl;
-					}
-				}
-				else
-				{
-					if (List.cornerFix || (!List.cornerFix&&Corner.NextIsCW))
-					{
-						Corner.NextIsGap90 = 1;
-						List.Gaps++;
-						//cout << "  Corner #"<<c<<" Diff 90 deg, ADDING GAP! Gaps now: " << List.Gaps << " cornerfix" << List.cornerFix << endl;
-					}
-				}*/
-				
 				if (AngleIs45&&AngleNIs45&&CornerDistIsValid&&Plain&&PlainN)
 				{
 					if (Corner.NextIsCW)
 					{
-						//cout << "    C45 N45 CW" << endl;
 						Corner.rot2  -= 90;
 					}
 					else 
 					{
-						//cout << "    C45 N45 CCW" << endl;
 						CornerN.rot1 -= 90;
 					}
 				}
 				else if (!AngleIs45&&AngleNIs45&&!Corner.NextIsCW&&CornerNDistIsValid&&PlainN)
 				{
-					/*if (Corner.NextIsCW)
-					{
-						cout << "    N45 CW" << endl;
-						CornerN.rot1 += 90;
-					}
-					else*/
-					{
-						//cout << "    N45 CCW CornerNDist " << CornerNDist << " size " << size <<  endl;
-						CornerN.rot1 -= 90;
-					}
+					CornerN.rot1 -= 90;
 				}
 				else if (AngleIs45&&!AngleNIs45&&CornerDistIsValid&&Plain&&Corner.NextIsCW)
 				{
-					//if (Corner.NextIsCW)
-					{
-						//cout << "    C45 CW" << endl;
-						Corner.rot2 -= 90;
-					}
-					/*else 
-					{
-						cout << "    C45 CCW" << endl;
-						Corner.rot1 += 90;
-					}*/
+					Corner.rot2 -= 90;
 				}
 				else if (List.cornerFix || (!List.cornerFix&&Corner.NextIsCW))
 				{
 					Corner.NextIsGap90 = 1;
 					List.Gaps++;
-					//cout << "    Gap 90" << endl;
 				}
-				//else cout << "    Rule 90 - NO RULE applied!!!" << endl;
 			}
 			else if (Diff==2)
 			{
@@ -547,44 +522,30 @@ void path_set::Analyze()
 				{
 					if (Corner.NextIsCW)
 					{
-						//cout << "    Rule 180 - C45 N45 CW" << endl;
 						Corner.rot2  -= 90;
 					}
 					else 
 					{
-						//cout << "    Rule 180 - C45 N45 CCW" << endl;
 						Corner.rot2  += 90;
 						CornerN.rot1 -= 90;
 					}
 				}
 				else if (AngleIs45&&!AngleNIs45&&Plain&&CornerDistIsValid&&Corner.NextIsCW)
 				{
-					//if (Corner.NextIsCW)
 					{
-						//cout << "    Rule 180 - C45 CW" << endl;
 						Corner.NextIsGap90 = 1;
 						List.Gaps++;
 						Corner.rot2  -= 90;
 					}
-					/*else 
-					{
-						cout << "    Rule 180 - C45 CCW" << endl;
-						Corner.rot2  += 90;
-						CornerN.rot1 -= 90;
-					}*/
 				}
 				// if world align of 2 sections differs by 180 degree
 				else if (List.cornerFix || (!List.cornerFix&&Corner.NextIsCW))
 				{
 					Corner.NextIsGap180 = 1;
 					List.Gaps+=2;
-					//cout << "  Corner #"<<c<<" Diff 180 deg, ADDING GAP! Gaps now: " << List.Gaps << " cornerfix" << List.cornerFix << endl;
 				}
-				//else cout << "    Rule 180 - NO Rule applied!" << endl;
 			}
-			//else cout << endl;
 		}
-		//cout << endl;
 	}
 }
 
@@ -596,7 +557,10 @@ void path_set::Analyze()
 
 void circle::AddHeight(int g, vector<path_set> &Set)
 {
+	#if DEBUG > 0
 	bool dev = 0;
+	#endif
+	
 	vector<float> &height = bGroup[g].heightTable;
 	vector<float> &step = bGroup[g].heightTableSteps;
 	for (int sec=0, v=0; sec<cTable[g].res; sec++)
@@ -615,17 +579,26 @@ void circle::AddHeight(int g, vector<path_set> &Set)
 			VN.z = V.z+step[sec];
 			v+=2;
 		}
+		
+		#if DEBUG > 0
 		if(dev) cout << " Spline sec " << sec << " Height P1: " << V.z << " P2 " << VN.z << endl;
+		#endif
 	}
 }
 
 void circle::ConvertToSpline(int g)
 {
+	#if DEBUG > 0
 	bool dev = 0;
+	#endif
+
 	int res = cTable[g].res;
 	if(cTable[g].type==0||cTable[g].type==1)
 	{
+		#if DEBUG > 0
 		if (dev) cout << " Converting Circle object (res: "<<tverts<<") to Spline (new res: "<< cTable[g].res*2 <<")..." << endl;
+		#endif
+		
 		//create new vertex array
 		vertex *NewVerts = new vertex[res*2];
 		for(int vo=0,vn=0;vo<res;vo++) {
@@ -641,13 +614,19 @@ void circle::ConvertToSpline(int g)
 		delete[] Backup;
 		Vertices = NewVerts;
 		tverts = res*2;
-		if(dev) getch();
+		
+		#if DEBUG > 0
+		if(dev) system("pause");
+		#endif
 	}
 }
 
 void circle::GetInVec(int g)
 {
+	#if DEBUG > 0
 	bool dev = 0;
+	#endif
+	
 	bool IsSpline = 0;
 	if(cTable[g].type==2||cTable[g].type==3) IsSpline = 1;
 	InVec.resize(cTable[g].res);
@@ -672,8 +651,10 @@ void circle::GetInVec(int g)
 				if (GetDot(InVec[sec], Test)<0) InVec[sec].flip();
 			}
 			
+			#if DEBUG > 0
 			if(dev) cout << " #" <<sec<< " V1 " <<  V << endl << " V2 " << VN << endl << " V0 " << VL << endl << " Vec1 " << Vec << endl << " Vec2 " << Vec2 << " InVec " << InVec[sec] <<endl << endl;
-			if(dev) getch();
+			if(dev) system("pause");
+			#endif
 			
 		} else {
 			InVec[sec] = Vec;
@@ -685,7 +666,6 @@ void circle::GetInVec(int g)
 
 void circle::GetAngles(int g)
 {
-	bool dev = 0;
 	bool IsSpline = 0;
 	if(cTable[g].type==2||cTable[g].type==3) IsSpline = 1;
 	
@@ -724,12 +704,12 @@ void circle::reverse(int res) {
 
 void circle::build_circlePi(int res, float rad, float height, bool flat) {
 	
+	#if DEBUG > 0
 	bool dev = 0;
-	Vertices = new vertex[res+1];
-	//tverts = res+1;
+	#endif
 	
-	//cout << "Kreis Koordinaten mit PI konstruieren..." << endl;
-	//cout << "Steps (360/" << res << ") = " << 360.0/res << endl;
+	Vertices = new vertex[res+1];
+	
 	float steps = 360.0/res;
 	float step_half = 0; if(flat) step_half = steps/2;
 	float alpha;
@@ -737,19 +717,11 @@ void circle::build_circlePi(int res, float rad, float height, bool flat) {
 	for (int i = (res/4), j, k=0; i < res+(res/4)+1; i++) {
 		
 		alpha = (( (i * steps)+step_half ) *PI/180.0);
-		//cout << "i[" << i << "] step: " << i * steps << ", \tAlpha = " << alpha << endl;
 		if (k==0) j = res; else j = k-1;
 		Vertices[j].x = rad*(cos(alpha));
 		Vertices[j].y = rad*(sin(alpha));
 		Vertices[j].z = height;
 		k++;
-		/*if (roundV) {
-		Vertices[j].x = round(Vertices[j].x);
-		Vertices[j].y = round(Vertices[j].y);
-		}*/
-		//if (Vertices[i].x<0.4&&Vertices[i].x>-0.4) Vertices[i].x = round(Vertices[i].x);
-		//if (Vertices[i].y<0.4&&Vertices[i].y>-0.4) Vertices[i].y = round(Vertices[i].y);
-		//cout << "\t - X (" << Vertices[j].x << ")\t rad["<<rad<<"]*(cos(alpha)["<<cos(alpha)<<"])\t | Y (" << Vertices[j].y << ")\t rad["<<rad<<"]\t*(sin(alpha)["<<sin(alpha)<<"])" << endl;
 	}
 	
 	if(flat&&step_half!=0)
@@ -757,42 +729,56 @@ void circle::build_circlePi(int res, float rad, float height, bool flat) {
 		// size difference between normal and "flat" circle
 		float rad_flat = rad * cos(step_half*PI/180.0);
 		float m = rad / rad_flat;
+		
+		#if DEBUG > 0
 		if (dev) cout << " rad " << rad << " rad_flat " << rad_flat << " m " << m << endl;
+		#endif
 		
 		// if starting angle > 0 scale circle to original radius again
 		if(m!=0&&IsValid(m))
-		for (int i = 0; i<res+1; i++) {
+		for (int i = 0; i<res+1; i++)
+		{
+			#if DEBUG > 0
 			if (dev) cout << " v " << i << Vertices[i];
+			#endif
+		
 			Vertices[i].x *= m;
 			Vertices[i].y *= m;
+		
+			#if DEBUG > 0
 			if (dev) cout << " new " << Vertices[i] << endl;
+			#endif
 		}
 	}
 		
 	reverse(res);
-	//for (int i = 0; i<res+1; i++)
-	//	cout << " Vertices["<<i<<"]" << Vertices[i] << endl;
 }
 
 void circle::build_pathIntersect(int g, float posy, float height, path_set &Set)
 {
-	bool dev = 0;
 	tverts = (Set.t_corners-Set.t_paths)*2;
 	
+	#if DEBUG > 0
+	bool dev = 0;
 	if(dev)cout << " total vertices of this vertex-path: " << tverts << " (total corners "<<Set.t_corners-Set.t_paths<<" *2 )" << endl;
+	#endif
+	
 	Vertices = new vertex[tverts];
 	float Size = sGroup[g].SizeY;
 	
 	// get intersection points between sections (except first and last sec)
+	#if DEBUG > 0
 	if(dev) cout << " Getting intersection points between sections... " << endl;
-	bool SHOW_LINES = 0;
-	canvas *Canva;
-	if (SHOW_LINES) Canva = new canvas(300, 50);
+	#endif
 	
 	for (int p=0, v=0,sec=0; p < Set.t_paths; p++)
 	{
 		path &Path = Set.Paths[p];
+		
+		#if DEBUG > 0
 		if(dev) cout << " path loop #" << p+1 << " of " << Set.t_paths<< endl;
+		#endif
+		
 		bool IsCircle = CompareVertices(  Path.Corners[0].pos, Path.Corners[Path.t_corners-1].pos  );
 		float Scal[Path.t_corners];
 		gvector Vec[Path.t_corners];
@@ -804,28 +790,45 @@ void circle::build_pathIntersect(int g, float posy, float height, path_set &Set)
 			path_corner &CornerN = Path.Corners[c+1];
 			Vec[c] = GetVector(Corner.pos, CornerN.pos);
 			Vec[c].z = 0;
+			
+			#if DEBUG > 0
 			if(dev) cout << " section vectors #" << c << ": " << Vec[c] << endl;
+			#endif
 		}
 		// Get Pos Vertex
-		for (int c = 0; c < Path.t_corners; c++) {
+		for (int c = 0; c < Path.t_corners; c++)
+		{
 			path_corner &Corner = Path.Corners[c];
 			// get position vertex for this section
 			pV[c] = Corner.pos;
 			pV[c].y += posy;
+			
+			#if DEBUG > 0
 			if(dev) cout << "     PosV sec#" << c << ": " << pV[c] << " = Corner ("<<Corner.pos<<") + posy("<<posy<<")" << endl;
+			#endif
 			
 			// rotate position vertex relevant to the current section align
 			float Yaw = 0.0;
-			if (c==Path.t_corners-1) {
+			if (c==Path.t_corners-1)
+			{
+				#if DEBUG > 0
 				if (dev)cout << "          LAST Corner!"<<endl;
+				#endif
+				
 				Yaw = Path.Corners[c-1].Yaw;
 				pV[c].rotateOrigin(0,0,Yaw,Corner.pos);
-			} else {
+			}
+			else
+			{
 				Yaw = Corner.Yaw;
 				pV[c].rotateOrigin(0,0,Yaw,Corner.pos);
 			}
+			#if DEBUG > 0
 			if(dev) cout << "     PosV sec#" << c << " now " <<pV[c]<<" after Z-Rot by " << Yaw << " deg around Point " << Corner.pos << endl;
+			#endif
 		}
+		
+		#if DEBUG > 0
 		if(dev) {
 			cout << " Final Position Vectors ("<<Path.t_corners<<")" << endl;
 			for (int c = 0; c < Path.t_corners; c++) {
@@ -833,132 +836,195 @@ void circle::build_pathIntersect(int g, float posy, float height, path_set &Set)
 				cout << " pV #" << c+1 << "/" << Path.t_corners << " " <<PV << endl;
  			}
 		}
+		#endif
 
 		// Get Section Scalars
 		for (int c = 0; c < Path.t_corners-2; c++) // corner loop
 		{
 			Scal[c] = GetDot(  Normalize(Vec[c]), Normalize(Vec[c+1])  );
+			
+			#if DEBUG > 0
 			if(dev) cout << " Scalar #" <<c << " " << Scal[c] << endl;
+			#endif
 		}
 		
-		if (dev) getch();
+		#if DEBUG > 0
+		if (dev) system("pause");
+		#endif
+		
 		int L_pV = Path.t_corners-1;
 		int L_sec = Path.t_corners-2;
 		for (int c = 0; c < Path.t_corners-1; c++) // corner loop
 		{
+			#if DEBUG > 0
 			if(dev) cout << " corner #" << c << " of " << Path.t_corners << " L_sec " << L_sec << " L_pV " << L_pV << endl;
+			#endif
+			
 			path_corner &Corner = Path.Corners[c];
 			path_corner &CornerN = Path.Corners[c+1];
 			vertex &V1 = Vertices[v];
 			vertex &V2 = Vertices[v+1];
 			if (Path.t_corners>2)
 			{
+				#if DEBUG > 0
 				if(dev)cout << " #### path has more than 2 corners #### " << endl;
+				#endif
+				
 				if (c==0)
 				{
+					#if DEBUG > 0
 					if (dev)cout << "  FIRST Corner!" << endl;
+					#endif
 					
-					if (!IsCircle) {
+					if (!IsCircle)
+					{
+						#if DEBUG > 0
 						if(dev) cout << "   NO Circle!!!" << endl;
+						#endif
+						
 						V1 = pV[0];
 					}
-					else {
+					else
+					{
+						#if DEBUG > 0
 						if(dev) cout << "   Circle!!!" << endl;
-						if (  GetDot(  Normalize(Vec[0]), Normalize(Vec[L_sec]  )  ) >0.9999  ) {
+						#endif
+						
+						if (  GetDot(  Normalize(Vec[0]), Normalize(Vec[L_sec]  )  ) >0.9999  )
+						{
+							#if DEBUG > 0
 							if(dev) cout << "     Previous Section has same Align!" << endl;
+							#endif
+							
 							V1 = pV[0];
-						} else {
+						}
+						else
+						{
+							#if DEBUG > 0
 							if(dev) cout << "     Previous Section Align differs!" << endl;
+							#endif
+							
 							V1 = GetLineIsect(pV[0], pV[L_sec], Vec[0], Vec[L_sec]);
 						}
 					}
-					if (Scal[0]<0.9999) { // next sec align differs
+					if (Scal[0]<0.9999) // next sec align differs
+					{
 						V2 = GetLineIsect(pV[0], pV[1], Vec[0], Vec[1]);
+						
+						#if DEBUG > 0
 						if(dev) cout << "     V2 is now Line Intersect of following: " << pV[0] << pV[1] << Vec[0] << Vec[1] << endl;
-					} else {// next sec align is same
+						#endif
+					}
+					else // next sec align is same
+					{
 						V2 = pV[1];
+						
+						#if DEBUG > 0
 						if(dev) cout << "     V2 is now pV[1] (#2)" << pV[1] << endl;
+						#endif
 					}
 				}
 				else if (c==Path.t_corners-2)
 				{
+					#if DEBUG > 0
 					if (dev)cout << "  LAST Corner!" << endl;
+					#endif
 					
 					if (Scal[c-1]<0.9999) // align differs
 					V1 = GetLineIsect(pV[c], pV[c-1], Vec[c], Vec[c-1]);
 					else // same align
 					V1 = pV[c];
 					
-					if (!IsCircle) { // NO Circle
+					if (!IsCircle) // NO Circle
+					{
+						#if DEBUG > 0
 						if(dev) cout << "   NO Circle!!!" << endl;
+						#endif
+						
 						V2 = pV[L_pV];
-					} else { // Circle!
+					}
+					else // Circle!
+					{
+						#if DEBUG > 0
 						if(dev) cout << "   Circle!!!" << endl;
-						if (  GetDot(  Normalize(Vec[0]) , Normalize(Vec[c])  ) >0.9999  ) { // next section (circle-start) has same align as current
+						#endif
+						
+						if (  GetDot(  Normalize(Vec[0]) , Normalize(Vec[c])  ) >0.9999  ) // next section (circle-start) has same align as current
+						{
+							#if DEBUG > 0
 							if(dev) cout << "     Next Section same Align!" << endl;
+							#endif
+							
 							V2 = pV[L_pV];
-						} else { // next section has different align as current
+						}
+						else // next section has different align as current
+						{
+							#if DEBUG > 0
 							if(dev) cout << "     Next Section Align differs!" << endl;
+							#endif
+							
 							V2 = GetLineIsect(pV[0], pV[c], Vec[0], Vec[c]);
 						}
 					}
 				}
 				else if (c>0&&c<Path.t_corners-2)
 				{
+					#if DEBUG > 0
 					if (dev)cout << "  MIDDLE Corner!" << endl;
+					#endif
 					
 					V1 = Vertices[v-1];
-					if (Scal[c]<0.9999) { // align differs
+					if (Scal[c]<0.9999) // align differs
+					{
 						V2 = GetLineIsect(pV[c], pV[c+1], Vec[c], Vec[c+1]);
-					} else { // same align
+					}
+					else // same align
+					{
 						V2 = pV[c+1];
 					}
 				}
 			}
 			else if (Path.t_corners==2)// path has exactly 2 corners
 			{
+				#if DEBUG > 0
 				if(dev)cout << " #### path has exactly 2 corners #### " << endl;
+				#endif
+				
 				V1 = pV[0];
 				V2 = pV[1];
 			}
-			/*else // path has 1 corner
-			{
-				if(dev)cout << " #### path has exactly 1 corner #### " << endl;
-				V1 = pV[0];
-				vertex VOrigin = Corner.pos;
-				gvector VecY = GetVector(VOrigin, V1);
-				gvector VecZ; VecZ.z+=1;
-				gvector Cross = Normalize(GetCross(VecY, VecZ));
-				Cross.mult(16);
-				V2 = pV[0]; V2.Add(Cross);
-			}*/
-			if (dev) getch();
-			if(SHOW_LINES) { Canva->CreateLine(0.05, V1, V2); Canva->Print(); }
+			
+			#if DEBUG > 0
+			if (dev) system("pause");
+			#endif
+			
 			V1.pID = p;
 			V1.Align = Corner.Align;
 			
-			//V1.step = Corner.step; //!!!!!!!!!!!!????????????
 			V1.z = height;
 			V2.z = height;
 			V1.Yaw = Corner.Yaw;
-			//V1.Pitch = Corner.Pitch;
+			
 			V1.Align = Corner.Align;
 			if(c>0)
 			V1.IsCCW = !Path.Corners[c-1].NextIsCW;
-			//if (Corner.pos.z!=CornerN.pos.z) V1.DoTri = 1; //!!!!!!!!!!!!????????????
+			
+			#if DEBUG > 0
 			if (dev) cout << "     Final Vertices V1 " << V1 << " V2 " << V2 << endl << endl;
+			#endif
 			
 			v+=2;
 		}
 	}
-	if(SHOW_LINES) delete Canva;
-	if (dev) { cout << endl; getch(); }
+	
+	#if DEBUG > 0
+	if (dev) { cout << endl; system("pause"); }
+	#endif
 }
 
 void circle::build_pathGrid(int g, float posy, float height, path_set &Set)
 {
 	tverts = ((Set.t_corners-Set.t_paths)*2)+(Set.Gaps*2);
-	//cout << " total vertices of this path mesh: " << tverts << " (total corners "<<Set.t_corners-Set.t_paths<<" *2 + Gaps "<<Set.Gaps<<" *2 )" << endl;
 	Vertices = new vertex[tverts];
 	float Size = sGroup[g].SizeY; // mGroup->biggestY; // Y-size of the original source object // changed 09.05.2019
 	
@@ -975,8 +1041,8 @@ void circle::build_pathGrid(int g, float posy, float height, path_set &Set)
 			
 			V1.pID = p;
 			V1.Align = Corner.Align;
-			V1.z = height;//+Corner.pos.z;
-			V2.z = height;//+Corner.pos.z;
+			V1.z = height;
+			V2.z = height;
 			V1.y = posy;
 			V2.y = posy;
 			V1.step = Corner.step;
@@ -987,7 +1053,6 @@ void circle::build_pathGrid(int g, float posy, float height, path_set &Set)
 			V2.x += CornerN.pos.x;
 			V2.y += CornerN.pos.y;
 			V1.Yaw = Corner.Yaw;
-			//V1.Pitch = Corner.Pitch;
 			
 			if (!Corner.NextIsCW) // Next Edge turns CCW (left) - move last vertex to prevent overlapping meshes
 			{
@@ -1002,16 +1067,6 @@ void circle::build_pathGrid(int g, float posy, float height, path_set &Set)
 						else if (Corner.Align==3) {V2.x += Size; }
 					}
 				}
-				/*else
-				{
-					//if (Corner.NextIsGap90||Corner.NextIsGap180)
-					{
-						if 		(Corner.Align==0) {V2.y -= Size; }
-						else if (Corner.Align==1) {V2.x -= Size; }
-						else if (Corner.Align==2) {V2.y += Size; }
-						else if (Corner.Align==3) {V2.x += Size; }
-					}
-				}*/
 			}
 			
 			if (c>0&&!Path.Corners[c-1].NextIsCW)  // Previous Edge turns CCW (left) - move first vertex to prevent overlapping meshes
@@ -1026,16 +1081,6 @@ void circle::build_pathGrid(int g, float posy, float height, path_set &Set)
 						else if (Corner.Align==3) {V1.x += Size;}
 					}
 				}
-				/*else
-				{
-					//if (Corner.NextIsGap90||Corner.NextIsGap180)
-					{
-						if 		(Corner.Align==0) {V1.y -= Size;}
-						else if (Corner.Align==1) {V1.x -= Size;}
-						else if (Corner.Align==2) {V1.y += Size;}
-						else if (Corner.Align==3) {V1.x += Size;}
-					}
-				}*/
 			}
 			
 			if ((Corner.NextIsGap90||Corner.NextIsGap180) && (Set.cornerFix || (!Set.cornerFix&&Corner.NextIsCW)) )
@@ -1059,7 +1104,6 @@ void circle::build_pathGrid(int g, float posy, float height, path_set &Set)
 				V4.z = height;//+CornerN.pos.z;
 				V4.rotateOrigin(0,0,GapRot,Origin);
 				V3.Yaw = Corner.rot1 + (GapRot/2);
-				//V3.Pitch = 0;
 				
 				if (Corner.NextIsGap180)
 				{
@@ -1070,11 +1114,10 @@ void circle::build_pathGrid(int g, float posy, float height, path_set &Set)
 					V5.pID = p;
 					V5.Align = Corner.Align;
 					V5.IsGap = 1;
-					V5.z = height;//+CornerN.pos.z;
-					V6.z = height;//+CornerN.pos.z;
+					V5.z = height;
+					V6.z = height;
 					V6.rotateOrigin(0,0,GapRot,Origin);
 					V5.Yaw = Corner.rot2 + (GapRot/2);
-					//V5.Pitch = 0;
 					v+=2;
 				}
 				v+=2;
@@ -1088,8 +1131,6 @@ void circle::build_pathGrid(int g, float posy, float height, path_set &Set)
 // CIRCLE CONSTRUCTOR
 void circle::build_circleGrid(int res, float rad, float height)
 {
-	//Vertices = new vertex[res];
-
 	// Pattern Segment Multiplier (e.g.1,2,4) - Base for pattern length calculation
 	int resmulti = res/12;
 	int res_stepdown = reduce(res);
@@ -1117,12 +1158,12 @@ void circle::build_circleGrid(int res, float rad, float height)
 	// Filled Pattern (e.g. res12,rad128: "-32 -32 -32 -32 0 0 32 32 32 32 0 0")
 	oldcircle steps;
 	
-	for (int axis = 0; axis < 2; axis++) {
-		
+	for (int axis = 0; axis < 2; axis++)
+	{
 		int min, max;
 		
-		for (int pos = 0; pos < res; pos++) {
-			
+		for (int pos = 0; pos < res; pos++)
+		{
 			max = pslen[axis][0];
 			
 			if (pos < max) {
@@ -1191,8 +1232,6 @@ void circle::build_circleGrid(int res, float rad, float height)
 		Vertices[c].x = Vertices[c-1].x + final.coords[0][c-1];
 		Vertices[c].y = Vertices[c-1].y + final.coords[1][c-1];
 		Vertices[c].z = height;
-		
-		//cout << "Final Circle Coordinate: " << Vertices[c] << endl;
 	}
 }
 
@@ -1230,7 +1269,10 @@ ostream &operator<<(ostream &ostr, circleset &cs)
 
 void ParseCornerFile(string pFile, path_set &PathList)
 {
+	#if DEBUG > 0
 	bool dev = 0;
+	#endif
+	
 	//circleset PathList;
 	string p_corner = "\"classname\" \"path_corner\"";
 	string str_origin = "\"origin\""; // +10
@@ -1244,7 +1286,10 @@ void ParseCornerFile(string pFile, path_set &PathList)
 	if (pFile.length()>0&&pFile.find(p_corner)!=-1)
 	{
 		// count path_corner
+		#if DEBUG > 0
 		if(dev) cout << "count path_corner..." << endl;
+		#endif
+		
 		int pcount=0;
 		int find = 0, last = 0;
 		while (find!=-1)
@@ -1256,19 +1301,29 @@ void ParseCornerFile(string pFile, path_set &PathList)
 		}
 		path_corner pCorner[pcount];
 		
+		#if DEBUG > 0
 		if(dev) cout << "total path_corner: " << pcount << endl;
+		#endif
+		
 		PathList.t_corners = pcount;
-		if(dev) getch();
+		
+		#if DEBUG > 0
+		if(dev) system("pause");
 		
 		// extract path_corner properties
 		if(dev) cout << "extract path_corner properties..." << endl;
+		#endif
+		
 		for (int i = 0, s=0,e=0,l=0; i<pcount; i++)
 		{
 			string str_x,str_y,str_z;
 			int x_start,x_end,y_start,y_end,z_start,z_end,name_start,name_end,tar_start,tar_end;
 			s = pFile.find(p_corner,l);
 			e = pFile.find("}",s);
+			
+			#if DEBUG > 0
 			if (dev) cout << endl << "+----- Current Path_Corner Entity Content ("<<s<<"-"<<e<<"):" << endl << pFile.substr(s, e-s) << endl;
+			#endif
 			
 			x_start = pFile.find(str_origin, s)+10;
 			x_end = pFile.find(spacer,x_start);
@@ -1292,7 +1347,10 @@ void ParseCornerFile(string pFile, path_set &PathList)
 			pCorner[i].name = pFile.substr(name_start,name_end-name_start);
 			else
 			pCorner[i].name = "UNSET";
+
+			#if DEBUG > 0
 			if (dev) cout << "     [!] Found Name at " << name_start << " (began search from "<<s<<") end " << name_end << " content " << pCorner[i].name << endl;
+			#endif
 			
 			tar_start = pFile.find(str_target, s)+10;
 			tar_end = pFile.find(qmark, tar_start);
@@ -1300,16 +1358,24 @@ void ParseCornerFile(string pFile, path_set &PathList)
 			pCorner[i].target = pFile.substr(tar_start,tar_end-tar_start);
 			else
 			pCorner[i].target = "UNSET";
-			if (dev) cout << "     [!] Found Target at " << tar_start << " (began search from "<<s<<") end " << tar_end << " content " << pCorner[i].target << endl;
+
+			#if DEBUG > 0
+			if(dev) cout << "     [!] Found Target at " << tar_start << " (began search from "<<s<<") end " << tar_end << " content " << pCorner[i].target << endl;
 			
 			if(dev) cout << "     path "<<i<<" name [" << pCorner[i].name << "] target [" << pCorner[i].target << "] coords [" << pCorner[i].pos << "] " << endl;
+			#endif
 			
 			l = e+1;
 		}
-		if(dev) getch();
+		#if DEBUG > 0
+		if(dev) system("pause");
+		#endif
 		
 		// assign path ID to corners, that have a valid target corner
+		#if DEBUG > 0
 		if(dev) cout << "assign path ID to generated path_corners..." << endl;
+		#endif
+		
 		int c_pID = 0;
 		for (int i = 1; i<pcount; i++)
 		{
@@ -1320,74 +1386,81 @@ void ParseCornerFile(string pFile, path_set &PathList)
 			string L_name = L.name;
 			string L_target = L.target;
 			
-			if ( L_name==C_name || (L_target==C_name&&L_target!="UNSET") ) {
+			if ( L_name==C_name || (L_target==C_name&&L_target!="UNSET") )
+			{
 				C.pID = L.pID;
-			} else {
+			}
+			else
+			{
 				c_pID++;
 				C.pID = c_pID;
 			}
-			if(dev) cout << "    corner " << i << " name [" << pCorner[i].name << "] target [" << pCorner[i].target << "] ID " << pCorner[i].pID << endl;
-		}
-		if(dev) getch();
-		
-		
-		// assign path ID to paths, if there is more than one path (first pathname without counter (01) identifies a new path)
-		/*if(dev) cout << "assign path ID to path_corners..." << endl;
-		string c_phrase = pCorner[0].name;
-		int c_phrase_len = pCorner[0].name.length();
-		int c_pID = 0;
-		for (int i = 0; i<pcount; i++)
-		{
-			int c_name_len = pCorner[i].name.length();
-			int c_phrase_pos = pCorner[i].name.find(c_phrase); // current phrase found pos
 			
-			// looking for "path1" (could find it in path11, path1101, path11101, etc.)
-			if (c_phrase_pos==-1 || (c_phrase_pos==0&&c_name_len==c_phrase_len+1) )
-			// if current search phrase (path1) wasnt found (path2) OR it was found, but current name is 1 digit longer than search phrase (e.g. path11), this is probably a new path
-			{
-				c_phrase = pCorner[i].name;
-				c_phrase_len = pCorner[i].name.length();
-				c_pID++;
-				pCorner[i].pID = c_pID;
-			}
-			// result belongs to e.g. path1 if result is at least 2 digits longer than path1, e.g. path101 (1. point), path1102 (102. points), etc.
-			else if (c_phrase_pos==0 && c_name_len>=c_phrase_len+2 ) // if current phrase (e.g. "path1") is found at Pos0 and its length is at least 2 digits longer than current phrase (e.g. "path101")
-			{
-				pCorner[i].pID = c_pID;
-			}
-			if(dev) cout << "    corner " << i << " name " << pCorner[i].name << " ID " << pCorner[i].pID << endl;
+			#if DEBUG > 0
+			if(dev) cout << "    corner " << i << " name [" << pCorner[i].name << "] target [" << pCorner[i].target << "] ID " << pCorner[i].pID << endl;
+			#endif
 		}
-		if(dev) getch();
-		*/
+		#if DEBUG > 0
+		if(dev) system("pause");
+		#endif
 		
 		int tpaths = c_pID+1;
 		int vcount[tpaths]; for (int i = 0; i<tpaths; i++) vcount[i] = 0;
+		
 		// count vertices of each path ID
+		#if DEBUG > 0
 		if(dev) cout << "count vertices of each path ID..." << endl;
+		#endif
+		
 		for (int i = 0; i<pcount; i++)
 		{
 			vcount[pCorner[i].pID]++;
+			
+			#if DEBUG > 0
 			if(dev) cout << "    current vertex counter " << vcount[pCorner[i].pID] << endl;
+			#endif
 		}
 		
+		#if DEBUG > 0
 		if(dev)
 		for (int i = 0; i<c_pID+1; i++) {
 			if(dev) cout << "    path " << i << " vertex amount " << vcount[i] << endl; }
-		if(dev) getch();
+		if(dev) system("pause");
+		#endif
 		
 		// get rid of single knots
 		bool Discarded = 0;
+		
+		#if DEBUG > 0
 		if(dev) cout << "Getting rid of single knots..." << endl;
+		#endif
+		
 		vector<path_corner> CleanCorners;
 		for (int i = 0, pIDOff=0; i<pcount; i++)
 		{
+			#if DEBUG > 0
 			if(dev) cout << "  Corner " << i << " name " << pCorner[i].name << " pID " << pCorner[i].pID << " has members " << vcount[pCorner[i].pID] << endl;
-			if (vcount[pCorner[i].pID]>1) {
+			#endif
+			
+			if (vcount[pCorner[i].pID]>1)
+			{
 				pCorner[i].pID -= pIDOff;
 				CleanCorners.push_back(pCorner[i]);
+				
+				#if DEBUG > 0
 				if(dev) cout << "    Included! decreased pID by "<<pIDOff<<" to " << pCorner[i].pID << endl;
+				#endif
 			}
-			else { Discarded=1; pIDOff++; tpaths--; if(dev) cout << "    Discarded! pIDOff now " << pIDOff << " tpaths now " << tpaths << "/" <<c_pID+1 << endl; }
+			else
+			{
+				Discarded=1;
+				pIDOff++;
+				tpaths--;
+				
+				#if DEBUG > 0
+				if(dev) cout << "    Discarded! pIDOff now " << pIDOff << " tpaths now " << tpaths << "/" <<c_pID+1 << endl;
+				#endif
+			}
 		}
 		
 		if (CleanCorners.size()>0)
@@ -1411,19 +1484,27 @@ void ParseCornerFile(string pFile, path_set &PathList)
 				for (int i = 0; i<CleanCorners.size(); i++)
 					vcount[CleanCorners[i].pID]++;
 				
+				#if DEBUG > 0
 				if(dev)
 				for (int i = 0; i<tpaths; i++) {
 					if(dev) cout << "    path " << i << "/"<<tpaths<<" knots " << vcount[i] << endl; }
+				#endif
 			}
 			
 			// finally fill the path corners into the files circleset
+			#if DEBUG > 0
 			if(dev) cout << "Filling cleaned path corners into files circleset..." << endl;
+			#endif
+			
 			PathList.t_paths = tpaths;
 			PathList.Paths = new path[tpaths];
 			for (int p = 0, n=0; p<PathList.t_paths; p++) // circle loop
 			{
 				path &Path = PathList.Paths[p];
+				
+				#if DEBUG > 0
 				if (dev) cout << " Path " << p << "/"<<tpaths<<" Corner " << n << "/"<<CleanCorners.size() <<" pID " << pCorner[n].pID << endl;
+				#endif
 				
 				Path.t_corners = vcount[p];
 				Path.Corners = new path_corner[vcount[p]];
@@ -1435,19 +1516,7 @@ void ParseCornerFile(string pFile, path_set &PathList)
 				}
 			}
 			
-			// get height of all corners and create a height table from it
-			/*for (int s = 0, h=0; s<PathList.t_paths; s++) // path loop
-			{
-				path &Path = PathList.Paths[s];
-				for (int v = 0; v<Path.t_corners; v++) // corner loop
-				{
-					path_corner &Corner = Path.Corners[v];
-					if (v==0) 	PathList.heightTable.push_back(Corner.pos.z);
-					else		PathList.heightTable.push_back(Corner.pos.z-Path.Corners[v-1].pos.z);
-					if(dev) cout << " Path #" << s << " Corner#" << v << " relative height: " << PathList.heightTable[h] << endl;
-					h++;
-				}
-			}*/
+			#if DEBUG > 0
 			if (dev) {
 				cout << endl << " Final Spline List:" << endl << endl;
 				for (int p = 0; p<PathList.t_paths; p++) // circle loop
@@ -1461,7 +1530,7 @@ void ParseCornerFile(string pFile, path_set &PathList)
 					}
 				}
 			}
-			
+			#endif
 			
 			PathList.valid = 1;
 		}
@@ -1471,11 +1540,15 @@ void ParseCornerFile(string pFile, path_set &PathList)
 			PathList.valid = 0;
 		}
 		
-		if(dev) getch();
+		#if DEBUG > 0
+		if(dev) system("pause");
+		#endif
 	}
 	else PathList.valid = 0;
 	
-	if (dev) getch();
+	#if DEBUG > 0
+	if (dev) system("pause");
+	#endif
 }
 
 

@@ -65,25 +65,6 @@ void RMF::WriteWorldSpawn(entity &Entity_WS)
 	int n_keys = Entity_WS.Keys_Original.size(); // (standard keys are "classname"="worldspawn", "sounds"="#", "MaxRange"="#", "mapversion"="220")
 	unsigned long pos_n_keys = RMFBuffer.tellp(); // safe counter pos to update it later
 	WriteByte((int)0); // number of key/value pairs
-	/*for(int i=0; i<n_keys; i++)
-	{
-		key &K = Entity_WS.Keys_Original[i];
-		if(K.name!="classname"&&K.name!="spawnflags")
-		{
-			WriteFixedTString(K.name);
-			WriteFixedTString(K.value);
-		}
-		else
-		{
-			n_keys--;
-		}
-	}*/
-	// update key value pair counter
-	/*int pos_last = RMFBuffer.tellp();
-	RMFBuffer.seekp(pos_n_keys);
-	WriteByte(n_keys);
-	RMFBuffer.seekp(pos_last);
-	*/
 	WriteByteEmpty(12); // ?? 12 bytes
 }
 
@@ -105,8 +86,11 @@ void RMF::WritePaths(int n_paths)
 // Face
 void RMF::WriteFace(face &Face)
 {
+	#if DEBUG > 0
 	bool dev = 0;
 	if(dev) cout << " RMF Export Face Tex " << Face.Texture << " Vcount " << Face.vcount << endl;
+	#endif
+	
 	// Texture String
 	string Tex256 = Face.Texture;
 	Tex256.resize(255);
@@ -132,13 +116,20 @@ void RMF::WriteFace(face &Face)
 	for (int v=0; v<Face.vcount; v++)
 	{
 		vertex &V = Face.Vertices[v];
+
+		#if DEBUG > 0
 		if(dev) cout << "   Vertex #" << v << " Valid " << V.IsValid << V << endl;
-		if(V.IsValid) {
+		#endif
+		
+		if(V.IsValid)
+		{
 			WriteVector(V);
 			n_verts++;
 		}
 	}
+	#if DEBUG > 0
 	if(dev) cout << endl;
+	#endif
 	
 	// Update Vertex Counter
 	UpdateAtPosAndReturn(pos_n_verts, n_verts);

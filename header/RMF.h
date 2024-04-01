@@ -5,7 +5,6 @@
 #include <vector>
 #include <iostream>
 #include <fstream>
-//#include <stdlib.h>
 #include <cstring>
 
 #include "entity.h"
@@ -20,7 +19,6 @@ using namespace std;
 struct RMF
 {
 	ofstream RMFBuffer;
-	//ofstream *Stream_Ptr = nullptr;
 	
 	// File Structure
 	void WriteHeader();
@@ -61,7 +59,6 @@ struct RMF
 		RMFBuffer.open(FilePath, ios::out | ios::binary);
 		RMFBuffer.seekp(0);
 	}
-	//RMF(ofstream &file) { Stream_Ptr = &file; }
 	~RMF() {}
 };
 

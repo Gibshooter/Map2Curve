@@ -59,51 +59,64 @@ void Matrix::EulerToMatrix(Euler A)
 	E[1][0] = CP*SY;	E[1][1] = (SR*SP*SY)+(CR*CY);		E[1][2] = (CR*SP*SY)+(-SR*CY);
 	E[2][0] = -SP;		E[2][1] = SR*CP;					E[2][2] = CR*CP;
 	
-	// case 2 SP = -1
-	
-	// case 3 SP = 1
-	
-	//E[0][0] = Cy*Cz;	E[0][1] = (Sx*Sy*Sz)+(Cx*-Sz);		E[0][2] = (Cx*Sy*Cz)+(-Sx*-Sz);
-	//E[1][0] = Cy*Sz;	E[1][1] = (Sx*Sy*Sz)+(Cx*Cz);		E[1][2] = (Cx*Sy*Sz)+(-Sx*Cz);
-	//E[2][0] = -Sy;		E[2][1] = Sx*Cy;					E[2][2] = Cx*Cy;
 	LevelFields(6);
 }
 
 Euler Matrix::MatrixToEuler()
 {
+	#if DEBUG > 0
 	bool dev = 0;
+	#endif
+
 	float &R00 = E[0][0]; float &R01 = E[0][1]; float &R02 = E[0][2];
 	float &R10 = E[1][0]; float &R11 = E[1][1]; float &R12 = E[1][2];
 	float &R20 = E[2][0]; float &R21 = E[2][1]; float &R22 = E[2][2];
+
+	#if DEBUG > 0
 	if (dev) cout << " Matrix to Euler..." << endl;
+	#endif
+
 	Euler A;
-	//float R20R = round(R20);
+
+	#if DEBUG > 0
 	if (dev) cout << "   R20 (-Sin(Pitch)) " << R20 <<  endl;
-	if (R20<1) {
-		if (R20>-1) { // R20(sin(Pitch)) != -1 && != 1
+	#endif
+
+	if (R20<1)
+	{
+		if (R20>-1) // R20(sin(Pitch)) != -1 && != 1
+		{
+			#if DEBUG > 0
 			if (dev) cout << "     Case I: Pitch != 180/-180" << endl;
+			#endif
+			
 			A.Roll 	= atan2(R21, R22);
 			A.Pitch = asin(R20);
 			A.Yaw 	= -atan2(-R10, R00);
-		} else { // R20(sin(Pitch)) = -1 = -90  | cos(Pitch) = 0
+		}
+		else // R20(sin(Pitch)) = -1 = -90  | cos(Pitch) = 0
+		{
+			#if DEBUG > 0
 			if (dev) cout << "     Case II: Pitch = 90" << endl;
+			#endif
+			
 			A.Roll 	= 0;
 			A.Pitch = PI/2;
 			A.Yaw 	= -atan2(R01, R02);
 		}
-	} else { // R20(sin(Pitch)) = 1 = 90  | cos(Pitch) = 0
+	}
+	else // R20(sin(Pitch)) = 1 = 90  | cos(Pitch) = 0
+	{
+		#if DEBUG > 0
 		if (dev) cout << "     Case III: Pitch = -90" << endl;
+		#endif
+		
 		A.Roll 	= 0;
 		A.Pitch = -PI/2;
 		A.Yaw 	= atan2(-R01, R11);
 	}
 	A.Roll *= 180.0 / PI; A.Pitch *= 180.0 / PI; A.Yaw *= 180.0 / PI;
 	
-	//A.Roll 	= atan2(R21, R22) / PI * 180.0;
-	//A.Pitch = asin(R20) / PI * 180.0;
-	//A.Yaw 	= -atan2(-R10, R00) / PI * 180.0;
-	
-	//if (dev) cout << "     Final Euler " << floorf(A.Roll*1000)/1000 << " " << floorf(A.Pitch*1000)/1000 << " " << floorf(A.Yaw*1000)/1000 << endl << endl;
 	return A;
 }
 

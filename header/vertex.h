@@ -23,7 +23,7 @@ struct vertex
 	int bID = -1;
 	float angle = 0.0;
 	bool DoSplit = 0;
-	string DevTex = "";
+	//string DevTex = ""; // obsolete
 	bool IsGap = 0;
 	float step = 0;
 	int pID = 0; // Path ID this brush will belong to
@@ -60,6 +60,7 @@ ostream &operator<<(ostream &ostr, vertex &v);
 
 /* ===== VERTEX FUNCTIONS ===== */
 
+vertex GetCentroid2024(vertex *vertices, int &vertexCount, bool devinfo);
 float GetFaceLen3 (vertex V0, vertex V1, vertex V2);
 vertex GetMVertex(vertex v1, vertex v2);
 vertex GetCenTri(vertex v1, vertex v2, vertex v3);
@@ -74,6 +75,8 @@ bool IsVertexInList(vertex &V, vertex *VList, int vcount, bool UsePrecision, int
 bool IsVertexInList(vertex &V, vector<vertex> VList, bool UsePrecision, int deci);
 bool IsVertexXYInList(vertex &V, vector<vertex> VList, bool UsePrecision, int deci);
 
+vertex operator+(vertex &V, gvector &Vec);
+vertex operator-(vertex &V, gvector &Vec);
 
 /* ===== VERTEX GROUP CLASS ===== */
 

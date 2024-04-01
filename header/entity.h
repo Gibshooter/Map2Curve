@@ -87,7 +87,6 @@ struct entity
 	
 	bool IsOriginEntity();
 	void RotateEntity(Euler RotAngles, bool UpdateEuler);
-	//brush* entity::ReturnEntityOriginBrush() // not necessary!
 	void CreateBrushes();
 	void CopySimple(entity &Source);
 	void RotateOrigin(float x, float y, float z, vertex Origin);

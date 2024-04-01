@@ -69,19 +69,25 @@ bool gaussianElimination(double mat[N][N+1], vertex &Isect)
     /* if matrix is singular */
     if (singular_flag != -1)
     {
+		#if DEBUG > 0
     	bool dev = 0;
     	
         if(dev)printf("Singular Matrix.\n"); 
+		#endif
   
         /* if the RHS of equation corresponding to 
            zero row  is 0, * system has infinitely 
            many solutions, else inconsistent*/
+
+		#if DEBUG > 0
         if(dev)
 		if (mat[singular_flag][N]) 
             printf("Inconsistent System."); 
         else
             printf("May have infinitely many "
                    "solutions.");
+		#endif
+		
     	return 0;
     } 
   
@@ -96,7 +102,10 @@ bool gaussianElimination(double mat[N][N+1], vertex &Isect)
 // function to calculate the values of the unknowns
 void backSub(double mat[N][N+1], vertex &Isect)
 {
+	#if DEBUG > 0
 	bool dev = 0;
+	#endif
+	
     double x[N];  // An array to store solution
     
     /* Start calculating from last equation up to the
@@ -121,11 +130,13 @@ void backSub(double mat[N][N+1], vertex &Isect)
         x[i] = x[i]/mat[i][i]; 
     }
     
+	#if DEBUG > 0
     if(dev) {
     printf("\nSolution for the system:\n"); 
     for (int i=0; i<N; i++) 
         printf("%lf\n", x[i]);
     }
+	#endif
     
     Isect.setall(x[0],x[1],x[2]);
 }

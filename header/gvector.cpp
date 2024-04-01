@@ -2,7 +2,6 @@
 #include "vertex.h"
 #include "utils.h"
 #include <math.h> // PI, sin, cos, pow, sqrt
-#include <conio.h>
 
 #define PI 3.14159265
 
@@ -67,45 +66,61 @@ void equatsys2::Fill(vertex V1, vertex V2, gvector Vec1, gvector Vec2)
 
 vertex equatsys2::Solve()
 {
+	#if DEBUG > 0
 	bool dev = 0;
 	if (dev) cout << " Solving LSE. EQ: " << L[0] << L[1] << endl;
+	#endif
 	
 	equat ET1 = L[0];
 	equat ET2 = L[1];
 	float p = 0.0; // param
 	
 	// equalize X
+	#if DEBUG > 0
 	if (dev) cout << " Equalize X " << L[0] << L[1] << endl;
+	#endif
+	
 	float m1 = L[1].R[1], m2 = L[0].R[1];
 	ET1.Multi(m1); // I
 	ET2.Multi(m2); // II
+
+	#if DEBUG > 0
 	if (dev) cout << "   = " << ET1 << ET2 << endl;
+	#endif
 	
 	// subtract II from I to get rid of X
 	equat M = ET1 - ET2;
+	
+	#if DEBUG > 0
 	if (dev) cout << " Subtract II from I: " << M << endl;
+	#endif
 	
 	// get Y
+	#if DEBUG > 0
 	if (dev) cout << " M "<< M;
+	#endif
+	
 	M.Subdiv(M.R[3]);
+	
+	#if DEBUG > 0
 	if (dev) cout << " Subdiv " << M.R[3] << M << endl;
+	#endif
+	
 	M.R[0] -= M.R[2];
 	p = M.R[0];
+
+	#if DEBUG > 0
 	if (dev) cout << " Param " << p << endl;
-	
-	/*
-	// get X
-	equat N = L[1];
-	N.R[3] *= Y;
-	
-	X = (N.R[2] + N.R[3] - N.R[0]) / N.R[1];
-	*/
+	#endif
 	
 	// get Intersection
 	I.x = L[0].R[2] + ( L[0].R[3] * p );
 	I.y = L[1].R[2] + ( L[1].R[3] * p );
+
+	#if DEBUG > 0
 	if (dev) cout << " Intersection " << I << endl << endl;
-	if (dev) getch();
+	if (dev) system("pause");
+	#endif
 	
 	return I;
 }
@@ -358,8 +373,6 @@ float GetVecAng(gvector Vec1, gvector Vec2) {
 
 
 
-
-
 /* ===== GVECTOR METHODS ===== */
 
 void gvector::gVecRoundN(int n)
@@ -388,6 +401,24 @@ void gvector::set(float n)
 	x = n;
 	y = n;
 	z = n;
+}
+
+void gvector::set(vertex p1, vertex p2)
+{
+	x = p2.x - p1.x;
+	y = p2.y - p1.y;
+	z = p2.z - p1.z;
+}
+
+void gvector::set(vertex p1, vertex p2, vertex po)
+{
+	x = p2.x - p1.x;
+	y = p2.y - p1.y;
+	z = p2.z - p1.z;
+	
+	px = po.x;
+	py = po.y;
+	pz = po.z;
 }
 
 float gvector::len()

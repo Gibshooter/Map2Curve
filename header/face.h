@@ -58,6 +58,7 @@ struct face
 	float BaseShiftY = 0;
 	int tID = 0;
 	int group = 0; // horizontal shift group
+	int ugroup = 0; // unique horizontal shift group
 	vector<int> BaseListX {0,0,0,0}; // sorted vertex ID list
 	vector<int> BaseListY {0,0,0,0}; // sorted vertex ID list
 	float EdgeLenL = 0;
@@ -66,6 +67,8 @@ struct face
 	float HShiftS = 0;
 	face *HSourceL = nullptr;
 	face *HSourceS = nullptr;
+	face *LHSourceL = nullptr;
+	face *LHSourceS = nullptr;
 	bool IsWedgeDown = 0;
 	bool HasWorldAlign = 0;
 	int EdgeIDs[6] = {0,0,0,0};
@@ -78,6 +81,7 @@ struct face
 	bool IsNULL = 0;
 	int TentID = 0;
 	string name="";
+	brush *Mother = nullptr;
 	
 	void GetNormal();
 	void CopyFace(face &Source, bool CopyVertices);
@@ -87,6 +91,7 @@ struct face
 	void RoundVertices();
 	void RefreshEdges();
 	void GetCentroid();
+	void GetCentroidClassic();
 	void GetCentroidC();
 	void SetEdges(int V0, int V1, int V2, int V3, int V4, int V5);
 	bool GetVertexOrder();
@@ -97,12 +102,14 @@ struct face
 	void RefreshTent(face &Base);
 	void RotateVertices(float x, float y, float z);
 	void MiniShift();
-	void ConvertToShearedTri(bool IsWedge2, bool IsInside, bool Reverse, brush &Brush);
-	void ConvertToSheared();
+	void ConvertToShearedTri(bool IsWedge2, bool IsInside, bool Reverse, brush &Brush, int g);
+	void ConvertToSheared(int g);
 	void SortVertices(gvector nVec);
 	int IsFaceBeyondPlane(gvector nVec);
 	int CarveFace(gvector Plane);
 	void AddNewVertex(vertex N);
+	void Move(gvector &Vec);
+	bool FaceIsValid(int CheckForID, bool CheckIsDraw, bool CheckIsNotNull, bool CheckIsNotNullHintTex);
 	void SetFace(int vc, vertex Verts[], string Tex)
 	{
 		vcount = vc;
@@ -157,6 +164,8 @@ bool IsVertexOnPlane(gvector &Normal, vertex &V, int deci);
 double GetDistPlaneVertex(gvector &Normal, vertex &V);
 bool DoFacesShareVertices(face &F1, face &F2);
 
+void CoutBrushFacesDevInfo(brush &Brush, int b, int g, bool IsInRange);
+void CoutFacesDevInfo(brush &Brush, face &Face, int f);
 
 
 

@@ -39,7 +39,7 @@ ostream &operator<<(ostream &ostr, tform &t);
 struct ctable {
 	float rad 		= 0;
 	float offset_NO = 0; // difference between new and original radius, used for detail objects
-	float offset 	= 0;
+	float offset 	= -1;
 	int res 		= -1;
 	int obj 		= -1;
 	int map 		= -1;
@@ -95,10 +95,15 @@ struct ctable {
 	int d_autoassign = -1;
 	int d_circlemode = -1;
 	int flatcircle = -1;
+	int hstretch = -1; // stretch texture horizontally based on current selected export range and hstretchamt
+	int hstretchamt = -1; // how often texture will be tiled/stretched along the curve horizontally; 0 = perfect fit based on current texture scale/export range; >0 = manual amount of tiling
+	float hshiftoffset = -1;
+	int hshiftsrc = -1;
 	
 	void Print();
 	void FillUnset(ctable &Filler);
 	void FillDefaults();
+	void CopyAll(ctable &Source);
 	
 	ctable () {}
 	~ctable() {}
@@ -111,16 +116,6 @@ void createTableC();
 
 
 /* ===== SETTING CLASS ===== */
-
-/*struct sdata
-{
-	int type = 0; // 0 = bool, 1 = int, 2 = float, 3 = string, 4 = tform
-	bool 	val_bool 	= 0;
-	int 	val_int 	= 0;
-	float 	val_float 	= 0;
-	string 	val_string 	= "";
-	tform	val_tform;
-};*/
 
 struct setting
 {
@@ -149,14 +144,20 @@ struct setting_list
 	
 	void SetEntry(string s_name, string s_val, bool &FoundAndSet)
 	{
+		#if DEBUG > 0
 		bool dev = 0;
 		if (dev)cout << " Set Values with Name " << s_name << " and Val "<<s_val<<" ..." << endl;
+		#endif
+		
 		for (int i=0; i<Settings.size(); i++)
 		{
 			setting &S = Settings[i];
 			if (s_name==S.name&&!S.IsSet)
 			{
+				#if DEBUG > 0
 				if (dev)cout << " Hit at Entry #" << i << " type "<<S.type<<" name " << S.name << " Is.Set " << S.IsSet<< endl;
+				#endif
+				
 				S.SetThis(s_val);
 				FoundAndSet = 1;
 			}
@@ -199,6 +200,7 @@ struct setting_list
 		if (Settings[47].IsSet)Table.p_evenout 		= Settings[47].val_bool;
 		if (Settings[49].IsSet)Table.c_enable 		= Settings[49].val_bool;
 		if (Settings[54].IsSet)Table.flatcircle		= Settings[54].val_bool;
+		if (Settings[57].IsSet)Table.hstretch		= Settings[57].val_bool; // new V0.8 Update
 				
 		// integers
 		if (Settings[22].IsSet)Table.bound 			= Settings[22].val_int;
@@ -212,6 +214,8 @@ struct setting_list
 		if (Settings[51].IsSet)Table.d_carve		= Settings[51].val_int;
 		if (Settings[52].IsSet)Table.d_autoassign	= Settings[52].val_int;
 		if (Settings[53].IsSet)Table.d_circlemode	= Settings[53].val_int;
+		if (Settings[58].IsSet)Table.hstretchamt	= Settings[58].val_int; // new V0.8 Update
+		if (Settings[60].IsSet)Table.hshiftsrc		= Settings[60].val_int; // new V0.8 Update
 		
 		// floats
 		if (Settings[0].IsSet)Table.rad 			= Settings[0].val_float;
@@ -223,6 +227,7 @@ struct setting_list
 		if (Settings[33].IsSet)Table.d_pos			= Settings[33].val_float;
 		if (Settings[35].IsSet)Table.spike_height 	= Settings[35].val_float;
 		if (Settings[46].IsSet)Table.p_expand 		= Settings[46].val_float;
+		if (Settings[59].IsSet)Table.hshiftoffset 	= Settings[59].val_float; // new V0.8 Update
 		
 		// strings
 		if (Settings[34].IsSet)Table.nulltex		= Settings[34].val_string;

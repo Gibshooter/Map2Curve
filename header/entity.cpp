@@ -10,7 +10,6 @@
 #include <string>
 #include <vector>
 #include <iostream>
-#include <conio.h> // getch
 
 using namespace std;
 
@@ -61,18 +60,6 @@ void ReplaceKeyInList(vector<key> &List, string candidate, string replace)
 
 /* ===== ENTITY METHODS ===== */
 
-/*brush* entity::ReturnEntityOriginBrush() // Not necessary
-{
-	entity &E = *this;
-	for (int b=0; b<E.t_brushes; b++)
-	{
-		brush &B = Brushes[b];
-		if(B.IsOriginBrush())
-			return &B;
-	}
-	return nullptr;
-}*/
-
 bool entity::IsKeyType(keytype Candi)
 {
 	entity &Entity = *this;
@@ -86,7 +73,6 @@ bool entity::IsKeyType(keytype Candi)
 
 bool entity::IsOriginEntity()
 {
-	bool dev = 0;
 	entity &Entity = *this;
 	
 	if(Entity.key_classname=="info_target" && Entity.key_targetname=="ORIGIN") {
@@ -98,7 +84,6 @@ bool entity::IsOriginEntity()
 
 bool entity::CarveEntity(gvector Plane)
 {
-	bool dev = 0;
 	entity &E = *this;
 	
 	// check if entities origin is beyond the given plane
@@ -118,8 +103,11 @@ bool entity::CarveEntity(gvector Plane)
 // new key search function since addition of RMF format
 void entity::GetKeyValues()
 {
+	#if DEBUG > 0
 	bool dev = 0;
 	if(dev) cout << " Looking or KeyValues of an Entity..." << endl;
+	#endif
+	
 	entity &Entity = *this;
 	int start = Entity.content.find("\"classname", 0);
 	vector<string> Temp_Keys;
@@ -135,18 +123,40 @@ void entity::GetKeyValues()
 			// Get Key
 			int end = C.find("\"", last+1);
 			string Found_Key = C.substr(last+1, end-last-1);
+			
+			#if DEBUG > 0
 			if(dev) cout << " Found_Key " << Found_Key << endl;
+			#endif
+			
 			if(Found_Key.size()>0)
 			{
 				Temp_Keys.push_back(Found_Key);
 				
 				// Get Value if key was valid
-				start = end+3; if(dev) cout << "   start " << start << " [" << C[start] << "]" << endl;
-				end = C.find("\"\n", start); if(dev) cout << "   end " << end << " [" << C[end] << "]" << endl;
+				start = end+3;
+				
+				#if DEBUG > 0
+				if(dev) cout << "   start " << start << " [" << C[start] << "]" << endl;
+				#endif
+				
+				end = C.find("\"\n", start);
+				
+				#if DEBUG > 0
+				if(dev) cout << "   end " << end << " [" << C[end] << "]" << endl;
+				#endif
+				
 				string Found_Value = C.substr(start, end-start);
+				
+				#if DEBUG > 0
 				if(dev) cout << "   Found_Value " << Found_Value << endl;
+				#endif
+				
 				Temp_Values.push_back(Found_Value);
-				last = end+2; if(dev) cout << "   last " << last << " [" << C[last] << "]" << endl;
+				last = end+2;
+				
+				#if DEBUG > 0
+				if(dev) cout << "   last " << last << " [" << C[last] << "]" << endl;
+				#endif
 			}
 			else
 			{
@@ -154,13 +164,26 @@ void entity::GetKeyValues()
 				cout << "   Key was empty, going to end of line!" <<endl << endl;
 				last = C.find("\n", end)+1;
 			}
-			if(last==-1||C[last]=='}'||C[last]=='{') { if(dev) cout << " END of Entity Keyvalues at Pos " << last << " [" << C[last] << "]" << endl; break; }
-			if(dev) getch();
+			if(last==-1||C[last]=='}'||C[last]=='{')
+			{
+				#if DEBUG > 0
+				if(dev) cout << " END of Entity Keyvalues at Pos " << last << " [" << C[last] << "]" << endl;
+				#endif
+				
+				break;
+			}
+			
+			#if DEBUG > 0
+			if(dev) system("pause");
+			#endif
 		}
 	}
 	
 	// add clean keyvalues to entities keyvaluelist (skip on all m2c_ keys)
+	#if DEBUG > 0
 	if(dev) cout<< endl << " clean keyvalues..." << endl;
+	#endif
+	
 	for(int i=0; i<Temp_Keys.size(); i++)
 	{
 		string &TempKey = Temp_Keys[i];
@@ -171,23 +194,36 @@ void entity::GetKeyValues()
 			ck.name = TempKey;
 			ck.value = TempVal;
 			Entity.Keys_Original.push_back(ck);
+			
+			#if DEBUG > 0
 			if(dev) cout<< "   key " << i << " " << ck.name << " \t " << ck.value << endl;
+			#endif
 		}
 	}
-	if(dev) getch();
+	
+	#if DEBUG > 0
+	if(dev) system("pause");
+	#endif
 }
 
 // this is a very outdated function. too lazy to update it though!
 void entity::GetKeyValues_M2C()
 {
+	#if DEBUG > 0
 	bool dev = 0;
+	#endif
+	
 	string phrase[] = { "classname", "angles", "origin", "targetname", "target", "scale" };
 	string phrase2[] = { "d_enable", "d_pos", "d_autopitch", "d_autoyaw", "d_separate", "d_autoname", "d_pos_rand", "d_rotz_rand", "d_movey_rand", "d_draw", "d_skip", "d_draw_rand", "d_carve", "d_scale_rand", "d_circlemode" };
 	
 	int p1 = (sizeof(phrase)/sizeof(*phrase));
 	int p2 = slist.size(); //(sizeof(slist)/sizeof(*slist));
 	int p3 = (sizeof(phrase2)/sizeof(*phrase2));
+	
+	#if DEBUG > 0
 	if (dev) cout << " Getting Keyvalues of Entity (type" << type << "). Phrases: " << p1 << "+"<<p2<<"="<<p1+p2<<"..."<<endl;
+	#endif
+	
 	// in this entity look for all possible settings
 	for (int i = 0, j = 0, k = 0; i<p1+p2+p3; i++)
 	{
@@ -200,24 +236,37 @@ void entity::GetKeyValues_M2C()
 		
 		if (i<p1+p3 || key_classname=="info_curve" || key_classname=="info_detailgroup" || key_classname=="info_curve_export" )
 		{
+			#if DEBUG > 0
 			if (dev && i<p1) cout << "   #"<<i<<" Looking for search phrase " << search_phrase<<endl;
 			else if (dev && i>=p1) cout << "   #"<<k<<" Looking for search phrase " << search_phrase<<endl;
 			else if (dev && i>=p1+p3) cout << "   #"<<j<<" Looking for search phrase " << search_phrase<<endl;
+			#endif
 			
 			int p_start = content.find(search_phrase, 0);
 			if (p_start!=-1)
 			{
+				#if DEBUG > 0
 				if (dev) cout << "     Found at pos " << p_start<<endl;
+				#endif
+				
 				int v_start = p_start+phrase_len;
 				int v_end = content.find("\"\n", v_start );
+				
+				#if DEBUG > 0
 				if (dev) cout << "     Value start at pos " << v_start << " (phrase length "<<phrase_len<<") end at " << v_end << " substr " << content.substr(v_start,v_end-v_start) <<endl;
+				#endif
+				
 				key Dummy;
 				Keys.push_back(Dummy);
 				int k = Keys.size()-1;
 				Keys[k].name   = phrase_short;
 				Keys[k].value = content.substr( v_start, v_end-v_start );
+				
+				#if DEBUG > 0
 				if (dev) cout << "     Key " << Keys[k].name<<endl;
 				if (dev) cout << "     Value " << Keys[k].value<<endl;
+				#endif
+				
 				if (Keys[k].name=="classname") 	key_classname = Keys[k].value;
 				if (Keys[k].name=="target") 	{ key_target = Keys[k].value;		/*KeyTypes.push_back(KT_TARGET);*/ }
 				if (Keys[k].name=="targetname") { key_targetname = Keys[k].value;	/*KeyTypes.push_back(KT_TARGETNAME);*/ }
@@ -227,15 +276,20 @@ void entity::GetKeyValues_M2C()
 		if (i>=p1+p3) j++;
 		if (i>=p1) k++;
 	}
-	if (dev) getch();
+	#if DEBUG > 0
+	if (dev) system("pause");
 	
 	if (dev) cout << endl << " Extracting and assigning values..."<<endl;
+	#endif
 	for (int k=0; k<Keys.size(); k++)
 	{
 		string name = Keys[k].name;
 		string value = Keys[k].value;
 		vector<string> Values;
+		
+		#if DEBUG > 0
 		if (dev) cout << "   Key #"<<k<< " Name: " << name << " Value " << value <<endl;
+		#endif
 		
 		// key values concerning detail groups are stored in the entity itself rather than in a contruction table
 		if (name=="d_enable") 		d_enable 		= stoi(value);
@@ -258,11 +312,15 @@ void entity::GetKeyValues_M2C()
 			if (value.length()>2)
 			SplitString(value," ", Values);
 		}
+		
+		#if DEBUG > 0
 		if (dev)
 		for (int i = 0; i<Values.size(); i++) {
 			cout << "       Extracted Values from Key #" << k << "("<<name << ", "<<value<<") -> #" << i << " = " << Values[i] << endl; }
 		
 		if (dev) cout << "   Values Count "<<Values.size() << endl;
+		#endif
+		
 		if (Values.size()>2)
 		{
 			if (name=="angles") {
@@ -278,27 +336,50 @@ void entity::GetKeyValues_M2C()
 		}
 	}
 	
-	if (dev) getch();
+	#if DEBUG > 0
+	if (dev) system("pause");
+	#endif
 }
 
 void entity::GetIntMapSettings(vector<string> &MapSettings)
 {
+	#if DEBUG > 0
 	bool dev = 0;
+	#endif
+
 	vector<int> &ID_List = gFile->settingsM_ID;
 	if (key_classname=="info_curve")
 	{
 		bool frad = 0;
 		
 		// first look if there is any rad command in the keylist
+		#if DEBUG > 0
 		if (dev) cout << " first look if there is any rad command in the keylist..." << endl;
-		for (int k=0; k<Keys.size(); k++) {
+		#endif
+		
+		for (int k=0; k<Keys.size(); k++)
+		{
+			#if DEBUG > 0
 			if (dev) cout << "   Key #" << k << " Name " <<  Keys[k].name << " Val " << Keys[k].value << endl;
+			#endif
+			
 			string name = Keys[k].name;
-			if (name=="rad") { frad++; if (dev) cout << "   FOUND YA!" << endl; }
+			if (name=="rad")
+			{
+				frad++;
+				
+				#if DEBUG > 0
+				if (dev) cout << "   FOUND YA!" << endl;
+				#endif
+			}
 		}
 		// if there isnt, add one
-		if (frad==0) {
+		if (frad==0)
+		{
+			#if DEBUG > 0
 			if (dev) cout << " Found NO rad keys in this info_curve entity! Adding one myself..." << endl;
+			#endif
+			
 			key Dummy;
 			Dummy.name="rad";
 			Dummy.value="0";
@@ -308,7 +389,10 @@ void entity::GetIntMapSettings(vector<string> &MapSettings)
 	if (key_classname=="info_curve"||key_classname=="info_curve_export")
 	{
 		// then add all settings to settingsM table (fix -1 values while youre on it?)
+		#if DEBUG > 0
 		if (dev) cout << " Adding all settings to settingsM table..." << endl;
+		#endif
+		
 		for (int k=0; k<Keys.size(); k++)
 		{
 			string name = Keys[k].name;
@@ -328,14 +412,19 @@ void entity::GetIntMapSettings(vector<string> &MapSettings)
 				}
 			}
 		}
-		if (dev) getch();
+		
+		#if DEBUG > 0
+		if (dev) system("pause");
+		#endif
 	}
 }
 
 void entity::CreateBrushes()
 {
+	#if DEBUG > 0
 	bool dev = 0;
 	bool dev2 = 0;
+	#endif
 	
 	if (t_brushes>0&&content.length()>0)
 	{
@@ -347,25 +436,45 @@ void entity::CreateBrushes()
 		Brushes = new brush[t_brushes];
 	
 		// count faces
+		#if DEBUG > 0
 		if (dev) cout << " Counting faces..."<<endl;
+		#endif
+		
 		int found = 0, last = head_end;
-		while (found!=-1) { // count all faces
+		while (found!=-1) // count all faces
+		{
 			found = content.find("(", last);
+			
+			#if DEBUG > 0
 			if (dev&&dev2) cout << "   FaceStartPos" << found;
-			if (found!=-1) {
+			#endif
+			
+			if (found!=-1)
+			{
 				int lineend = content.find("\n", found);
+
+				#if DEBUG > 0
 				if (dev&&dev2) cout << " FaceEndPos" << lineend;
+				#endif
+				
 				last = lineend;
 				t_faces++;
+				
+				#if DEBUG > 0
 				if (dev&&dev2) cout << " Counter " << t_faces <<endl;
+				#endif
 			}
 			else break;
 		}
+		
+		#if DEBUG > 0
 		if (dev) cout << " total faces: " << t_faces << endl;
 		if (dev) cout << " total brushes: " << t_brushes << endl;
 		
 		// Interpret Map File
 		if (dev) cout << " Interpreting Entity Brushes & Faces..." << endl;
+		#endif
+		
 		int btable[t_brushes];
 		string b_import[t_faces][22]; // imported brush array; stores all available informations about each brush
 		
@@ -374,27 +483,54 @@ void entity::CreateBrushes()
 		{
 			int bstart = content.find("{\n( ",last);
 			int blen = content.find("\n}\n",bstart)-bstart;
+			
+			#if DEBUG > 0
 			if (dev&&dev2) cout << "  Brush " << b << ", bstart " << bstart << ", blen " << blen << endl;
 			
 			// get brush face count
 			if (dev) cout << "  Getting face count..." << endl;
-			for (int j = 0, lastf = bstart, foundf = 0; (foundf < bstart+blen)&&(foundf!=-1); j++) {
+			#endif
+			
+			for (int j = 0, lastf = bstart, foundf = 0; (foundf < bstart+blen)&&(foundf!=-1); j++)
+			{
+				#if DEBUG > 0
 				if (dev&&dev2) cout << "    Search Loop " << j << " lastf" << lastf;
+				#endif
+				
 				foundf = content.find("(", lastf);
+
+				#if DEBUG > 0
 				if (dev&&dev2) cout << " FaceStartPos " << foundf;
+				#endif
+				
 				lastf = content.find("\n", foundf);
+				
+				#if DEBUG > 0
 				if (dev&&dev2) cout << " LineEndPos " << lastf << endl;
+				#endif
+				
 				maxf = j;
 			}
 			btable[b] = maxf;
+			
+			#if DEBUG > 0
 			if (dev) cout << "  Facecount for brush#" << b+1 << ": " << maxf << endl;
+			#endif
+			
 			//face loop, copy values to face array
 			int last_val = bstart, valstart = 0, valend = 0;
 			for(int f = lastfam; f-lastfam<maxf; f++)
 			{
+				#if DEBUG > 0
 				if (dev&&dev2) cout << "   Copy values of Face " << f+1 << endl;
+				#endif
+				
 				b_import[f][0] = to_string(b);
+				
+				#if DEBUG > 0
 				if (dev&&dev2) cout << "  Face: " << f <<  " of brush: " << b << "("<<b_import[f][0]<<")" << endl;
+				#endif
+				
 				// value loop
 				for (int v = 1; v < 22; v++) {
 					if (v==1) 	valstart = content.find_first_not_of("{ ([])\n", last_val);
@@ -403,26 +539,22 @@ void entity::CreateBrushes()
 					last_val = valend;
 					b_import[f][v] = content.substr(valstart,valend-valstart);
 					
+					#if DEBUG > 0
 					if (dev&&dev2) cout << "face: " << f << ", value: " << v << ", text: " << b_import[f][v] << endl;
 					if (dev&&dev2) cout << "valstart: " << valstart << ", valend: " << valend << ", last_val: " << last_val << endl;
+					#endif
 				}
 			}
 			lastfam += maxf;
 			last = bstart+1;
 		}
 		
-		//print all brushes and info
-		/*for(int f = 0; f<tfc; f++) {
-			cout << "Brush ("<< b_import[f][0] << ") ";
-			for(int v = 1; v<22; v++) {
-				cout << b_import[f][v] << " ";
-			}
-		cout << endl;
-		}*/
-		
 		// copy raw brush information into raw object
+		#if DEBUG > 0
 		if (dev) cout << "Copying map information into Brush objects..." << endl;
-		//if (dev) getch();
+		if (dev) system("pause");
+		#endif
+		
 		for (int b = 0, i = 0; b<t_brushes; b++)
 		{
 			brush &Brush = Brushes[b];
@@ -431,14 +563,12 @@ void entity::CreateBrushes()
 			Brush.Faces = new face[Brush.t_faces];
 			Brush.bID = b;
 			
+			#if DEBUG > 0
 			if (dev) cout << "  Brush " << b << " Faces " << Brush.t_faces << " entID " << Brush.entID << " EntityID " << eID << endl;
-			
-			//Brush.SegID = b;
-			//if (dev) cout << "  SegID " << b << endl;
+			#endif
 			
 			for(int f = 0; f<Brush.t_faces; f++)
 			{
-				if (dev&&dev2) cout << "    Face " << f << endl;
 				vertex v1, v2, v3; gvector vec1, vec2;
 				
 				face &Face = Brush.Faces[f];
@@ -447,49 +577,58 @@ void entity::CreateBrushes()
 				
 				v1.x = stof(b_import[i][1]);
 				v1.y = stof(b_import[i][2]);
-				v1.z = stof(b_import[i][3]); if (dev&&dev2) cout << "     v1 " << v1 << endl;
+				v1.z = stof(b_import[i][3]); 
 				v2.x = stof(b_import[i][4]);
 				v2.y = stof(b_import[i][5]);
-				v2.z = stof(b_import[i][6]); if (dev&&dev2) cout << "     v2 " << v2 << endl;
+				v2.z = stof(b_import[i][6]); 
 				v3.x = stof(b_import[i][7]);
 				v3.y = stof(b_import[i][8]);
-				v3.z = stof(b_import[i][9]); if (dev&&dev2) cout << "     v3 " << v3 << endl;
+				v3.z = stof(b_import[i][9]); 
 				vec1.x = stod(b_import[i][11]);
 				vec1.y = stod(b_import[i][12]);
-				vec1.z = stod(b_import[i][13]); if (dev&&dev2) cout << "     vecX " << vec1 << endl;
+				vec1.z = stod(b_import[i][13]); 
 				vec2.x = stod(b_import[i][15]);
 				vec2.y = stod(b_import[i][16]);
-				vec2.z = stod(b_import[i][17]); if (dev&&dev2) cout << "     vecY " << vec2 << endl;
+				vec2.z = stod(b_import[i][17]); 
 				Face.Vertices[0] = v1;
 				Face.Vertices[1] = v2;
 				Face.Vertices[2] = v3;
 				Face.VecX = vec1;
 				Face.VecY = vec2;
-				Face.Texture = b_import[i][10]; if (dev&&dev2) cout << "     Tex " << Face.Texture << endl;
-				Face.ShiftX = stof(b_import[i][14]); if (dev&&dev2) cout << "     Face.ShiftX " << Face.ShiftX << endl;
-				Face.ShiftY = stof(b_import[i][18]); if (dev&&dev2) cout << "     Face.ShiftY " << Face.ShiftY << endl;
+				Face.Texture = b_import[i][10];
+				Face.ShiftX = stof(b_import[i][14]); 
+				Face.ShiftY = stof(b_import[i][18]); 
 				Face.Rot = stof(b_import[i][19]); // face rotation is being ignored on import
-				Face.ScaleX = stof(b_import[i][20]); if (dev&&dev2) cout << "     Face.ScaleX " << Face.ScaleX << endl;
-				Face.ScaleY = stof(b_import[i][21]); if (dev&&dev2) cout << "     Face.ScaleY " << Face.ScaleY << endl;
-				//Face.GetfID();
-				 if (dev&&dev2) cout << endl;
+				Face.ScaleX = stof(b_import[i][20]);
+				Face.ScaleY = stof(b_import[i][21]);
+
+				#if DEBUG > 0
+				if (dev&&dev2) cout << "    Face " << f << endl;
+				if (dev&&dev2) cout << "     v1 " << v1 << endl;
+				if (dev&&dev2) cout << "     v2 " << v2 << endl;
+				if (dev&&dev2) cout << "     v3 " << v3 << endl;
+				if (dev&&dev2) cout << "     vecX " << vec1 << endl;
+				if (dev&&dev2) cout << "     vecY " << vec2 << endl;
+				if (dev&&dev2) cout << "     Tex " << Face.Texture << endl;
+				if (dev&&dev2) cout << "     Face.ShiftX " << Face.ShiftX << endl;
+				if (dev&&dev2) cout << "     Face.ShiftY " << Face.ShiftY << endl;
+				if (dev&&dev2) cout << "     Face.ScaleX " << Face.ScaleX << endl;
+				if (dev&&dev2) cout << "     Face.ScaleY " << Face.ScaleY << endl;
+				if (dev&&dev2) cout << endl;
+				#endif
+				
 				i++;
+				
+				#if DEBUG > 0
 				//if (dev) cout << "Brush: " << b << ", Face: " << f << ", Verts: " << Face.Vertices[0] << Face.Vertices[1] << Face.Vertices[2];
 				//if (dev) cout << ", Total B-Faces: " << mGroup->Brushes[b].t_faces << endl;
+				#endif
 			}
 		}
 		
-		// create Vertex Sorting List for each Brush
-		/*if (dev) cout << "  Creating Vertex Sorting List for each Brush..." << endl;
-		for (int b = 0; b<tbc; b++)
-		{
-			brush &Brush = mGroup->Brushes[b];
-			
-			//if (Brush.vlist!=nullptr) delete Brush.vlist;
-			Brush.vlist = new int[Brush.t_faces-2];	// Create Vertex Order List
-			for (int i = 0; i < Brush.t_faces-2; i++) Brush.vlist[i] = -1;
-		}*/
-		if (dev) getch();
+		#if DEBUG > 0
+		if (dev) system("pause");
+		#endif
 	}
 }
 
@@ -502,23 +641,33 @@ void entity::RotateOrigin(float x, float y, float z, vertex nOrigin)
 
 void entity::RotateEntity(Euler RotAngles, bool UpdateEuler)
 {
+	#if DEBUG > 0
 	bool dev = 0;
 	if (dev) cout << " Rotating Matrix by " << RotAngles << " Updating Euler (" << UpdateEuler << ")" <<endl;
+	#endif
+	
 	Matrix RotMatrix;
 	RotMatrix.EulerToMatrix(RotAngles); // create Rotation Matrix from Euler Angles
+
+	#if DEBUG > 0
 	if (dev) cout << "   Original Angle Matrix: " << endl << AMatrix << endl;
 	if (dev) cout << "   Rotation Matrix from Euler: " << endl << RotMatrix << endl;
+	#endif
 	
 	Matrix NewAMatrix = MatrixMultiply(RotMatrix,AMatrix); // Multiply Rotation Matrix with existing Angle Matrix to get new Angle Matrix
 	
+	#if DEBUG > 0
 	if (dev) cout << "   New Angle Matrix (Multiplied): " << endl << NewAMatrix << endl;
+	#endif
 	
 	if (UpdateEuler)
 		Angles = NewAMatrix.MatrixToEuler(); // get new Entity Angles from new Angle Matrix
 	else
 		Angles = RotAngles;
 	
+	#if DEBUG > 0
 	if (dev) cout << "   Euler Angles: " << Angles << endl;
+	#endif
 	
 	AMatrix = NewAMatrix; // update Entities Angle Matrix
 }

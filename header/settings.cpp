@@ -7,7 +7,8 @@
 #include <iostream>
 #include <vector>
 #include <string>
-#include <conio.h>
+
+#define DEBUG 0
 
 using namespace std;
 
@@ -18,7 +19,7 @@ extern vector<int> slist_type;
 extern vector<int> slist_min;
 extern vector<int> slist_max;
 extern ctable* cTable;
-extern ctable* dTable;
+extern ctable* dTable; // default Settings consisting of DEFAULTS.txt or internal defaults
 extern ctable* sTable;
 extern bool G_DEV;
 extern bool ValidDefaults;
@@ -33,7 +34,7 @@ extern group *mDetailGroup;
 
 void LoadDefaultSettings()
 {
-	string DefaultsTXT = LoadTextFile("DEFAULTS.txt");
+	string DefaultsTXT = LoadTextFile(ROOT+"DEFAULTS.txt");
 	vector<string> DefaultsList;
 	
 	ctable iTable; // Internal Defaults Table
@@ -60,7 +61,10 @@ void LoadDefaultSettings()
 
 void LoadWads()
 {
+	#if DEBUG > 0
 	bool dev = 0;
+	#endif
+	
 	vector<string> WadFilePaths;
 	string PATH_WAD_DIR = ROOT+"WAD\\";
 	
@@ -108,17 +112,22 @@ void LoadWads()
 		}
 	}
 	
+	#if DEBUG > 0
 	if (dev) {
 	cout << endl << "    Found WAD Files in WAD Dir: " << endl;
 	for (int i = 0; i<WADFiles.size(); i++)
 	cout << "  #" << i << " " << WADFiles[i].FilePath << endl;}
+	#endif
 }
 
 
 
 void GetSettings(string cfgstr, vector<string> &SettingList, vector<string> &lslist)
 {
+	#if DEBUG > 0
 	bool dev = 0;
+	#endif
+	
 	cfgstr += "\n";
 	// count lines of config string
 	int found = 0;
@@ -130,7 +139,10 @@ void GetSettings(string cfgstr, vector<string> &SettingList, vector<string> &lsl
 	//ctr++;
 	
 	// copy line by line into new config string
+	#if DEBUG > 0
 	if(dev) { cout << endl << " Copying line by line into new config string..." << endl; }
+	#endif
+	
 	bool cfg_scanned[ctr]; for (int i = 0; i<ctr; i++) cfg_scanned[i] = 0;
 	string cfg_lines[ctr];
 	int start = 0;
@@ -142,25 +154,37 @@ void GetSettings(string cfgstr, vector<string> &SettingList, vector<string> &lsl
 		//if (end_pos==-1) end = cfgstr.length();
 		cfg_lines[i] = cfgstr.substr(start,end-start);
 		start = end;
+		
+		#if DEBUG > 0
 		if(dev) {cout << "cfg_lines["<<i<<"]" << cfg_lines[i];}
+		#endif
 	}
 	// start searching for keywords line by line
+	
+	#if DEBUG > 0
 	if(dev) { cout << endl << " Searching for keywords line by line..." << endl; }
+	#endif
+	
 	string phrase = "";
 	// phrase loop
 	int phrase_counter = slist.size(); //(sizeof(slist)/sizeof(*slist));
 	for (int j = 0; j < phrase_counter; j++) {
 		phrase = slist[j];
 		int phrase_len = slist[j].length();
+		
+		#if DEBUG > 0
 		if(dev) { cout << "  current phrase [" << phrase << "] #"<<j<<"/"<<phrase_counter<<" len " << phrase_len << endl; }
+		#endif
+		
 		// config lines loop
-		for (int i = 0; i<ctr; i++) { // search for phrase
+		for (int i = 0; i<ctr; i++) // search for phrase
+		{
 			if (!cfg_scanned[i])
 			{
 				int found_p = cfg_lines[i].find(phrase,0);
 				int found_p_space; if(found_p!=-1) found_p_space = cfg_lines[i].find_first_of(" \t",found_p);
 				int found_p_len = found_p_space-found_p;
-				//if (cfg_lines[i].find("rad")!=-1) {cout << " Special #" << i << " found_p " << found_p<< " space " << found_p_space << " len " << found_p_len <<endl; cout << cfg_lines[i]; }
+				
 				if (found_p_len==phrase_len)
 				{
 					bool comment = false;
@@ -183,32 +207,37 @@ void GetSettings(string cfgstr, vector<string> &SettingList, vector<string> &lsl
 					}
 					
 					//Phrase found, search for value
-					if(found_p!=-1&&!comment&&!lookalike) {
+					if(found_p!=-1&&!comment&&!lookalike)
+					{
+						#if DEBUG > 0
 						if(dev) { cout<< "     Scanned list #"<<i<<"/"<<ctr<< " Phrase found, no Comment/Lookalike, searching value..."; }
-						/*int phrase_end = found_p+phrase.length();
-						int phrase_spacecom = cfg_lines[i].find_first_of(" \t",phrase_end);
-						int found_val = cfg_lines[i].find_first_not_of(" \t\"", phrase_spacecom);
-						int value_len = 0;
-						if (cfg_lines[i][found_val-1]=='\"')
-							value_len = cfg_lines[i].find_first_of("\"\t\n",found_val)-found_val;
-						else
-							value_len = cfg_lines[i].find_first_of(" \t\n",found_val)-found_val;
+						#endif
 						
-						string str_f_value = cfg_lines[i].substr(found_val,value_len);
-						//cout << " config line "<<i<< " phrase " << phrase << " pos "<< found_p<< " value " << str_f_value << " pos " << found_val << " length " << value_len << endl;
-						*/
 						string str_f_value = GetValue(cfg_lines[i], found_p+phrase_len);
-						if(str_f_value!="ERR") {
+						if(str_f_value!="ERR")
+						{
+							#if DEBUG > 0
 							if(dev) { cout << " found!" << endl; }
+							#endif
+							
 							SettingList.push_back(phrase);
 							SettingList.push_back(str_f_value);
-						} else { if(dev) {cout << " NOT found!" << endl;} }
+						}
+						else
+						{
+							#if DEBUG > 0
+							if(dev) {cout << " NOT found!" << endl;}
+							#endif
+						}
 						cfg_scanned[i] = 1;
 					}
 				}
 			}
 		}
+		
+		#if DEBUG > 0
 		if(dev) { cout << endl; }
+		#endif
 	}
 	
 	// look for d_autoassign command in advance
@@ -217,6 +246,7 @@ void GetSettings(string cfgstr, vector<string> &SettingList, vector<string> &lsl
 		gFile->d_autoassign = 1;
 	}
 	
+	#if DEBUG > 0
 	if (dev) {
 		int found_arcs = 0;
 		cout << endl << "All found phrases and values:\n";
@@ -225,29 +255,45 @@ void GetSettings(string cfgstr, vector<string> &SettingList, vector<string> &lsl
 			if (SettingList[i]=="rad") found_arcs++;
 		}
 		cout << " Found a total of " << found_arcs << " arcs!" << endl;
-		getch();
+		system("pause");
 	}
+	#endif
 }
 
 string GetCustomPhraseValue(string text, string phrase)
 {
+	#if DEBUG > 0
+	bool dev = 0;
+	#endif
+	
 	// Check for custom source path in settings file
 
-	//string phrase = "source";
 	string value = "";
 	int f_pos = 0;
 	
 	while (f_pos!=-1)
 	{
-		//cout << "    f_pos: " << f_pos << " find phrase ";
+		#if DEBUG > 0
+		if(dev) cout << "    f_pos: " << f_pos << " find phrase ";
+		#endif
+		
 		f_pos = text.find(phrase, f_pos);
-		//cout << f_pos << endl;
+
+		#if DEBUG > 0
+		if(dev) cout << f_pos << endl;
+		#endif
 		
 		if (CheckPhrase(text, f_pos))
 		{
-			//cout << "      Phrase at pos " << f_pos << " is NOT commented out!" << endl;
+			#if DEBUG > 0
+			if(dev) cout << "      Phrase at pos " << f_pos << " is NOT commented out!" << endl;
+			#endif
+			
 			value = GetValue(text, f_pos+phrase.length());
-			//cout << "      value " << value << " file exists " << CheckIfFileExists(value) <<  endl;
+			
+			#if DEBUG > 0
+			if(dev) cout << "      value " << value << " file exists " << CheckIfFileExists(value) <<  endl;
+			#endif
 			
 			return value;
 		}
@@ -258,14 +304,25 @@ string GetCustomPhraseValue(string text, string phrase)
 
 string GetValue(string text, int start_pos)
 {
+	#if DEBUG > 0
+	bool dev = 0;
+	#endif
+	
 	int f_pos_v = text.find_first_not_of(" \t", start_pos);
 	int f_pos_n = text.find("\n", start_pos);
 	int f_pos_c = text.find("//", start_pos);
-	//cout << "         Get Value - value pos " << f_pos_v << " newline pos " << f_pos_n << " comment pos " << f_pos_c << endl;
+
+	#if DEBUG > 0
+	if(dev) cout << "         Get Value - value pos " << f_pos_v << " newline pos " << f_pos_n << " comment pos " << f_pos_c << endl;
+	#endif
+
 	int f_pos_v_end = 0;
 	if (f_pos_v==-1||f_pos_v==f_pos_n||f_pos_v==f_pos_c)
 	{
-		//cout << "           Value not found OR Value is comment!" << endl;
+		#if DEBUG > 0
+		if(dev) cout << "           Value not found OR Value is comment!" << endl;
+		#endif
+		
 		return "ERR";
 	}
 	else if (f_pos_v!=-1&&(f_pos_v<f_pos_n||f_pos_n==-1)&&(f_pos_v<f_pos_c||f_pos_c==-1))
@@ -273,40 +330,61 @@ string GetValue(string text, int start_pos)
 		bool quotes = 0;
 		string value = "";
 		
-		//cout << "           Value found at " << f_pos_v;
+		#if DEBUG > 0
+		if(dev) cout << "           Value found at " << f_pos_v;
+		#endif
+		
 		if (text[f_pos_v]=='\"')
 		{
-			//cout << "Found quotes! ";
+			#if DEBUG > 0
+			if(dev) cout << "Found quotes! ";
+			#endif
+			
 			quotes = 1;
 			f_pos_v_end = text.find_first_of("\"\n\t", f_pos_v+1);
 			value = text.substr(f_pos_v+1, f_pos_v_end-f_pos_v-1);
 		}
 		else
 		{
-			//cout << "Didnt find quotes! ";
+			#if DEBUG > 0
+			if(dev) cout << "Didnt find quotes! ";
+			#endif
+			
 			f_pos_v_end = text.find_first_of("\n \t", f_pos_v);
 			value = text.substr(f_pos_v, f_pos_v_end-f_pos_v);
 		}
-		//cout << " end " << f_pos_v_end << " final " << value << endl;
+		#if DEBUG > 0
+		if(dev) cout << " end " << f_pos_v_end << " final " << value << endl;
+		#endif
+		
 		return value;
 	}
 }
 
 bool CheckPhrase(string text, int pos)
 {
+	#if DEBUG > 0
 	bool dev = 0;
-	//cout << "           Checking Validity of Phrase..." << endl;
+	if(dev)cout << "           Checking Validity of Phrase..." << endl;
+	#endif
+	
 	if (pos==-1) return 0;
 	else if (pos==0) return 1;
 	else
 	{
+		#if DEBUG > 0
 		if (dev) cout << " Checking if found phrase is commented out..." << endl;
+		#endif
+		
 		// check if found phrase has anything but space or tabs in front of it (if it does, it is invalid!)
 		// check if found phrase is commented out
 		int newline = text.rfind("\n",pos); // new line
 		int comment = text.rfind("//",pos); // comment brackets
 		int dirt = text.find_last_not_of(" \t",pos-1);
+		
+		#if DEBUG > 0
 		if(dev) cout << "             pos " << pos << " newline " << newline << " comment " << comment << " dirt " << dirt << endl;
+		#endif
 		
 		if ((newline==-1&&comment==-1&&dirt==-1)||(comment<newline&&dirt<=newline)) // phrase is located in first line and/or not commented out
 			return 1;
@@ -329,12 +407,18 @@ bool CheckPhrase(string text, int pos)
 
 void tform::set(string input)
 {
+	#if DEBUG > 0
 	bool dev = 0;
+	#endif
+	
 	int HasNumbers = input.find_first_of("0123456789");
 	// example input: "5 5 5"
 	if(HasNumbers!=-1)
 	{
+		#if DEBUG > 0
 		if(dev) cout << " Raw Tform input: [" << input << "]" << endl;
+		#endif
+		
 		string V = "-0123456789.|";
 		string Clean;
 		for (int i=0,s=0; i<input.length(); i++) {
@@ -348,7 +432,11 @@ void tform::set(string input)
 			}
 		}
 		if(Clean[Clean.length()-1]=='|') Clean.erase(Clean.begin()+Clean.length()-1);
+
+		#if DEBUG > 0
 		if(dev) { cout << " Cleaned Tform input: [" << Clean << "]" << endl; }
+		#endif
+		
 		if (!ContainsInvalids(Clean, V))
 		{
 			int comma_1 = 0; comma_1 = Clean.find("|",0);
@@ -365,8 +453,11 @@ void tform::set(string input)
 			
 			IsSet = 1; //if (x!=0||y!=0||z!=0) 
 		}
+
+		#if DEBUG > 0
 		if(dev) cout << *this << endl;
-		if(dev) getch();
+		if(dev) system("pause");
+		#endif
 	}
 }
 
@@ -380,18 +471,24 @@ ostream &operator<<(ostream &ostr, tform &t)
 
 void setting::SetThis(string val)
 {
-	bool dev = 0;
 	string ValidCharsBool = "01";
 	string ValidCharsInt ="-+01234567890";
 	string ValidCharsFloat = ".-+01234567890";
 	string ValidCharsTform = " .-+01234567890";
 	
+	#if DEBUG > 0
+	bool dev = 0;
 	if (dev)cout << " Trying to  set Setting " << name <<"(type "<<type<<", ID"<<ID<<") to " << val << "..." <<endl;
+	#endif
+	
 	if (type==0) { // bool
 		if (!ContainsInvalids(val, ValidCharsBool)) {
 			IsSet = 1;
 			if (val=="1") val_bool = 1; else val_bool = 0;
+			
+			#if DEBUG > 0
 			if (dev)cout << "   Value is of type bool! val now " << val_bool << endl << endl;
+			#endif
 		}
 	}
 	else if (type==1) { // int
@@ -400,7 +497,10 @@ void setting::SetThis(string val)
 			val_int = stoi(val);
 			if (val_int<MIN) val_int = MIN;
 			else if (val_int>MAX) val_int = MAX;
+			
+			#if DEBUG > 0
 			if (dev)cout << "   Value is of type int! val now " << val_int << endl << endl;
+			#endif
 		}
 	}
 	else if (type==2) { // float
@@ -409,26 +509,42 @@ void setting::SetThis(string val)
 			val_float = stof(val);
 			if (val_float<MIN) val_float = MIN;
 			else if (val_float>MAX) val_float = MAX;
+			
+			#if DEBUG > 0
 			if (dev)cout << "   Value is of type float! val now " << val_float << endl << endl;
+			#endif
 		}
 	}
 	else if (type==3) { // string
 		if (val!="UNSET"&&val!="ERR"&&val.length()>=MIN&&val.length()<=MAX) {
 			IsSet = 1;
 			val_string = val;
+			
+			#if DEBUG > 0
 			if (dev)cout << "   Value is of type string! val now " << val_string << endl << endl;
+			#endif
 		}
 	}
 	else if (type==4) { // tform
 		if (!ContainsInvalids(val, ValidCharsTform)) {
 			val_tform.set(val);
 			if(val_tform.IsSet) IsSet = 1;
+			
+			#if DEBUG > 0
 			if (dev)cout << "   Value is of type tform! val now " << val_tform << endl << endl;
+			#endif
 		}
 	}
-	else { if (dev)cout << "   Didnt set anything!" << endl << endl; }
+	else
+	{
+		#if DEBUG > 0
+		if (dev)cout << "   Didnt set anything!" << endl << endl;
+		#endif
+	}
 	
+	#if DEBUG > 0
 	if(dev)Print();
+	#endif
 }
 
 void setting::Print() { cout << " Setting: " << name << " \tID " << ID << " \ttype " << type << " \tmin " << MIN << " \tmax " << MAX << endl;}
@@ -444,12 +560,14 @@ setting::setting(string s_name, int s_ID, int s_type, int s_min, int s_max)
 
 void ctable::FillUnset(ctable &Filler)
 {
+	//if (rad<0)			rad			= Filler.rad;
+	if (offset==-1)		offset		= Filler.offset;
 	if (res<0)			res			= Filler.res;
 	if (type<0)			type		= Filler.type;
 	if (shift<0)		shift		= Filler.shift;
 	if (tri<0)			tri			= Filler.tri;
 	if (round<0)		round		= Filler.round;
-	//if (height<0)		height		= Filler.height;
+	if (height==-1)		height		= Filler.height;
 	if (ramp<0)			ramp		= Filler.ramp;
 	if (cornerfix<0)	cornerfix	= Filler.cornerfix;
 	if (preverse<0)		preverse	= Filler.preverse;
@@ -485,6 +603,10 @@ void ctable::FillUnset(ctable &Filler)
 	if (d_autoassign<0)	d_autoassign= Filler.d_autoassign;
 	if (d_circlemode<0)d_circlemode= Filler.d_circlemode;
 	if (flatcircle<0)	flatcircle	= Filler.flatcircle;
+	if (hstretch<0)		hstretch	= Filler.hstretch;
+	if (hstretchamt<0)	hstretchamt	= Filler.hstretchamt;
+	if (hshiftoffset==-1)	hshiftoffset	= Filler.hshiftoffset;
+	if (hshiftsrc<0)	hshiftsrc	= Filler.hshiftsrc;
 	
 	if (!scale.IsSet)		scale		= Filler.scale;
 	if (!scale_src.IsSet)	scale_src	= Filler.scale_src;
@@ -498,6 +620,67 @@ void ctable::FillUnset(ctable &Filler)
 	if (!p_scale.IsSet)		p_scale		= Filler.p_scale;
 }
 
+void ctable::CopyAll(ctable &Source)
+{
+	rad			= Source.rad;
+	offset		= Source.offset;
+	res			= Source.res;
+	type		= Source.type;
+	shift		= Source.shift;
+	tri			= Source.tri;
+	round		= Source.round;
+	height		= Source.height;
+	ramp		= Source.ramp;
+	cornerfix	= Source.cornerfix;
+	preverse	= Source.preverse;
+	ramptex		= Source.ramptex;
+	psplit		= Source.psplit;
+	append		= Source.append;
+	bound		= Source.bound;
+	range_start	= Source.range_start;
+	range_end	= Source.range_end;
+	transit_tri	= Source.transit_tri;
+	transit_round= Source.transit_round;
+	gaps		= Source.gaps;
+	gaplen		= Source.gaplen;
+	skipnull	= Source.skipnull;
+	d_enable	= Source.d_enable;
+	d_autoyaw	= Source.d_autoyaw;
+	d_autopitch	= Source.d_autopitch;
+	d_pos		= Source.d_pos;
+	d_separate	= Source.d_separate;
+	d_autoname	= Source.d_autoname;
+	d_draw		= Source.d_draw;
+	d_draw_rand	= Source.d_draw_rand;
+	d_skip		= Source.d_skip;
+	nulltex		= Source.nulltex;
+	spike_height= Source.spike_height;
+	path		= Source.path;
+	heightmode	= Source.heightmode;
+	p_expand	= Source.p_expand;
+	p_evenout	= Source.p_evenout;
+	c_enable	= Source.c_enable;
+	texmode		= Source.texmode;
+	d_carve		= Source.d_carve;
+	d_autoassign= Source.d_autoassign;
+	d_circlemode= Source.d_circlemode;
+	flatcircle	= Source.flatcircle;
+	hstretch	= Source.hstretch;
+	hstretchamt	= Source.hstretchamt;
+	hshiftoffset= Source.hshiftoffset;
+	hshiftsrc	= Source.hshiftsrc;
+
+	scale		= Source.scale;
+	scale_src	= Source.scale_src;
+	rot			= Source.rot;
+	rot_src		= Source.rot_src;
+	move		= Source.move;
+	d_pos_rand	= Source.d_pos_rand;
+	d_rotz_rand	= Source.d_rotz_rand;
+	d_movey_rand= Source.d_movey_rand;
+	d_scale_rand= Source.d_scale_rand;
+	p_scale		= Source.p_scale;
+}
 void ctable::FillDefaults()
 {
 	rad 		= 0;
@@ -545,6 +728,11 @@ void ctable::FillDefaults()
 	p_evenout	= 0;
 	flatcircle	= 0;
 	d_circlemode = 0;
+	c_enable	= 1;
+	hstretch	= 0;
+	hstretchamt	= 0;
+	hshiftoffset= 0;
+	hshiftsrc	= 1;
 }
 
 void ctable::Print()
@@ -609,6 +797,10 @@ void ctable::Print()
 	cout << "   nulltex \t" << nulltex << endl;
 	cout << "   spike_height \t" << spike_height << endl;
 	cout << "   c_enable \t" << c_enable << endl;
+	cout << "   hstretch \t" << hstretch << endl;
+	cout << "   hstretchamt \t" << hstretchamt << endl;
+	cout << "   hshiftoffset \t" << hshiftoffset << endl;
+	cout << "   hshiftsrc \t" << hshiftsrc << endl;
 }
 
 
@@ -637,7 +829,6 @@ ctable* createTableS(int CurveCount, vector<string> &SettingsList, bool IDOffset
 		}
 	}
 	
-	// cout
 	if(dev||G_DEV)
 	for (int s=0; s<SettingsList.size(); s+=2) // setting loop
 		cout << " SettingsList["<<s<<"] -> " << SettingsList[s] << " content: [" << SettingsList[s+1] <<"]"<< endl;
@@ -650,31 +841,47 @@ ctable* createTableS(int CurveCount, vector<string> &SettingsList, bool IDOffset
 }
 
 
-
-
 // calculate the resulting settings for each arc
 void createTableC()
 {
+	#if DEBUG > 0
 	bool dev = 0;
 	if (dev) cout << "Creating " << mGroup->t_arcs << " Construction Tables..." << endl;
+	#endif
 	
 	// Create construction Tables
 	int &t_arcs = mGroup->t_arcs;
-	if (cTable!=nullptr) {delete[] cTable; if (dev) cout << " Deleting existing cTable, containing " << t_arcs << " objects and creating a new one..." << endl; }
+	if (cTable!=nullptr)
+	{
+		delete[] cTable;
+		
+		#if DEBUG > 0
+		if (dev) cout << " Deleting existing cTable, containing " << t_arcs << " objects and creating a new one..." << endl;
+		#endif
+	}
 	cTable = new ctable[t_arcs];
 	
 	// Fill Construction Tables with previously loaded Settings
+	#if DEBUG > 0
 	if (dev) cout << "   Filling " << t_arcs << " Construction Tables with previously loaded Settings..." << endl;
+	#endif
+	
 	for (int a = 0; a<t_arcs; a++) {
 		cTable[a] = sTable[a];
+
+		#if DEBUG > 0
 		if (dev) cout << "     Arc " << a << " rad: " << sTable[a].rad << "\t offset: " << sTable[a].offset << "\t type: " << sTable[a].type << "\t res: " << sTable[a].res << "\t shift: " << sTable[a].shift << "\t height: " << sTable[a].height << endl;
+		#endif
 	}
 	
 	// export settings
 	if (cTable[0].target!="UNSET") gFile->target = cTable[0].target; else gFile->target = dTable[0].target;
 	if (cTable[0].append!=-1) gFile->append = cTable[0].append; else gFile->append = dTable[0].append;
 	
+	#if DEBUG > 0
 	if (dev) cout << "   Evaluate settings..." << endl;
+	#endif
+	
 	// Evaluate settings
 	for (int a = 0; a<t_arcs; a++) // arc loop
 	{
@@ -683,7 +890,7 @@ void createTableC()
 		else if (a>0&&cTable[a].type<0) 	cTable[a].type = cTable[a-1].type; // if x-th type is 0, type is same as previous type
 		
 		// d_carve
-		if 		(a==0&&cTable[0].d_carve<0) 	cTable[0].d_carve = dTable[0].d_carve;
+		if 		(a==0&&cTable[0].d_carve<0) cTable[0].d_carve = dTable[0].d_carve;
 		else if (a>0&&cTable[a].d_carve<0) 	cTable[a].d_carve = cTable[a-1].d_carve;
 		
 		// d_autoassign (unnecessary at the moment)
@@ -701,6 +908,10 @@ void createTableC()
 		// rmf
 		if 		(a==0&&cTable[0].rmf<0) 	cTable[0].rmf = dTable[0].rmf;
 		else if (a>0&&cTable[a].rmf<0) 		cTable[a].rmf = cTable[a-1].rmf;
+		
+		// offset
+		if 		(a==0&&cTable[0].offset==-1) 	cTable[0].offset = dTable[0].offset;
+		else if (a>0&&cTable[a].offset==-1) 	cTable[a].offset = cTable[a-1].offset;
 		
 		// rad & offset
 		float MaxY = sGroup[a].Dimensions.yb;
@@ -744,7 +955,11 @@ void createTableC()
 			if (cTable[a].res <= 4) cTable[a].res = 4; // always set res to a minimum of 4
 		}
 		else if (cTable[a].type==1) { // grid Circle Type
-		
+			
+			#if DEBUG > 0
+			if(dev) cout << endl << "          curve#" << a << endl;	
+			#endif
+			
 			if (a==0&&cTable[a].res<=0)
 				cTable[a].res = 12;							// if first res is 0, set to minimum of 12
 
@@ -752,10 +967,19 @@ void createTableC()
 				
 			else if (a>0&&cTable[a].res<=0)					// if x-th res is 0, get res based on previous res
 			{
+				//float m = cTable[a].rad/cTable[a-1].rad;	// old method pre 15. Dec 2023
+				//int temp = ((m/2)*cTable[a-1].res);		// ^
 				float m = cTable[a].rad/cTable[a-1].rad;
-				int temp = ((m/2)*cTable[a-1].res);
-				CheckFixRes(temp, 2);
-				cTable[a].res = temp;						// if x-th res is 0, set it to value based on the current and last radius+offset
+				int temp = (m*cTable[a-1].res)/4.0;
+				int temp2 = temp*4;
+				
+				#if DEBUG > 0
+				if(dev) cout << "          rad: " << cTable[a].rad <<endl << "          last rad:"<< cTable[a-1].rad <<endl << "          result m: " << m << endl;
+				if(dev) cout << "          temp: " << temp << endl;
+				#endif
+				
+				CheckFixRes(temp2, 2);
+				cTable[a].res = temp2;						// if x-th res is 0, set it to value based on the current and last radius+offset
 			}
 			else if (cTable[a].res>0&&cTable[a].res<7) 		// res 1..6 (12..384)
 			{
@@ -772,6 +996,9 @@ void createTableC()
 			else if (cTable[a].res>=7&&cTable[a].res<=384)		// res 12..384
 				CheckFixRes(cTable[a].res, 2);
 		}
+		#if DEBUG > 0
+		if(dev) cout << "          final res: " << cTable[a].res << endl << endl;
+		#endif
 		
 		// heightmode
 		if 		(a==0&&cTable[0].heightmode<0) cTable[0].heightmode = dTable[0].heightmode;
@@ -851,23 +1078,23 @@ void createTableC()
 
 		
 		//transit_tri
-		if 		(a==0&&cTable[0].transit_tri<0) cTable[0].transit_tri = dTable[0].transit_tri;
-		else if (a>0&&cTable[a].transit_tri<0)  cTable[a].transit_tri = cTable[a-1].transit_tri;
+		if 		(a==0&&cTable[0].transit_tri<0) 	cTable[0].transit_tri = dTable[0].transit_tri;
+		else if (a>0&&cTable[a].transit_tri<0)  	cTable[a].transit_tri = cTable[a-1].transit_tri;
 
 		
 		//transit_round
-		if 		(a==0&&cTable[0].transit_round<0) cTable[0].transit_round = dTable[0].transit_round;
-		else if (a>0&&cTable[a].transit_round<0)  cTable[a].transit_round = cTable[a-1].transit_round;
+		if 		(a==0&&cTable[0].transit_round<0) 	cTable[0].transit_round = dTable[0].transit_round;
+		else if (a>0&&cTable[a].transit_round<0) 	cTable[a].transit_round = cTable[a-1].transit_round;
 
 		
 		// gaps
-		if 		(a==0&&cTable[0].gaps<0) 	cTable[0].gaps = dTable[0].gaps;
-		else if (a>0&&cTable[a].gaps<0) 	cTable[a].gaps = cTable[a-1].gaps;
+		if 		(a==0&&cTable[0].gaps<0) 			cTable[0].gaps = dTable[0].gaps;
+		else if (a>0&&cTable[a].gaps<0) 			cTable[a].gaps = cTable[a-1].gaps;
 
 		
 		// scale
-		if 		(a==0&&!cTable[0].scale.IsSet) 	cTable[0].scale = dTable[0].scale;
-		else if (a>0&&!cTable[a].scale.IsSet) 	cTable[a].scale = dTable[0].scale;
+		if 		(a==0&&!cTable[0].scale.IsSet) 		cTable[0].scale = dTable[0].scale;
+		else if (a>0&&!cTable[a].scale.IsSet) 		cTable[a].scale = dTable[0].scale;
 
 		
 		// scale_src
@@ -876,8 +1103,8 @@ void createTableC()
 
 		
 		// rot
-		if 		(a==0&&!cTable[0].rot.IsSet) 	cTable[0].rot = dTable[0].rot;
-		else if (a>0&&!cTable[a].rot.IsSet) 	cTable[a].rot = dTable[0].rot;
+		if 		(a==0&&!cTable[0].rot.IsSet) 		cTable[0].rot = dTable[0].rot;
+		else if (a>0&&!cTable[a].rot.IsSet) 		cTable[a].rot = dTable[0].rot;
 
 		
 		// rot_src
@@ -886,26 +1113,26 @@ void createTableC()
 
 		
 		// move
-		if 		(a==0&&!cTable[0].move.IsSet) 	cTable[0].move = dTable[0].move;
-		else if (a>0&&!cTable[a].move.IsSet) 	cTable[a].move = dTable[0].move;
+		if 		(a==0&&!cTable[0].move.IsSet) 		cTable[0].move = dTable[0].move;
+		else if (a>0&&!cTable[a].move.IsSet) 		cTable[a].move = dTable[0].move;
 
 		
 		// gaplen
-		if 		(a==0&&cTable[0].gaplen<0) 	cTable[0].gaplen = dTable[0].gaplen;
-		else if (a>0&&cTable[a].gaplen<0) 	cTable[a].gaplen = cTable[a-1].gaplen;
+		if 		(a==0&&cTable[0].gaplen<0) 			cTable[0].gaplen = dTable[0].gaplen;
+		else if (a>0&&cTable[a].gaplen<0) 			cTable[a].gaplen = cTable[a-1].gaplen;
 
 		
 		// d_enable
-		if 		(a==0&&cTable[0].d_enable<0) 	cTable[0].d_enable = dTable[0].d_enable;
-		else if (a>0&&cTable[a].d_enable<0) 	cTable[a].d_enable = cTable[a-1].d_enable;
+		if 		(a==0&&cTable[0].d_enable<0) 		cTable[0].d_enable = dTable[0].d_enable;
+		else if (a>0&&cTable[a].d_enable<0) 		cTable[a].d_enable = cTable[a-1].d_enable;
 
 		// c_enable
-		if 		(a==0&&cTable[0].c_enable<0) 	cTable[0].c_enable = dTable[0].c_enable;
-		else if (a>0&&cTable[a].c_enable<0) 	cTable[a].c_enable = cTable[a-1].c_enable;
+		if 		(a==0&&cTable[0].c_enable<0) 		cTable[0].c_enable = dTable[0].c_enable;
+		else if (a>0&&cTable[a].c_enable<0) 		cTable[a].c_enable = cTable[a-1].c_enable;
 		
 		// d_autoyaw
-		if 		(a==0&&cTable[0].d_autoyaw<0) 	cTable[0].d_autoyaw = dTable[0].d_autoyaw;
-		else if (a>0&&cTable[a].d_autoyaw<0) 	cTable[a].d_autoyaw = cTable[a-1].d_autoyaw;
+		if 		(a==0&&cTable[0].d_autoyaw<0) 		cTable[0].d_autoyaw = dTable[0].d_autoyaw;
+		else if (a>0&&cTable[a].d_autoyaw<0) 		cTable[a].d_autoyaw = cTable[a-1].d_autoyaw;
 
 		
 		// d_autopitch
@@ -914,8 +1141,8 @@ void createTableC()
 
 		
 		// d_pos
-		if 		(a==0&&cTable[0].d_pos<0) 	cTable[0].d_pos = dTable[0].d_pos;
-		else if (a>0&&cTable[a].d_pos<0) 		cTable[a].d_pos = cTable[a-1].d_pos;
+		if 		(a==0&&cTable[0].d_pos<0) 			cTable[0].d_pos = dTable[0].d_pos;
+		else if (a>0&&cTable[a].d_pos<0) 			cTable[a].d_pos = cTable[a-1].d_pos;
 
 		
 		// d_separate
@@ -940,7 +1167,7 @@ void createTableC()
 		
 		// d_pos_rand
 		if 		(a==0&&!cTable[0].d_pos_rand.IsSet) 	cTable[0].d_pos_rand = dTable[0].d_pos_rand;
-		else if (a>0&&!cTable[a].d_pos_rand.IsSet) 	cTable[a].d_pos_rand = cTable[a-1].d_pos_rand;
+		else if (a>0&&!cTable[a].d_pos_rand.IsSet) 		cTable[a].d_pos_rand = cTable[a-1].d_pos_rand;
 
 		
 		// d_rotz_rand
@@ -954,13 +1181,13 @@ void createTableC()
 
 		
 		// d_draw
-		if 		(a==0&&cTable[0].d_draw<0) 	cTable[0].d_draw = dTable[0].d_draw;
-		else if (a>0&&cTable[a].d_draw<0) 	cTable[a].d_draw = cTable[a-1].d_draw;
+		if 		(a==0&&cTable[0].d_draw<0) 			cTable[0].d_draw = dTable[0].d_draw;
+		else if (a>0&&cTable[a].d_draw<0) 			cTable[a].d_draw = cTable[a-1].d_draw;
 
 		
 		// d_skip
-		if 		(a==0&&cTable[0].d_skip<0) 	cTable[0].d_skip = dTable[0].d_skip;
-		else if (a>0&&cTable[a].d_skip<0) 	cTable[a].d_skip = cTable[a-1].d_skip;
+		if 		(a==0&&cTable[0].d_skip<0) 			cTable[0].d_skip = dTable[0].d_skip;
+		else if (a>0&&cTable[a].d_skip<0) 			cTable[a].d_skip = cTable[a-1].d_skip;
 
 		
 		// d_circlemode
@@ -968,21 +1195,40 @@ void createTableC()
 		else if (a>0&&cTable[a].d_circlemode<0) 	cTable[a].d_circlemode = cTable[a-1].d_circlemode;
 
 		// d_draw_rand
-		if 		(a==0&&cTable[0].d_draw_rand<0) cTable[0].d_draw_rand = dTable[0].d_draw_rand;
-		else if (a>0&&cTable[a].d_draw_rand<0) 	cTable[a].d_draw_rand = cTable[a-1].d_draw_rand;
+		if 		(a==0&&cTable[0].d_draw_rand<0) 	cTable[0].d_draw_rand = dTable[0].d_draw_rand;
+		else if (a>0&&cTable[a].d_draw_rand<0) 		cTable[a].d_draw_rand = cTable[a-1].d_draw_rand;
 
 
 		// p_evenout
-		if 		(a==0&&cTable[0].p_evenout<0) cTable[0].p_evenout = dTable[0].p_evenout;
-		else if (a>0&&cTable[a].p_evenout<0) 	cTable[a].p_evenout = cTable[a-1].p_evenout;
+		if 		(a==0&&cTable[0].p_evenout<0) 		cTable[0].p_evenout = dTable[0].p_evenout;
+		else if (a>0&&cTable[a].p_evenout<0) 		cTable[a].p_evenout = cTable[a-1].p_evenout;
 
 		
 		// flatcircle
-		if 		(a==0&&cTable[0].flatcircle<0) cTable[0].flatcircle = dTable[0].flatcircle;
-		else if (a>0&&cTable[a].flatcircle<0) 	cTable[a].flatcircle = cTable[a-1].flatcircle;
-
-		//if (dev) cout << "     Arc " << a << " rad: " << cTable[a].rad << "\t offset: " << cTable[a].offset << "\t type: " << cTable[a].type << "\t res: " << cTable[a].res << "\t shift: " << cTable[a].shift << "\t height: " << cTable[a].height /*<< "\t tri: " << cTable[a].tri << "\t ramp: " << cTable[a].ramp << "\t round: " << cTable[a].round*/ << endl;
-		if (dev) { cTable[a].Print(); getch(); }
+		if 		(a==0&&cTable[0].flatcircle<0) 		cTable[0].flatcircle = dTable[0].flatcircle;
+		else if (a>0&&cTable[a].flatcircle<0) 		cTable[a].flatcircle = cTable[a-1].flatcircle;
+		
+		
+		// hstretch new since v0.8 update Dec 2023
+		if 		(a==0&&cTable[0].hstretch<0) 		cTable[0].hstretch = dTable[0].hstretch;
+		else if (a>0&&cTable[a].hstretch<0) 		cTable[a].hstretch = cTable[a-1].hstretch;
+		
+		// hstretchamt new since v0.8 update Dec 2023
+		if 		(a==0&&cTable[0].hstretchamt<0) 	cTable[0].hstretchamt = dTable[0].hstretchamt;
+		else if (a>0&&cTable[a].hstretchamt<0) 		cTable[a].hstretchamt = cTable[a-1].hstretchamt;
+		
+		// hshiftoffset new since v0.8 update Dec 2023
+		if 		(a==0&&cTable[0].hshiftoffset==-1) 	cTable[0].hshiftoffset = dTable[0].hshiftoffset;
+		else if (a>0&&cTable[a].hshiftoffset==-1) 	cTable[a].hshiftoffset = cTable[a-1].hshiftoffset;
+		
+		// hstretchamt new since v0.8 update Dec 2023
+		if 		(a==0&&cTable[0].hshiftsrc<0) 		cTable[0].hshiftsrc = dTable[0].hshiftsrc;
+		else if (a>0&&cTable[a].hshiftsrc<0) 		cTable[a].hshiftsrc = cTable[a-1].hshiftsrc;
+		
+		
+		#if DEBUG > 0
+		if (dev) { cTable[a].Print(); system("pause"); }
+		#endif
 	}
 }
 

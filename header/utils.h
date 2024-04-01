@@ -7,7 +7,6 @@
 
 #include <string>
 #include <vector>
-#include <conio.h>
 
 using namespace std;
 
@@ -15,32 +14,12 @@ struct path_set;
 
 
 
-/* ===== CANVAS CLASS ===== */
-
-struct canvas
-{
-	int p_w = 0;
-	int p_h = 0;
-	vector<string> Pixels;
-	
-	void CreateLine(float scale, vertex V1, vertex V2);
-	void PasteLine(vector<vertex>&Line);
-	void Print();
-
-	canvas() {};
-	canvas(int w, int h);
-	~canvas() {}
-};
-
-
-
-
 /* ===== NUMBER LIST GENERATOR FUNCTIONS ===== */
 
-void CreateSlopeLinear(float step, int size, vector<float>&List);
-void CreateSlopeSmooth(float step, int size, vector<float>&List);
-void CreateSlopeRandom(float step, int size, vector<float>&List);
+void CreateSlopeLinear(float height, int size, vector<float>&List, vector<float> &Lengths, int g);
+void CreateSlopeRandom(float height, int size, vector<float>&List, int g);
 void CreateSlopeSpline(path_set &Spline, int size, vector<float>&List, vector<float>&Steps);
+void CreateSlopeEasings(float height, int size, vector<float>&List, vector<float> &Lengths, int g);
 
 /* ===== FILE & STRING HANDLING FUNCTIONS ===== */
 
@@ -67,6 +46,7 @@ bool IsNULL(double n);
 bool CompareFloatDeci(float N1, float N2, int deciplace);
 float GetRandInRange(float min, float max);
 int IsBorderliner(float n, int prec);
+float easing(float x, int mode);
 
 /* ===== SMALL MATH FUNCTIONS ===== */
 
