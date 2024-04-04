@@ -46,6 +46,16 @@ using namespace std;
 		certain functions or apply something new to to my code, but I kept trying
 		and trying until it finally worked as intended.
 	
+	====== EXTERNAL CODE I USED IN THIS PROJECT ======
+		
+		https://www.geeksforgeeks.org/gaussian-elimination/
+		by Yash Varyani
+		https://www.geeksforgeeks.org/legal/copyright-information/
+		
+		Relevant files:
+		- LSE.h
+		- LSE.cppp
+	
 	====== RESOURCES ======
 	
 		- Euler Angles: https://www.geometrictools.com/Documentation/EulerAngles.pdf
