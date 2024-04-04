@@ -7,6 +7,8 @@
 using namespace std;
 
 //https://www.geeksforgeeks.org/gaussian-elimination/
+//https://www.geeksforgeeks.org/legal/copyright-information/
+
 
 #define N 3        // Number of unknowns 
 

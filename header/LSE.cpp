@@ -12,6 +12,7 @@ extern vertex Zero;
 
 
 //https://www.geeksforgeeks.org/gaussian-elimination/
+//https://www.geeksforgeeks.org/legal/copyright-information/
 
 void SetMat(double mat[3][4], face Faces[3])
 {
