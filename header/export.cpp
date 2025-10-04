@@ -1,9 +1,10 @@
+#include "export.h"
 #include "file.h"
-//#include "settings.h"
 #include "group.h"
 #include "utils.h"
 #include "face.h"
 #include "RMF.h"
+#include "messages.h"
 
 #include <iostream>
 #include <string>
@@ -11,14 +12,17 @@
 #include <fstream>
 #include <iomanip> // precision
 
+#define DEBUG 0
+
 using namespace std;
 
-//enum keytype;
+extern file *gFile;
 extern ctable *cTable;
 extern group *mGroup;
 extern group *sGroup;
 extern group *bGroup;
 extern group_set *DetailSet;
+extern group_set *sDetailSet;
 extern bool G_DEV;
 extern string ROOT;
 extern bool ISROOTED;
@@ -28,34 +32,36 @@ extern bool ISROOTED;
 
 
 // Export Brush to .rmf-File (Valve Hammer Editors Rich Map Format)
-void file::ExportToRMF()
+void ExportToRMF()
 {
 	#if DEBUG > 0
 	bool dev = 0;
 	if (dev) cout << " Exporting Brush to .rmf-File..." << endl;
 	#endif
 	
+	file &File = *gFile;
+	
 	// custom output file
 	string OutputFilePath;
-	if (target!="ERR"&&target!="UNSET"&&target.length()>0) {
-		OutputFilePath = target;
+	if (File.target!="ERR"&&File.target!="UNSET"&&File.target.length()>0) {
+		OutputFilePath = File.target;
 		
 		// if user defined output path + filename has no RMF file extension, add one by replacing the existing file extension
 		if(OutputFilePath.substr(OutputFilePath.length()-3,3)!="rmf")
 		OutputFilePath.replace(OutputFilePath.length()-3,3,"rmf");
 	}
 	else
-		OutputFilePath = p_path+name+"_curved.rmf";
+		OutputFilePath = File.p_path+File.name+"_curved.rmf";
 	
 	// Console Info Message
-	cout << OutputFilePath;
+	MESSENGER( MSG_EXPO_FILENAME, vector<string>{OutputFilePath}, vector<int>{}, vector<float>{} );
 	
 	// Skipping Brushes with only Nullfaces
 	for (int g = 0; g < mGroup->t_arcs; g++)
 	{
 		group &Group = bGroup[g];
 		if (cTable[g].skipnull>0 && cTable[g].rmf>0)
-		Group.CheckNULLBrushes();
+		Group.CheckNULLBrushes(1);
 	}
 	
 	// reset exported brush variable (from when curve was supported to map-file recently, which would otherwise lead to no exported brushes for type 2/3)
@@ -113,7 +119,7 @@ void file::ExportToRMF()
 				brush &Brush = Group.Brushes[b];
 				int sec = Brush.SecID;
 				
-				if (Brush.entID==0 && Group.IsSecInRange(sec) && Brush.draw)  // custom range (e.g. 0 to 100%) determined by range_start/end command
+				if (Brush.entID==0 && Group.IsSecInRange(sec) && Brush.draw && Brush.valid)  // custom range (e.g. 0 to 100%) determined by range_start/end command
 				{
 					if (Brush.Tri==nullptr)
 					{
@@ -161,9 +167,9 @@ void file::ExportToRMF()
 		if ( cTable[g].rmf>0 && cTable[g].c_enable>0 )
 		if ( cTable[g].type!=2 && cTable[g].type!=3 )
 		{
-			for (int e = 0; e < EntityList.size(); e++) // entity loop
+			for (int e = 0; e < File.EntityList.size(); e++) // entity loop
 			{
-				entity &Entity = EntityList[e];
+				entity &Entity = File.EntityList[e];
 				
 				// current solid entity header
 				if ( Entity.type==1 && !Entity.IsDetail )
@@ -178,7 +184,7 @@ void file::ExportToRMF()
 						brush &Brush = bGroup[g].Brushes[b];
 						int sec = Brush.SecID;
 						
-						if (Brush.entID==e && Group.IsSecInRange(sec) && Brush.draw)
+						if (Brush.entID==e && Group.IsSecInRange(sec) && Brush.draw && Brush.valid)
 						{
 							if (Brush.Tri==nullptr)
 							{
@@ -216,14 +222,14 @@ void file::ExportToRMF()
 		else if ( cTable[g].type==2||cTable[g].type==3 )
 		{
 			int t_orients 	= 1;
-			int t_paths 	= PathList[g].t_paths;
+			int t_paths 	= File.PathList[g].t_paths;
 			// count total orientations and assign orient ID to each Brush
 			for (int b = 1, o=0; b < bGroup[g].t_brushes; b++)
 			{
 				brush &Brush = bGroup[g].Brushes[b];
 				brush &LBrush = bGroup[g].Brushes[b-1];
 				
-				if (Brush.draw)
+				if (Brush.draw && Brush.valid)
 				{
 					int sec = Brush.SecID;
 					
@@ -245,9 +251,9 @@ void file::ExportToRMF()
 			// write spline brushes
 			for (int o = 0; o < t_orients; o++) // orientation loop
 			for (int p = 0; p < t_paths; p++) // paths loop
-			for (int e = 0; e < EntityList.size(); e++) // entity loop
+			for (int e = 0; e < File.EntityList.size(); e++) // entity loop
 			{
-				entity &Entity = EntityList[e];
+				entity &Entity = File.EntityList[e];
 				
 				// current solid entity header
 				if (Entity.type==1)
@@ -262,7 +268,7 @@ void file::ExportToRMF()
 						brush &Brush = bGroup[g].Brushes[b];
 						int sec = Brush.SecID;
 						
-						if (!Brush.exported && Brush.entID==e && ((cTable[g].psplit==1&&Brush.oID==o)||(cTable[g].psplit==0)) && Brush.pID==p && Group.IsSecInRange(sec) && Brush.draw)
+						if (!Brush.exported && Brush.entID==e && ((cTable[g].psplit==1&&Brush.oID==o)||(cTable[g].psplit==0)) && Brush.pID==p && Group.IsSecInRange(sec) && Brush.draw && Brush.valid)
 						{
 							if (!wrote_head)
 							{
@@ -387,71 +393,44 @@ void file::ExportToRMF()
 			
 			if ( dGroup.d_enable==1 )
 			{
-				for (int e = 0; e < EntityList.size(); e++) // entity loop
+				for (int e = 0; e < File.EntityList.size(); e++) // entity loop
 				{
-					entity &Entity = EntityList[e];
+					entity &Entity = File.EntityList[e];
 					
 					if ( Entity.dID==dg && Entity.type == 1 && Entity.t_brushes>0 && Entity.IsDetail )
 					{
 						// export detail objects as whole objects
 						if ( dGroup.d_separate==0 )
 						{
-							// current solid entity header
-							RMF_Buffer.WriteEntityHeader(Entity);
-							int n_solids = 0;
-							unsigned long pos_n_solids = RMF_Buffer.WriteCounterGetPos();
-							
-							// Iterate Brushes
+							// check if there are any brushes to export for this section and detail object at all (this fixes EMPTY ENTITIES being exported)
+							bool BrushesExist = 0;
 							for (int b = 0; b < dGroup.t_brushes; b++)
 							{
 								brush &Brush = dGroup.Brushes[b];
 								int sec = Brush.SecID;
+								
 								if ( Brush.entID==e && Group.IsSecInRange(sec) && Brush.draw && !Brush.IsOrigin )
-								{
-									#if DEBUG > 0
-									if(dev) cout << " EntityGroup " << dg << " Brush " << b << " entID " << Brush.entID << " n_solids " << n_solids << endl;
-									#endif
-									
-									RMF_Buffer.WriteSolid(Brush);
-									n_solids++;
-								}
+									BrushesExist = 1;
 							}
 							
-							RMF_Buffer.WriteEntityFooter(Entity); // finish current solid entity
-							RMF_Buffer.UpdateAtPosAndReturn(pos_n_solids, n_solids); // Update number of World Brushes
-							n_obj++;
-						}
-						else // export detail objects as individual solid objects
-						{
-							for (int s=0; s<bGroup[g].sections; s++)
+							if(BrushesExist)
 							{
-								entity EntityN;
-								EntityN.CopySimple(Entity);
-								
-								if ( dGroup.d_autoname>0 ) {
-									if( Entity.key_target!="" ) {
-										string k_target_name = "target";
-										string k_target_value = Entity.key_target+"_"+to_string(s);
-										ReplaceKeyInList(EntityN.Keys_Original, k_target_name, k_target_value);
-									}
-									if( Entity.key_targetname!="" ) {
-										string k_targetname_name = "targetname";
-										string k_targetname_value = Entity.key_targetname+"_"+to_string(s);
-										ReplaceKeyInList(EntityN.Keys_Original, k_targetname_name, k_targetname_value);
-									}
-								}
-								
+								// current solid entity header
 								RMF_Buffer.WriteEntityHeader(Entity);
 								int n_solids = 0;
 								unsigned long pos_n_solids = RMF_Buffer.WriteCounterGetPos();
 								
+								// Iterate Brushes
 								for (int b = 0; b < dGroup.t_brushes; b++)
 								{
 									brush &Brush = dGroup.Brushes[b];
 									int sec = Brush.SecID;
-									
-									if (sec==s && Brush.entID==e && Group.IsSecInRange(sec) && Brush.draw && !Brush.IsOrigin)
+									if ( Brush.entID==e && Group.IsSecInRange(sec) && Brush.draw && !Brush.IsOrigin )
 									{
+										#if DEBUG > 0
+										if(dev) cout << " EntityGroup " << dg << " Brush " << b << " entID " << Brush.entID << " n_solids " << n_solids << endl;
+										#endif
+										
 										RMF_Buffer.WriteSolid(Brush);
 										n_solids++;
 									}
@@ -460,6 +439,61 @@ void file::ExportToRMF()
 								RMF_Buffer.WriteEntityFooter(Entity); // finish current solid entity
 								RMF_Buffer.UpdateAtPosAndReturn(pos_n_solids, n_solids); // Update number of World Brushes
 								n_obj++;
+							}
+						}
+						else // export detail objects as individual solid objects
+						{
+							for (int s=0; s<bGroup[g].sections; s++)
+							{
+								// check if there are any brushes to export for this section and detail object at all (this fixes EMPTY ENTITIES being exported)
+								bool BrushesExist = 0;
+								for (int b = 0; b < dGroup.t_brushes; b++)
+								{
+									brush &Brush = dGroup.Brushes[b];
+									int sec = Brush.SecID;
+									
+									if (sec==s && Brush.entID==e && Group.IsSecInRange(sec) && Brush.draw && !Brush.IsOrigin)
+										BrushesExist = 1;
+								}
+								
+								if(BrushesExist)
+								{
+									entity EntityN;
+									EntityN.CopySimple(Entity);
+									
+									if ( dGroup.d_autoname>0 ) {
+										if( Entity.key_target!="" ) {
+											string k_target_name = "target";
+											string k_target_value = Entity.key_target+"_"+to_string(s);
+											ReplaceKeyInList(EntityN.Keys_Original, k_target_name, k_target_value);
+										}
+										if( Entity.key_targetname!="" ) {
+											string k_targetname_name = "targetname";
+											string k_targetname_value = Entity.key_targetname+"_"+to_string(s);
+											ReplaceKeyInList(EntityN.Keys_Original, k_targetname_name, k_targetname_value);
+										}
+									}
+									
+									RMF_Buffer.WriteEntityHeader(Entity);
+									int n_solids = 0;
+									unsigned long pos_n_solids = RMF_Buffer.WriteCounterGetPos();
+									
+									for (int b = 0; b < dGroup.t_brushes; b++)
+									{
+										brush &Brush = dGroup.Brushes[b];
+										int sec = Brush.SecID;
+										
+										if (sec==s && Brush.entID==e && Group.IsSecInRange(sec) && Brush.draw && !Brush.IsOrigin)
+										{
+											RMF_Buffer.WriteSolid(Brush);
+											n_solids++;
+										}
+									}
+									
+									RMF_Buffer.WriteEntityFooter(Entity); // finish current solid entity
+									RMF_Buffer.UpdateAtPosAndReturn(pos_n_solids, n_solids); // Update number of World Brushes
+									n_obj++;
+								}
 							}
 						}
 					}
@@ -531,7 +565,7 @@ void file::ExportToRMF()
 	if (dev) cout << " Writing World Spawn Entity and Paths..." << endl;
 	#endif
 
-	RMF_Buffer.WriteWorldSpawn(EntityList[0]);
+	RMF_Buffer.WriteWorldSpawn(File.EntityList[0]);
 	RMF_Buffer.WritePaths((int)0);
 	RMF_Buffer.CloseFile();
 }
@@ -539,13 +573,14 @@ void file::ExportToRMF()
 
 
 // Export Brush to .map-File
-void file::ExportToMap()
+void ExportToMap()
 {
 	#if DEBUG > 0
 	bool dev = 0;
 	if (dev) cout << " Exporting Brush to .map-File..." << endl;
 	#endif
 	
+	file &File = *gFile;
 	ofstream mapfile;
 	
 	// custom export file
@@ -554,64 +589,49 @@ void file::ExportToMap()
 	#endif
 	
 	string OutputFilePath;
-	if (target!="ERR"&&target!="UNSET"&&target.length()>0) {
-		if (target!=path_map)
-		OutputFilePath = target;
+	if (File.target!="ERR"&&File.target!="UNSET"&&File.target.length()>0) {
+		if (File.target!=File.path_map)
+		OutputFilePath = File.target;
 		else { // if source filename equals target filename, add _curved to it, to prevent overwriting source file (this can only happen for MAP files)
-			int i = target.find(".map");
+			int i = File.target.find(".map");
 			if (i!=-1)
-			OutputFilePath = target.substr(0, i) + "_curved.map";
+			OutputFilePath = File.target.substr(0, i) + "_curved.map";
 		}
 	}
 	else
-		OutputFilePath = p_path+name+"_curved.map";
+		OutputFilePath = File.p_path+File.name+"_curved.map";
 	
 	// Console Info Message
-	#if DEBUG > 0
-	if (dev) cout << " Console Info Message..." << endl;
-	#endif
-	cout << OutputFilePath;
+	MESSENGER( MSG_EXPO_FILENAME, vector<string>{OutputFilePath}, vector<int>{}, vector<float>{} );
 	
 	// append
 	string OutputFileContent;
 	string OutputFileContentWorld;
 	string OutputFileContentEntities;
-	if (append&&CheckIfFileExists(OutputFilePath))
+	if (File.append&&CheckIfFileExists(OutputFilePath))
 	{
 		OutputFileContent 			= LoadTextFile(OutputFilePath);
-		OutputFileContentWorld 		= GetMapWorld(OutputFileContent);
-		OutputFileContentEntities 	= GetMapEnts(OutputFileContent);
-	} else append = 0;
-	
-	#if DEBUG > 0
-	if (dev) cout << " append " << cTable[0].append << " target len " << OutputFileContent.length() << " worldspawn len " << OutputFileContentWorld.length() << " entities len " << OutputFileContentEntities.length() << endl;
-	#endif
+		OutputFileContentWorld 		= File.GetMapWorld(OutputFileContent);
+		OutputFileContentEntities 	= File.GetMapEnts(OutputFileContent);
+	} else File.append = 0;
 	
 	// Skipping Brushes with only Nullfaces
 	for (int g = 0; g < mGroup->t_arcs; g++)
 	{
 		if (cTable[g].skipnull>0 && cTable[g].map>0)
-		bGroup[g].CheckNULLBrushes();
+		bGroup[g].CheckNULLBrushes(1);
 	}
 	
 	// Export to file
 	mapfile.open(OutputFilePath);
 	
 	// Write worldspawn header
-	#if DEBUG > 0
-	if (dev) cout << " Worldspawn header..." << endl;
-	#endif
-
-	if (append)
+	if (File.append)
 	mapfile << OutputFileContentWorld;
 	else
-	mapfile << EntityList[0].content.substr(0, EntityList[0].head_end) << endl;
+	mapfile << File.EntityList[0].content.substr(0, File.EntityList[0].head_end) << endl;
 	
 	// Write all world brushes first (all arcs)
-	#if DEBUG > 0
-	if (dev) cout << " Writing all world brushes first (all arcs)..." << endl;
-	#endif
-
 	// Bounding Boxes
 	for (int g = 0; g < mGroup->t_arcs; g++)
 	{
@@ -660,12 +680,8 @@ void file::ExportToMap()
 				brush &Brush = bGroup[g].Brushes[b];
 				int sec = Brush.SecID;
 				
-				if (Brush.entID==0 && Group.IsSecInRange(sec) && Brush.draw)  // custom range (e.g. 0 to 100%) determined by range_start/end command
+				if (Brush.entID==0 && Group.IsSecInRange(sec) && Brush.draw && Brush.valid && Brush.t_faces>=5)  // custom range (e.g. 0 to 100%) determined by range_start/end command
 				{
-					#if DEBUG > 0
-					if (dev) cout << "  Writing Brush " << b << "..." << endl;
-					#endif
-					
 					if (Brush.Tri==nullptr)
 					{
 						mapfile << "{" << endl;
@@ -707,10 +723,6 @@ void file::ExportToMap()
 					// Gap of current Brush
 					if (cTable[g].gaps>0&&Brush.Gap!=nullptr)
 					{
-						#if DEBUG > 0
-						if (dev) cout << "   Writing Gap Brush..." << endl;
-						#endif
-						
 						brush &Gap = *Brush.Gap;
 						mapfile << "{" << endl;
 						for (int f = 0; f < Gap.t_faces; f++)
@@ -728,25 +740,46 @@ void file::ExportToMap()
 	}
 	mapfile << "}" << endl; // finish world brushes
 	
-	if (append)
+	if (File.append)
 	mapfile << OutputFileContentEntities;
 
 	// write solid entities
-	#if DEBUG > 0
-	if (dev) cout << " Writing solid entities..." << endl;
-	#endif
-	
 	for (int g = 0; g < mGroup->t_arcs; g++)
 	{
 		group &Group = bGroup[g];
 		
-		if (cTable[g].type!=2&&cTable[g].type!=3 && cTable[g].map>0 && cTable[g].c_enable>0)
-		for (int e = 0; e < EntityList.size(); e++) // entity loop
+		// check if there are valid brushes in entities at all
+		vector<bool> EntityHasBrushes(File.EntityList.size());
+		
+		for (int e = 0; e < File.EntityList.size(); e++)
 		{
-			entity &Entity = EntityList[e];
+			entity &Entity = File.EntityList[e];
+			EntityHasBrushes.push_back(0);
+			
+			int bcntr = 0;
+			for (int b = 0; b < Group.t_brushes; b++)
+			{
+				brush &Brush = Group.Brushes[b];
+				int sec = Brush.SecID;
+				
+				if (Brush.entID==e && Group.IsSecInRange(sec) && Brush.draw && Brush.valid && Brush.t_faces>=5)
+				{
+					bcntr++;
+				}
+			}
+			Entity.t_brushes = bcntr;
+			if(bcntr>0) {EntityHasBrushes[e] = 1;}
+			else 		{EntityHasBrushes[e] = 0;}
+		}
+		
+		
+		if (cTable[g].type!=2&&cTable[g].type!=3 && cTable[g].map>0 && cTable[g].c_enable>0)
+		for (int e = 0; e < File.EntityList.size(); e++) // entity loop
+		{
+			entity &Entity = File.EntityList[e];
 			
 			// current solid entity header
-			if ( Entity.type==1 && !Entity.IsDetail )
+			if ( Entity.type==1 && !Entity.IsDetail && EntityHasBrushes[e])
 			{
 				mapfile << Entity.content.substr(0, Entity.head_end) << "\n";
 				//cout << "Arc #"<<g<<" Entity ID " << e << " Entity Type " << Entity.type << endl;
@@ -757,7 +790,7 @@ void file::ExportToMap()
 					brush &Brush = Group.Brushes[b];
 					int sec = Brush.SecID;
 					
-					if (Brush.entID==e && Group.IsSecInRange(sec) && Brush.draw)
+					if (Brush.entID==e && Group.IsSecInRange(sec) && Brush.draw && Brush.valid && Brush.t_faces>=5)
 					{
 						//cout << "Brush.SecID: " << Brush.SecID << ", range: " << range << endl;
 						if (Brush.Tri==nullptr)
@@ -801,10 +834,6 @@ void file::ExportToMap()
 						// Gap of current Brush
 						if (cTable[g].gaps>0&&Brush.Gap!=nullptr)
 						{
-							#if DEBUG > 0
-							if (dev) cout << "   Writing Gap Brush..." << endl;
-							#endif
-							
 							brush &Gap = *Brush.Gap;
 							mapfile << "{" << endl;
 							for (int f = 0; f < Gap.t_faces; f++)
@@ -824,7 +853,7 @@ void file::ExportToMap()
 		else if ( (cTable[g].type==2||cTable[g].type==3) && cTable[g].map>0 && cTable[g].c_enable>0)
 		{
 			int t_orients 	= 1;
-			int t_paths 	= PathList[g].t_paths;
+			int t_paths 	= File.PathList[g].t_paths;
 			// count total orientations and assign orient ID to each Brush
 			for (int b = 1, o=0; b < bGroup[g].t_brushes; b++)
 			{
@@ -853,12 +882,12 @@ void file::ExportToMap()
 			// write spline brushes
 			for (int o = 0; o < t_orients; o++) // orientation loop
 			for (int p = 0; p < t_paths; p++) // paths loop
-			for (int e = 0; e < EntityList.size(); e++) // entity loop
+			for (int e = 0; e < File.EntityList.size(); e++) // entity loop
 			{
-				entity &Entity = EntityList[e];
+				entity &Entity = File.EntityList[e];
 				
 				// current solid entity header
-				if (Entity.type==1)
+				if (Entity.type==1 && EntityHasBrushes[e])
 				{
 					bool wrote_head = 0;
 					bool wrote_foot = 0;
@@ -868,11 +897,7 @@ void file::ExportToMap()
 						brush &Brush = bGroup[g].Brushes[b];
 						int sec = Brush.SecID;
 						
-						#if DEBUG > 0
-						if(dev)cout << " eID " << Brush.entID << " pID " << Brush.pID << " oID " << Brush.oID << " Draw " << Brush.draw << endl;
-						#endif
-						
-						if (!Brush.exported && Brush.entID==e && ((cTable[g].psplit==1&&Brush.oID==o)||(cTable[g].psplit==0)) && Brush.pID==p && Group.IsSecInRange(sec) && Brush.draw)
+						if (!Brush.exported && Brush.entID==e && ((cTable[g].psplit==1&&Brush.oID==o)||(cTable[g].psplit==0)) && Brush.pID==p && Group.IsSecInRange(sec) && Brush.draw && Brush.valid && Brush.t_faces>=5)
 						{
 							if (!wrote_head)
 							{
@@ -934,9 +959,6 @@ void file::ExportToMap()
 	}
 
 	// Bounding Boxes
-	#if DEBUG > 0
-	if (dev) cout << " Bounding Boxes..." << endl;
-	#endif
 	for (int g = 0; g < mGroup->t_arcs; g++)
 	{
 		group &Group = bGroup[g];
@@ -946,8 +968,8 @@ void file::ExportToMap()
 			vertex O;
 			
 			dimensions AllCombined;
-			if (t_dgroups>0&&bGroup[g].t_brushes>0) AllCombined = DimensionCombine(bGroup[g].Dimensions, DetailSet[g].Dimensions);
-			else if(bGroup[g].t_brushes==0&&t_dgroups>0) AllCombined = DetailSet[g].Dimensions;
+			if (File.t_dgroups>0&&bGroup[g].t_brushes>0) AllCombined = DimensionCombine(bGroup[g].Dimensions, DetailSet[g].Dimensions);
+			else if(bGroup[g].t_brushes==0&&File.t_dgroups>0) AllCombined = DetailSet[g].Dimensions;
 			else AllCombined = bGroup[g].Dimensions;
 			
 			O.x = (AllCombined.xb+AllCombined.xs)/2.0;
@@ -1019,11 +1041,11 @@ void file::ExportToMap()
 			
 			if ( dGroup.d_enable==1 )
 			{
-				for (int e = 0; e < EntityList.size(); e++) // entity loop
+				for (int e = 0; e < File.EntityList.size(); e++) // entity loop
 				{
-					entity &Entity = EntityList[e];
+					entity &Entity = File.EntityList[e];
 					
-					if ( Entity.dID==dg && Entity.type == 1 && Entity.t_brushes>0 && Entity.IsDetail )
+					if ( Entity.dID==dg && Entity.type == 1 && /*Entity.t_brushes>0 &&*/ Entity.IsDetail )
 					{
 						// export detail objects as whole objects
 						if ( dGroup.d_separate==0 )
@@ -1146,16 +1168,229 @@ void file::ExportToMap()
 }
 
 
-// Export Original Map to Map again
-/*void file::ExportToMapO(string p)
+
+
+
+void ExportToObj()
 {
-	if (p=="") p = p_path+name+"_original.map";
+	file &File = *gFile;
+	
+	for (int g = 0; g < mGroup->t_arcs; g++)
+	{
+		group &Group = bGroup[g];
+		
+		if (cTable[g].obj&&Group.valid) // wether or not this arc is being exported to an obj file
+		{
+			ofstream objfile;
+			objfile.open(File.p_path+File.name+"_"+to_string(g+1)+".obj");
+			
+			for (int b = 0; b < Group.t_brushes; b++)
+			{
+				brush &Brush = Group.Brushes[b];
+				int sec = Brush.SecID;
+				
+				if (Group.IsSecInRange(sec) && Brush.draw)  // custom range (e.g. 0 to 90 degree) determined by arc command in settings file
+				{
+					if (Brush.Tri==nullptr)
+					{
+						objfile << "o brush_export" << b << endl;
+						
+						for (int f = 0; f < Brush.t_faces; f++)
+						{
+							face &Face = Brush.Faces[f];
+							int tverts = Face.vcount;
+							
+							if (Face.draw)
+							{
+								for(int v = 0; v < tverts; v++)
+								{
+									objfile << "v " << Face.Vertices[v].x << " " << Face.Vertices[v].y << " " << Face.Vertices[v].z << " ";
+									if(v==0) objfile << "0 1 0" << endl;
+									else if(v==1) objfile << "1 1 0" << endl;
+									else if(v==2) objfile << "1 0 0" << endl;
+									else objfile << endl;
+								}
+								
+								objfile << "f";
+								
+								for(int i = 0; i < tverts; i++)
+								{
+									objfile << " -" << i+1;
+								}
+								
+								objfile << endl << endl;
+							}
+						}
+					}
+					else
+					{
+						for (int bt=0; bt<Brush.t_tri; bt++)
+						{
+							brush &TriBrush = Brush.Tri[bt];
+							objfile << "o brush_export" << b << endl;
+							
+							for (int f = 0; f < TriBrush.t_faces; f++)
+							{
+								face &Face = TriBrush.Faces[f];
+								int tverts = Face.vcount;
+								
+								if (Face.draw)
+								{
+									for(int v = 0; v < tverts; v++)
+									{
+										objfile << "v " << Face.Vertices[v].x << " " << Face.Vertices[v].y << " " << Face.Vertices[v].z << " " << endl;
+									}
+									
+									objfile << "f";
+									
+									for(int i = 0; i < tverts; i++)
+									{
+										objfile << " -" << i+1;
+									}
+									
+									objfile << endl << endl;
+								}
+							}
+						}
+					}
+				}
+			}
+			
+			// Detail Objects
+			group_set &Set = DetailSet[g];
+			for (int d=0; d<Set.t_groups; d++)
+			{
+				group &dGroup = Set.Groups[d];
+				for (int b = 0; b < dGroup.t_brushes; b++)
+				{
+					brush &Brush = dGroup.Brushes[b];
+					int sec = Brush.SecID;
+					
+					if ( Group.IsSecInRange(sec) && Brush.draw && Brush.t_faces>0 )
+					{
+						objfile << "o brush_export" << b << endl;
+						
+						for (int f = 0; f < Brush.t_faces; f++)
+						{
+							face &Face = Brush.Faces[f];
+							int tverts = Face.vcount;
+							
+							if (Face.draw)
+							{
+								for(int v = 0; v < tverts; v++) {
+									objfile << "v " << Face.Vertices[v].x << " " << Face.Vertices[v].y << " " << Face.Vertices[v].z << " ";
+									if(v==0) objfile << "0 1 0" << endl;
+									else if(v==1) objfile << "1 1 0" << endl;
+									else if(v==2) objfile << "1 0 0" << endl;
+									else objfile << endl;
+								}
+								
+								objfile << "f";
+								
+								for(int i = 0; i < tverts; i++)
+									objfile << " -" << i+1;
+								
+								objfile << endl << endl;
+							}
+						}
+					}
+				}
+			}
+			
+			// DEV Assets
+			if(G_DEV)
+			for (int b=0; b < Group.DevAssets.size(); b++)
+			{
+				brush &Brush = *Group.DevAssets[b];
+				int sec = Brush.SecID;
+				
+				if ( Group.IsSecInRange(sec) )
+				{
+					objfile << "o brush_export" << b << endl;
+					
+					for (int f = 0; f < Brush.t_faces; f++)
+					{
+						face &Face = Brush.Faces[f];
+						int tverts = Face.vcount;
+						
+						for(int v = 0; v < tverts; v++)
+						{
+							objfile << "v " << Face.Vertices[v].x << " " << Face.Vertices[v].y << " " << Face.Vertices[v].z << " ";
+							if(v==0) objfile << "0 1 0" << endl;
+							else if(v==1) objfile << "1 1 0" << endl;
+							else if(v==2) objfile << "1 0 0" << endl;
+							else objfile << endl;
+						}
+						
+						objfile << "f";
+						
+						for(int i = 0; i < tverts; i++)
+						{
+							objfile << " -" << i+1;
+						}
+						
+						objfile << endl << endl;
+					}
+				}
+			}
+
+			// Gaps
+			if (cTable[g].gaps>0)
+			for (int b = 0; b < Group.t_brushes; b++)
+			{
+				if(Group.Brushes[b].Gap!=nullptr)
+				{
+					brush &Gap = *Group.Brushes[b].Gap;
+					int sec = Gap.SecID;
+	
+					if ( Group.IsSecInRange(sec) )
+					{
+						objfile << "o brush_export" << b << endl;
+						
+						for (int f=0; f<Gap.t_faces; f++)
+						{
+							face &Face = Gap.Faces[f];
+							int tverts = Face.vcount;
+							if (Face.draw)
+							{
+								for(int v = 0; v < tverts; v++)
+								{
+									objfile << "v " << Face.Vertices[v].x << " " << Face.Vertices[v].y << " " << Face.Vertices[v].z << " " << endl;
+								}
+								
+								objfile << "f";
+								
+								for(int i = 0; i < tverts; i++)
+								{
+									objfile << " -" << i+1;
+								}
+								
+								objfile << endl << endl;
+							}
+						}
+						objfile << endl << endl;
+					}
+				}
+			}
+			objfile.close();
+		}
+	}
+}
+
+
+// Export Original Map to Map again
+void ExportToMapO() //(string p)
+{
+	file &File = *gFile;
+	
+	//if (p=="") p = p_path+name+"_original.map";
+	string p = File.p_path+File.name+"_original.map";
 	
 	ofstream mapfile;
 	mapfile.open(p);
 
 	// worldspawn header
-	mapfile << EntityList[0].content.substr(0, EntityList[0].head_end) << endl;
+	mapfile << File.EntityList[0].content.substr(0, File.EntityList[0].head_end) << endl;
 	
 	for (int g = 0; g < mGroup->t_arcs; g++)
 	{
@@ -1200,217 +1435,200 @@ void file::ExportToMap()
 	
 	mapfile << endl;
 	mapfile.close();
-}*/
-
-
-
-
-void file::ExportToObj()
-{
-	for (int g = 0; g < mGroup->t_arcs; g++)
-	{
-		group &Group = bGroup[g];
-		
-		if (cTable[g].obj&&Group.valid) // wether or not this arc is being exported to an obj file
-		{
-			ofstream objfile;
-			objfile.open(p_path+name+"_"+to_string(g+1)+".obj");
-			
-			for (int b = 0; b < Group.t_brushes; b++)
-			{
-				brush &Brush = Group.Brushes[b];
-				int sec = Brush.SecID;
-				
-				if (Group.IsSecInRange(sec) && Brush.draw)  // custom range (e.g. 0 to 90 degree) determined by arc command in settings file
-				{
-					if (Brush.Tri==nullptr)
-					{
-						objfile << "g brush_export" << b << endl;
-						
-						for (int f = 0; f < Brush.t_faces; f++)
-						{
-							face &Face = Brush.Faces[f];
-							int tverts = Face.vcount;
-							
-							if (Face.draw)
-							{
-								for(int v = 0; v < tverts; v++)
-								{
-									objfile << "v " << Face.Vertices[v].x << " " << Face.Vertices[v].y << " " << Face.Vertices[v].z << " ";
-									if(v==0) objfile << "0 1 0" << endl;
-									else if(v==1) objfile << "1 1 0" << endl;
-									else if(v==2) objfile << "1 0 0" << endl;
-									else objfile << endl;
-								}
-								
-								objfile << "f";
-								
-								for(int i = 0; i < tverts; i++)
-								{
-									objfile << " -" << i+1;
-								}
-								
-								objfile << endl << endl;
-							}
-						}
-					}
-					else
-					{
-						for (int bt=0; bt<Brush.t_tri; bt++)
-						{
-							brush &TriBrush = Brush.Tri[bt];
-							objfile << "g brush_export" << b << endl;
-							
-							for (int f = 0; f < TriBrush.t_faces; f++)
-							{
-								face &Face = TriBrush.Faces[f];
-								int tverts = Face.vcount;
-								
-								if (Face.draw)
-								{
-									for(int v = 0; v < tverts; v++)
-									{
-										objfile << "v " << Face.Vertices[v].x << " " << Face.Vertices[v].y << " " << Face.Vertices[v].z << " " << endl;
-									}
-									
-									objfile << "f";
-									
-									for(int i = 0; i < tverts; i++)
-									{
-										objfile << " -" << i+1;
-									}
-									
-									objfile << endl << endl;
-								}
-							}
-						}
-					}
-				}
-			}
-			
-			// Detail Objects
-			group_set &Set = DetailSet[g];
-			for (int d=0; d<Set.t_groups; d++)
-			{
-				group &dGroup = Set.Groups[d];
-				for (int b = 0; b < dGroup.t_brushes; b++)
-				{
-					brush &Brush = dGroup.Brushes[b];
-					int sec = Brush.SecID;
-					
-					if ( Group.IsSecInRange(sec) && Brush.draw )
-					{
-						objfile << "g brush_export" << b << endl;
-						
-						for (int f = 0; f < Brush.t_faces; f++)
-						{
-							face &Face = Brush.Faces[f];
-							int tverts = Face.vcount;
-							
-							if (Face.draw)
-							{
-								for(int v = 0; v < tverts; v++) {
-									objfile << "v " << Face.Vertices[v].x << " " << Face.Vertices[v].y << " " << Face.Vertices[v].z << " ";
-									if(v==0) objfile << "0 1 0" << endl;
-									else if(v==1) objfile << "1 1 0" << endl;
-									else if(v==2) objfile << "1 0 0" << endl;
-									else objfile << endl;
-								}
-								
-								objfile << "f";
-								
-								for(int i = 0; i < tverts; i++)
-									objfile << " -" << i+1;
-								
-								objfile << endl << endl;
-							}
-						}
-					}
-				}
-			}
-			
-			// DEV Assets
-			if(G_DEV)
-			for (int b=0; b < Group.DevAssets.size(); b++)
-			{
-				brush &Brush = *Group.DevAssets[b];
-				int sec = Brush.SecID;
-				
-				if ( Group.IsSecInRange(sec) )
-				{
-					objfile << "g brush_export" << b << endl;
-					
-					for (int f = 0; f < Brush.t_faces; f++)
-					{
-						face &Face = Brush.Faces[f];
-						int tverts = Face.vcount;
-						
-						for(int v = 0; v < tverts; v++)
-						{
-							objfile << "v " << Face.Vertices[v].x << " " << Face.Vertices[v].y << " " << Face.Vertices[v].z << " ";
-							if(v==0) objfile << "0 1 0" << endl;
-							else if(v==1) objfile << "1 1 0" << endl;
-							else if(v==2) objfile << "1 0 0" << endl;
-							else objfile << endl;
-						}
-						
-						objfile << "f";
-						
-						for(int i = 0; i < tverts; i++)
-						{
-							objfile << " -" << i+1;
-						}
-						
-						objfile << endl << endl;
-					}
-				}
-			}
-
-			// Gaps
-			if (cTable[g].gaps>0)
-			for (int b = 0; b < Group.t_brushes; b++)
-			{
-				if(Group.Brushes[b].Gap!=nullptr)
-				{
-					brush &Gap = *Group.Brushes[b].Gap;
-					int sec = Gap.SecID;
-	
-					if ( Group.IsSecInRange(sec) )
-					{
-						objfile << "g brush_export" << b << endl;
-						
-						for (int f=0; f<Gap.t_faces; f++)
-						{
-							face &Face = Gap.Faces[f];
-							int tverts = Face.vcount;
-							if (Face.draw)
-							{
-								for(int v = 0; v < tverts; v++)
-								{
-									objfile << "v " << Face.Vertices[v].x << " " << Face.Vertices[v].y << " " << Face.Vertices[v].z << " " << endl;
-								}
-								
-								objfile << "f";
-								
-								for(int i = 0; i < tverts; i++)
-								{
-									objfile << " -" << i+1;
-								}
-								
-								objfile << endl << endl;
-							}
-						}
-						objfile << endl << endl;
-					}
-				}
-			}
-			objfile.close();
-		}
-	}
 }
 
 
+void ExportGroupToMap(group &Group, string filename)
+{
+	file &File = *gFile;
+	
+	ofstream mapfile;
+	mapfile.open(filename);
 
+	// worldspawn header
+	mapfile << File.EntityList[0].content.substr(0, File.EntityList[0].head_end) << endl;
+	
+	for (int b = 0; b < Group.t_brushes; b++)
+	{
+		brush &Brush = Group.Brushes[b];
+		
+		mapfile << "{" << endl;
+		
+		for (int f = 0; f < Brush.t_faces; f++)
+		{
+			face &Face = Brush.Faces[f];
+			
+			mapfile << setprecision(8) << fixed;
+			mapfile << Face.Vertices[0] << Face.Vertices[1] << Face.Vertices[2];
+			mapfile << setprecision(8) << fixed;
+			
+			mapfile << " " << Face.Texture;
+			mapfile << " [ ";
+			mapfile << Face.VecX.x << " ";
+			mapfile << Face.VecX.y << " ";
+			mapfile << Face.VecX.z << " ";
+			mapfile << Face.ShiftX << " ";
+			mapfile << "] [ ";
+			mapfile << Face.VecY.x << " ";
+			mapfile << Face.VecY.y << " ";
+			mapfile << Face.VecY.z << " ";
+			mapfile << Face.ShiftY << " ";
+			mapfile << "] ";
+			mapfile << Face.Rot << " ";
+			mapfile << Face.ScaleX << " ";
+			mapfile << Face.ScaleY << " ";
+			mapfile << endl;
+		}
+		mapfile << "}" << endl;
+	}
+	mapfile << "}" << endl;
+	
+	mapfile << endl;
+	mapfile.close();
+}
+
+#if DEBUG > 0
+void ExportToObjDev()
+{
+	file &File = *gFile;
+	
+	for (int g = 0; g < mGroup->t_arcs; g++)
+	{
+		group &Group = sGroup[g];
+		
+		ofstream objfile;
+		objfile.open(File.p_path+File.name+"_"+to_string(g+1)+"_dev.obj");
+		
+		for (int b = 0; b < Group.t_brushes; b++)
+		{
+			brush &Brush = Group.Brushes[b];
+			int sec = Brush.SecID;
+			
+			objfile << "g brush_export" << b << endl;
+			
+			for (int f = 0; f < Brush.t_faces; f++)
+			{
+				face &Face = Brush.Faces[f];
+				int tverts = Face.vcount;
+				
+				if (Face.draw)
+				{
+					for(int v = 0; v < tverts; v++)
+					{
+						objfile << "v " << Face.Vertices[v].x << " " << Face.Vertices[v].y << " " << Face.Vertices[v].z << " ";
+						if(v==0) objfile << "0 1 0" << endl;
+						else if(v==1) objfile << "1 1 0" << endl;
+						else if(v==2) objfile << "1 0 0" << endl;
+						else objfile << endl;
+					}
+					
+					objfile << "f";
+					
+					for(int i = 0; i < tverts; i++)
+					{
+						objfile << " -" << i+1;
+					}
+					
+					objfile << endl << endl;
+				}
+			}
+		}
+		
+		objfile.close();
+	}
+}
+#endif
+
+void ExportGroupToObjDev(group &Group, string filename)
+{
+	ofstream objfile;
+	objfile.open(filename); // File.p_path+File.name+"_"+to_string(g+1)+"_dev.obj"
+	
+	/*int actual_Brushes = sizeof(Group.Brushes)/sizeof(brush);
+	cout << " actual_Brushes: " << actual_Brushes << endl;
+	WAIT();*/
+	
+	// Solid Brushes of this detail group
+	for (int b = 0; b<Group.t_brushes; b++)
+	{
+		brush &Brush = Group.Brushes[b];
+		
+		objfile << "o objects_export" << b << endl;
+		
+		for (int f = 0; f < Brush.t_faces; f++)
+		{
+			face &Face = Brush.Faces[f];
+			int tv = Face.vcount;
+			
+			//if (Face.draw)
+			{
+				for(int v = 0; v < tv; v++)
+				{
+					objfile << "v " << Face.Vertices[v].x << " " << Face.Vertices[v].y << " " << Face.Vertices[v].z << endl;
+				}
+				
+				objfile << "f";
+				
+				for(int i = 0; i < tv; i++)
+				{
+					objfile << " -" << i+1;
+				}
+				
+				objfile << endl << endl;
+			}
+		}
+	}
+	
+	objfile.close();
+}
+
+void ExportGroupToObjDev(group_set &Set, string filename)
+{
+	ofstream objfile;
+	objfile.open(filename); // File.p_path+File.name+"_"+to_string(g+1)+"_dev.obj"
+	
+	for (int d = 0; d<Set.t_groups; d++)
+	{
+		group &Group = Set.Groups[d];
+		
+		/*int actual_Brushes = sizeof(Group.Brushes)/sizeof(Group.Brushes[0]);
+		cout << " actual_Brushes: " << actual_Brushes << endl;
+		WAIT();*/
+		
+		// Solid Brushes of this detail group
+		for (int b = 0; b<Group.t_brushes; b++)
+		{
+			brush &Brush = Group.Brushes[b];
+			
+			objfile << "o detail_objects_export" << b << endl;
+			
+			for (int f = 0; f < Brush.t_faces; f++)
+			{
+				face &Face = Brush.Faces[f];
+				int tv = Face.vcount;
+				
+				//if (Face.draw)
+				{
+					for(int v = 0; v < tv; v++)
+					{
+						objfile << "v " << Face.Vertices[v].x << " " << Face.Vertices[v].y << " " << Face.Vertices[v].z << endl;
+					}
+					
+					objfile << "f";
+					
+					for(int i = 0; i < tv; i++)
+					{
+						objfile << " -" << i+1;
+					}
+					
+					objfile << endl << endl;
+				}
+			}
+		}
+	}
+	
+	objfile.close();
+}
 
 
 

@@ -28,6 +28,7 @@ extern vector<WADFile> WADFiles;
 extern group *mGroup;
 extern group *sGroup;
 extern group *mDetailGroup;
+extern group_set *sDetailSet;
 
 
 /* ===== GENERAL FUNCTIONS ===== */
@@ -136,7 +137,6 @@ void GetSettings(string cfgstr, vector<string> &SettingList, vector<string> &lsl
 		found = cfgstr.find_first_of("\n",found+1);
 		ctr++;
 	}
-	//ctr++;
 	
 	// copy line by line into new config string
 	#if DEBUG > 0
@@ -607,6 +607,9 @@ void ctable::FillUnset(ctable &Filler)
 	if (hstretchamt<0)	hstretchamt	= Filler.hstretchamt;
 	if (hshiftoffset==-1)	hshiftoffset	= Filler.hshiftoffset;
 	if (hshiftsrc<0)	hshiftsrc	= Filler.hshiftsrc;
+	if (mapcarve<0)		mapcarve	= Filler.mapcarve;
+	if (mirror<0)		mirror		= Filler.mirror;
+	if (mirror_src<0)	mirror_src	= Filler.mirror_src;
 	
 	if (!scale.IsSet)		scale		= Filler.scale;
 	if (!scale_src.IsSet)	scale_src	= Filler.scale_src;
@@ -618,6 +621,7 @@ void ctable::FillUnset(ctable &Filler)
 	if (!d_movey_rand.IsSet)d_movey_rand= Filler.d_movey_rand;
 	if (!d_scale_rand.IsSet)d_scale_rand= Filler.d_scale_rand;
 	if (!p_scale.IsSet)		p_scale		= Filler.p_scale;
+	if (!gridsize.IsSet)	gridsize	= Filler.gridsize;
 }
 
 void ctable::CopyAll(ctable &Source)
@@ -669,17 +673,21 @@ void ctable::CopyAll(ctable &Source)
 	hstretchamt	= Source.hstretchamt;
 	hshiftoffset= Source.hshiftoffset;
 	hshiftsrc	= Source.hshiftsrc;
-
+	
 	scale		= Source.scale;
 	scale_src	= Source.scale_src;
 	rot			= Source.rot;
 	rot_src		= Source.rot_src;
 	move		= Source.move;
+	mirror		= Source.mirror;
+	mirror_src	= Source.mirror_src;
 	d_pos_rand	= Source.d_pos_rand;
 	d_rotz_rand	= Source.d_rotz_rand;
 	d_movey_rand= Source.d_movey_rand;
 	d_scale_rand= Source.d_scale_rand;
 	p_scale		= Source.p_scale;
+	gridsize	= Source.gridsize;
+	mapcarve	= Source.mapcarve;
 }
 void ctable::FillDefaults()
 {
@@ -733,6 +741,12 @@ void ctable::FillDefaults()
 	hstretchamt	= 0;
 	hshiftoffset= 0;
 	hshiftsrc	= 1;
+	gridsize.x	= 1.0;
+	gridsize.y	= 1.0;
+	gridsize.z	= 1.0;
+	mapcarve	= 0;
+	mirror		= 0;
+	mirror_src	= 0;
 }
 
 void ctable::Print()
@@ -780,6 +794,8 @@ void ctable::Print()
 	cout << "   rot \t\t" << rot << endl;
 	cout << "   rot_src \t" << rot_src << endl;
 	cout << "   move \t" << move << endl;
+	cout << "   mirror \t" << mirror << endl;
+	cout << "   mirror_src \t" << mirror_src << endl;
 	cout << "   d_enable \t" << d_enable << endl;
 	cout << "   d_autoyaw \t" << d_autoyaw << endl;
 	cout << "   d_autopitch \t" << d_autopitch << endl;
@@ -801,6 +817,8 @@ void ctable::Print()
 	cout << "   hstretchamt \t" << hstretchamt << endl;
 	cout << "   hshiftoffset \t" << hshiftoffset << endl;
 	cout << "   hshiftsrc \t" << hshiftsrc << endl;
+	cout << "   gridsize \t" << gridsize << endl;
+	cout << "   mapcarve \t" << mapcarve << endl;
 }
 
 
@@ -914,48 +932,110 @@ void createTableC()
 		else if (a>0&&cTable[a].offset==-1) 	cTable[a].offset = cTable[a-1].offset;
 		
 		// rad & offset
-		float MaxY = sGroup[a].Dimensions.yb;
-		float MinY = sGroup[a].Dimensions.ys;
-		float size = MaxY - MinY;
-		if(size==0) { MaxY = mDetailGroup->Dimensions.yb; MinY = mDetailGroup->Dimensions.ys; size = MaxY - MinY; }
+		float 	MaxY = sGroup[a].Dimensions.yb,
+				MinY = sGroup[a].Dimensions.ys,
+				size = MaxY - MinY;
 		
-		if 		(cTable[a].rad==0) 			cTable[a].rad = MaxY+cTable[a].offset;	// if first rad is 0, set rad to biggest map-y coord + offset
+		// added as of v0.87
+		if( sGroup[a].t_brushes == 0 )
+		if( sDetailSet!=nullptr )
+		{
+				MaxY = sDetailSet[a].Dimensions.yb,
+				MinY = sDetailSet[a].Dimensions.ys;
+				size = MaxY - MinY;
+		}
+		else if( mDetailGroup!=nullptr )
+		{
+				MaxY = mDetailGroup->Dimensions.yb,
+				MinY = mDetailGroup->Dimensions.ys;
+				size = MaxY - MinY;
+		}
+		
+		if 		(cTable[a].rad==0) 			cTable[a].rad =  MaxY + cTable[a].offset;	// if first rad is 0, set rad to biggest map-y coord + offset
 		else 								cTable[a].rad += cTable[a].offset;
 		
-		// if (cTable[a].type<2) // prevent arc radius smaller than 0 or ect size if arc type is PI or GRID Circle (paths can have negative source-ect coordinates)
-		if ( cTable[a].rad-size <= 0) cTable[a].rad = size; //+cTable[a].offset
+		// prevent arc radius smaller than 0 or ect size if arc type is PI or GRID Circle (paths can have negative source-ect coordinates)
+		if ( cTable[a].mapcarve<=0 && cTable[a].rad-size <= 0) // added "cTable[a].mapcarve>0 &&" as of v0.87 September 25th 2025 to compensate carving
+		{
+			cTable[a].rad = size;
+		}
+		
 		if ( cTable[a].type==2 )
 		{
-			cTable[a].rad = size+cTable[a].offset;
-			//cout << " FIXING Radius of Grid Path Type source map... Rad currently " << cTable[a].rad << " map Y size " << size << " offset " << cTable[a].offset << endl;
-			if ( cTable[a].rad < size) { cTable[a].rad = size; } //cout << "   Rad bigger than size+offset ("<<size+cTable[a].offset<<") Rad now " << cTable[a].rad << endl; }
+			cTable[a].rad = size + cTable[a].offset;
+			
+			if ( cTable[a].rad < size) { cTable[a].rad = size; }
 		}
 		else if ( cTable[a].type==3 )
 		{
-			cTable[a].rad = (size/2)+cTable[a].offset;
+			cTable[a].rad = (size/2) + cTable[a].offset;
 		}
-		sGroup[a].SizeY = size;
+		//sGroup[a].SizeY = size;
 		
 		// original radius offset
-		cTable[a].offset_NO = (cTable[a].rad-(size/2)) - (mGroup->Dimensions.yb-(mGroup->SizeY/2));
-		if(sGroup[a].t_brushes==0) cTable[a].offset_NO = (cTable[a].rad-(size/2)) - (mDetailGroup->Dimensions.yb-(mDetailGroup->SizeY/2));
+		cTable[a].offset_NO = ( cTable[a].rad - (size/2) ) - ( sGroup[a].Dimensions.yb - ( sGroup[a].SizeY/2 ) ); // 0.82 July 2024 changed from mGroup to sGroup[a]
+		
+		//if( sGroup[a].t_brushes == 0 ) cTable[a].offset_NO = ( cTable[a].rad - (size/2) ) - ( mDetailGroup->Dimensions.yb - ( mDetailGroup->SizeY / 2 ) ); // BAK before changing from mDetail to sDetailSet
+		if( sGroup[a].t_brushes == 0 && ( sDetailSet!=nullptr || mDetailGroup!=nullptr ) )
+		{
+			if		( sDetailSet!=nullptr )   cTable[a].offset_NO = ( cTable[a].rad - (size/2) ) - ( MaxY - ( sDetailSet[a].SizeY / 2 ) );
+			else if	( mDetailGroup!=nullptr ) cTable[a].offset_NO = ( cTable[a].rad - (size/2) ) - ( MaxY - ( mDetailGroup->SizeY / 2 ) );
+		}
+		
+		if(G_DEV)
+		{
+		cout << "+-----------------------------------------------------------------+" << endl;
+		cout << "+sGROUP["<<a<<"]..." << endl;
+		cout << "|__Dimensions.yb " << sGroup[a].Dimensions.yb << endl;
+		cout << "|__Dimensions.ys " << sGroup[a].Dimensions.ys << endl;
+		cout << "|__sizeY         " << sGroup[a].SizeY << endl;
+		
+		if(mDetailGroup!=nullptr) {
+		cout << "+mDetailGroup..." << endl;
+		cout << "|__Dimensions.yb " << mDetailGroup->Dimensions.yb << endl;
+		cout << "|__Dimensions.ys " << mDetailGroup->Dimensions.ys << endl;
+		cout << "|__sizeY         " << mDetailGroup->SizeY << endl;
+		}
+		
+		if(sDetailSet!=nullptr) {
+		cout << "+sDetailSet["<<a<<"]..." << endl;
+		cout << "|__Dimensions.yb " << sDetailSet[a].Dimensions.yb << endl;
+		cout << "|__Dimensions.ys " << sDetailSet[a].Dimensions.ys << endl;
+		cout << "|__sizeY         " << sDetailSet[a].SizeY << endl;
+		}
+		
+		cout << "+cTable["<<a<<"]..." << endl;
+		cout << "|__cTable["<<a<<"].rad       " << cTable[a].rad << endl;
+		cout << "|__cTable["<<a<<"].offset_NO " << cTable[a].offset_NO << endl;
+		system("pause");
+		}
 		
 		//res
-		if (cTable[a].type==0) { // PI Circle Type
-			if 		(a==0&&cTable[0].res<=0) cTable[0].res = dTable[0].res;	// if first res is 0, set to minimum of 8
-			else if (a>0&&cTable[a].res<=0) {
-				float m = cTable[a].rad/cTable[a-1].rad; //cout << "multiplier: " << m << endl;
-				int temp = (m*cTable[a-1].res)/4.0; //cout << "temp (last res/4): " << m << endl;
-				int temp2 = temp*4; //cout << "temp2 (temp*4): " << m << endl;
-				cTable[a].res = temp2; // if x-th res is 0, set it to value based on the current and last radius+offset
-			} else if (a==0&&cTable[0].res>0) {
-				int temp = cTable[a].res/4.0;
+		if (cTable[a].type==0) // PI Circle Type
+		{
+			if (a==0&&cTable[0].res<=0)
+			{
+				cTable[0].res = dTable[0].res;						// if first res is 0, set to minimum of 8
+			}
+			else if (a>0&&cTable[a].res<=0)
+			{
+				float m 		= cTable[a].rad / cTable[a-1].rad; 	//cout << "multiplier: " << m << endl;
+				int temp 		= ( m*cTable[a-1].res ) / 4.0; 		//cout << "temp (last res/4): " << m << endl;
+				int temp2 		= temp*4; 							//cout << "temp2 (temp*4): " << m << endl;
+				cTable[a].res 	= temp2; 							// if x-th res is 0, set it to value based on the current and last radius+offset
+			}
+			else if ( a==0&&cTable[0].res > 0 )
+			{
+				int temp = cTable[a].res / 4.0;
 				cTable[a].res = temp*4;
 			}
-			if (cTable[a].res <= 4) cTable[a].res = 4; // always set res to a minimum of 4
+			if (cTable[a].res <= 4)
+			{
+				cTable[a].res = 4; 									// always set res to a minimum of 4
+			}
 		}
-		else if (cTable[a].type==1) { // grid Circle Type
-			
+		else if (cTable[a].type==1) // grid Circle Type
+		{
 			#if DEBUG > 0
 			if(dev) cout << endl << "          curve#" << a << endl;	
 			#endif
@@ -1225,6 +1305,21 @@ void createTableC()
 		if 		(a==0&&cTable[0].hshiftsrc<0) 		cTable[0].hshiftsrc = dTable[0].hshiftsrc;
 		else if (a>0&&cTable[a].hshiftsrc<0) 		cTable[a].hshiftsrc = cTable[a-1].hshiftsrc;
 		
+		// gridsize new since v0.81 update May 2024
+		if 		(a==0&&!cTable[0].gridsize.IsSet) 		cTable[0].gridsize = dTable[0].gridsize;
+		else if (a>0&&!cTable[a].gridsize.IsSet) 		cTable[a].gridsize = cTable[a-1].gridsize;
+		
+		// mapcarve new since v0.87 update July 2024
+		if 		(a==0&&!cTable[0].mapcarve<0) 		cTable[0].mapcarve = dTable[0].mapcarve;
+		else if (a>0&&!cTable[a].mapcarve<0) 		cTable[a].mapcarve = cTable[a-1].mapcarve;
+		
+		// mirror_src new since v0.87 update August 2024
+		if 		(a==0&&!cTable[0].mirror_src<0) 		cTable[0].mirror_src = dTable[0].mirror_src;
+		else if (a>0&&!cTable[a].mirror_src<0) 		cTable[a].mirror_src = cTable[a-1].mirror_src;
+		
+		// mirror_src new since v0.87 update August 2024
+		if 		(a==0&&!cTable[0].mirror<0) 		cTable[0].mirror = dTable[0].mirror;
+		else if (a>0&&!cTable[a].mirror<0) 			cTable[a].mirror = cTable[a-1].mirror;
 		
 		#if DEBUG > 0
 		if (dev) { cTable[a].Print(); system("pause"); }

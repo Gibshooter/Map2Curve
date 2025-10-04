@@ -58,61 +58,102 @@ struct brush
 	dimensions D;
 	vertex Origin;
 	bool IsOrigin = 0;
+	bool AllFacesNull= 0; // new v0.87 Update because this would cause issues with GetHorLengths()
 	
 	int* vlist 		= nullptr;
 	circleset *cset = nullptr;
 	face* Faces 	= nullptr;
+	brush* Gap = nullptr;
+	brush* Tri = nullptr;
 
+	vector <vertex>DevVertices;
+	
+	// +---------------------------+
+	// |-------- METHODS ----------|
+	// +---------------------------+
+	
+	// Basic
 	void Copy(brush &Source);
 	void CopySimple(brush &Source);
+	
+	// Transformation
 	void Scale(float n);
 	void ScaleOrigin(float n, vertex Origin, int g);
 	void Move(float x, float y, float z, bool fixShifts, int g);
 	void Rot(float x, float y, float z);
 	void RotOrigin(float x, float y, float z, vertex Origin, int g);
-	void MakeCuboid(dimensions Box, string Tex);
-	void MakeCube(float size, string Tex);
-	bool CheckValidity();
-	void GetFaceOrients();
-	void CheckDivisibility();
-	void CreateGap(int g);
-	void ClearVertexList();
+	void MirrorOrigin(int mode, vertex Origin, bool fixShifts, bool getEdges);
+
+	// Modify Vertex Data
+	void RoundVertices(int g);
+	void FixBorderliner(int prec);
+	
+	// Generate Brush(es) from existing Brush
+	void CarveBrush(gvector Plane, bool rebuild);
 	void Triangulate();
 	void TriTrapezoid();
 	void TriTriangle();
 	void TriComplex();
-	void RoundVertices();
-	void GetFacePlanarity();
-	void MarkFaceVertices(face &Candidate, int Mode, bool Overwrite); // Mark all vertices of a brush that match a certain faces vertices; Mode 0 = DoRound; Mode 1 = DoAddHeight
-	void CheckNULLFaces();
-	void SetRound(bool State);
-	void RefreshSpikeTents();
 	void CreateTent();
-	void Reconstruct();
-	void CheckForHoles(vector<int> &Neighbors);
-	void FixHoles();
-	bool IsEdgeInBrush(vertex &E1, vertex &E2, int Exlude);
+	void RefreshSpikeTents();
+	void CreateGap(int g);
 	
-	void GetSourceFaces();
+	// Generate from nothing
+	void MakeCuboid(dimensions Box, string Tex);
+	void MakeCube(float size, string Tex);
+	
+	// Check and Modify Brush Data
+	bool CheckValidity();
+	void CheckDivisibility();
+	void CleanUpBrush();
+	void CheckNULLFaces(bool markDraw);
+	bool IsBrushSloped();
+	int FaceMethod(); // 0 = vertices, 1 = planes; check if faces are saved as vertices (Hammer, Jackhammer, etc.) or planes (Trenchbroom with simple brushes e.g. boxes without slopes)
+	bool IsThisBrushMadeOfTrianglesEntirely();
+	bool IsOriginBrush();
+	
+	// Get Brush Informations
+	void GetBrushDimensions(bool Overwrite);
 	void GetSimpleCentroid();
-	void GetFaceVertexSE();
-	void GetVertexListSE();
-	void GetVertexList();
-	void GetRconVertices();
-	void ConvertVerticesC2V();
+	
+	// Get Face Informations
+	void GetFaceOrients();
+	void GetFacePlanarity();
+	void GetSourceFaces();
+	void GetFaceNormals();
 	void GetFaceCentroids();
 	void GetFaceCentroidsC();
-	void GetFaceNormals();
 	void GetFaceShifts();
 	void GetTVecAligns();
-	void CarveBrush(gvector Plane);
-	bool IsOriginBrush();
-	void GetBrushDimensions(bool Overwrite);
-	void FixBorderliner(int prec);
+	
+	// Get Vertex Informations
+	void GetBrushVertexList(bool Override = 0);
+	void GetFaceVertexSE();
+	void GetVertexAngles();
+	void GetVertexListSE();
+	void GetVertexList(bool Override = 0);
+	void GetRconVertices();
+	void ConvertVerticesC2V();
+	void ClearVertexList();
+	
+	// Compare to others
+	void MarkFaceVertices(face &Candidate, int Mode, bool Overwrite); // Mark all vertices of a brush that match a certain faces vertices; Mode 0 = DoRound; Mode 1 = DoAddHeight
+	void SetRound(bool State);
+	bool IsEdgeInBrush(vertex &E1, vertex &E2, int Exlude);
+	
+	// Reconstruct
+	//void Reconstruct(); // removed due to v0.87 overhaul 2025
+	void Reconstruct2025(bool onlyCurveBrushes = true);
+	void IntersectAllFaces(vector<vertex>&newVertices, vector<string>&BlackList);
+	void CheckForHoles(vector<int> &Neighbors);
+	//void FixHoles(); //MADE UNNECESSARY IN THE v0.87 OVERHAUL UPDATE 2025
+	
+	// DEV
+	void ApplyTempTex();
+	void printSimple(bool r = 1);
 	void VecToBrush(gvector &Vec, gvector Normal, string Tex);
 	
-	brush* Gap = nullptr;
-	brush* Tri = nullptr;
+	
 	brush() {}
 	brush(int tf, int tv);
 	~brush();
@@ -127,7 +168,7 @@ brush* Face2BrushTri(face &SrcFace, int Side);
 brush* Face2BrushTriBridge(face &SrcFace, int VID);
 brush* Face2BrushTriFan(face &SrcFace, int VID);
 
-void ExportBrushToOBJ(string OutputFile, brush &Brush);
+void ExportBrushToOBJDev(string OutputFile, brush &Brush, bool append);
 brush* CreateCube(int size);
 brush* MakeBoxHollow(dimensions D, float wallsize, string Tex);
 

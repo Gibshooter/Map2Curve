@@ -106,23 +106,25 @@ struct group {
 	void ShearVectors();
 	void GetGroupVertexList();
 	void ClearBrushVertexList();
-	void ExportGroupToMap(string p);
+	
 	void GetBrushFacePlanarity();
 	void Triangulate();
 	void GetFaceGroups();
 	void GetHeadVertices();
 	void GetTransitVertices();
-	void CheckNULLBrushes();
+	void CheckNULLBrushes(bool markDraw);
 	bool CheckForSlopes();
 	void CreateIsects();
+	void CarveGroup(gvector Vec, bool rebuild);
 	void CarveGroupSections();
 	void WeldGroupVertices(bool WeldGaps);
+	void CleanUpGroup();
 	
 	void AddBrushHeights();
 	void CreateHeightTable();
 	void CreateGapList();
 	
-	void Reconstruct();
+	//void Reconstruct();
 	void ReconstructMap();
 	void GetBrushSimpleCentroid();
 	void GetBrushShifts();
@@ -130,7 +132,7 @@ struct group {
 	void GetBrushVertexAngles();
 	void GetBrushFaceVertexSE();
 	void GetBrushVertexListSE();
-	void GetBrushVertexList();
+	void GetGroupBrushVertexList(bool Override = 0);
 	void GetRconBrushVertices();
 	void ConvertRconBrushVertices();
 	void GetBrushFaceCentroids();
@@ -143,14 +145,22 @@ struct group {
 	void GroupTexturize();
 	void GroupTexturizeHStretch();
 	void AddCustomShiftOffset();
-	
+
+	// DEVELOPER
+	void ExportGroupToMap(string p);
+	void ExportGroupToOBJDev(string p);
+	void printSimple(bool r=1);
+	//cout << " EXPORTED!!! "<< endl;
+	//dGroup.ExportGroupToOBJDev(gFile->p_path+gFile->name+"_Post_Carving_"+to_string(d)+".obj");
+	//system("pause");
+		
 	group() {}
 	~group()
 	{
 		delete[] Brushes;
 		delete[] boundBox;
 		delete[] Entities;
-		for(int i=0;i<DevAssets.size();i++)
+		for(int i=0; i<DevAssets.size(); i++)
 			delete DevAssets[i];
 		if(SecBaseFace!=nullptr)
 		delete[] SecBaseFace;
@@ -165,8 +175,9 @@ struct group_set
 {
 	group *Groups = nullptr;
 	int t_groups = 0;
+	float SizeY = 0;
 	dimensions Dimensions;
-	
+
 	void GetGroupSetDimensions(bool Overwrite);
 	group_set() {}
 	~group_set() { delete[] Groups; }

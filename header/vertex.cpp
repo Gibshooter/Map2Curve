@@ -14,6 +14,14 @@ struct gvector;
 
 /* ===== VERTEX METHODS ===== */
 
+bool IsVertexNan(vertex V)
+{
+	if 		(!IsValid(V.x)) return true;
+	else if (!IsValid(V.y)) return true;
+	else if (!IsValid(V.z)) return true;
+	else return false;
+}
+
 void vertex::set(float n)
 {
 	x = n;
@@ -33,6 +41,12 @@ void vertex::operator=(gvector Vec)
 	x = Vec.x;
 	y = Vec.y;
 	z = Vec.z;
+}
+void vertex::operator=(vertex Vert)
+{
+	x = Vert.x;
+	y = Vert.y;
+	z = Vert.z;
 }
 
 void vertex::Add(gvector Vec)
@@ -156,6 +170,29 @@ void vertex::rotateOrigin(float degx, float degy, float degz, vertex orig)
 	}
 }
 
+void vertex::mirrorOrigin(int m, vertex o)
+{
+	bool X=0, Y=0, Z=0;
+	if	(m==1||m==4||m==5||m==7)	X=1;
+	if	(m==2||m==4||m==6||m==7) 	Y=1;
+	if	(m==3||m==5||m==6||m==7)	Z=1;
+	
+	// subtract Origin
+	if	(X)	x -= o.x;
+	if	(Y) y -= o.y;
+	if	(Z)	z -= o.z;
+	
+	// mirror vertex
+	if	(X)	x *= -1;
+	if	(Y) y *= -1;
+	if	(Z)	z *= -1;
+	
+	// re-add Origin
+	if	(X)	x += o.x;
+	if	(Y) y += o.y;
+	if	(Z)	z += o.z;
+}
+
 void vertex::move(float moveX, float moveY, float moveZ)
 {
 	if(moveX!=0) x += moveX;
@@ -170,7 +207,13 @@ vertex::vertex (float a, float b, float c)
 	z = c;
 }
 
-
+void vertex::printSimple(bool r)
+{
+	if (r)
+	cout <<round(x) << " " << round(y) << " " << round(z) << " DoAddHeight " << DoAddHeight;
+	else
+	cout <<x << " " << y << " " << z;
+}
 
 /* ===== VERTEX FUNCTIONS ===== */
 
@@ -178,6 +221,7 @@ ostream &operator<<(ostream &ostr, vertex &v)
 {
 	return ostr << "( " << v.x << " " << v.y << " " << v.z << " )";
 }
+
 
 bool IsVertexInList(vertex &V, vertex *VList, int vcount, bool UsePrecision, int deci)
 {
@@ -231,7 +275,7 @@ bool IsVertexInList(vertex &V, vector<vertex> VList, bool UsePrecision, int deci
 	
 	#if DEBUG > 0
 	bool dev = 0;
-	if (dev) cout << "VINLIST Checking if Vertex " << V << " is in VList with length " << vcount << ". Precision 0/1 (" << UsePrecision << ") up to " << deci << " places..." << endl;
+	if (dev) cout << "VINLIST Checking if Vertex " << V << " is in VList with size " << vcount << ". Precision 0/1 (" << UsePrecision << ") up to " << deci << " places..." << endl;
 	#endif
 	
 	for (int v = 0; v<vcount; v++)
@@ -368,9 +412,14 @@ bool CompareVerticesR(vertex V0, vertex V1)
 {
 	//cout << " Comparing vertices of V0 " << V0 << " and V1 " << V1;
 	if (
-	round(V0.x)==round(V1.x)&&
-	round(V0.y)==round(V1.y)&&
-	round(V0.z)==round(V1.z))
+	// BUGFIX - CHANGED V 0.82 XXXXXXXXXXXXXX 28.5.2025
+	// switched from round() to CompareFloatDeci, forgot why BUT it solved something!
+	//round(V0.x)==round(V1.x)&&
+	//round(V0.y)==round(V1.y)&&
+	//round(V0.z)==round(V1.z))
+	CompareFloatDeci(V0.x,V1.x, 4)&&
+	CompareFloatDeci(V0.y,V1.y, 4)&&
+	CompareFloatDeci(V0.z,V1.z, 4))
 	{
 		//cout << " MATCH!" << endl;
 		return true;
@@ -579,6 +628,93 @@ vertex operator-(vertex &V, gvector &Vec)
 	VN.setall( V.x-Vec.x, V.y-Vec.y, V.z-Vec.z );
 	
 	return VN;
+}
+
+void vertexListRemoveDoubles(vector<vertex>&vertexList)
+{
+	#if DEBUG > 0
+	bool dev = 0;
+	#endif
+	
+	// NEW CLEAN VERTEX LIST
+	vector<vertex>cleanList;
+	cleanList.push_back(vertexList[0]);
+	
+	for(int v=0; v<vertexList.size(); v++) // raw vertex loop
+	{
+		vertex &V = vertexList[v];
+		bool isInvalid = 0;
+		
+		for(int c=0; c<cleanList.size(); c++) // clean vertex loop
+		{
+			vertex &C = cleanList[c];
+			
+			// check distance between vertices: close distances mean it's a double
+			gvector Vec1 = GetVector(V, C);
+			float L = GetVecLen(Vec1);
+			
+			#if DEBUG > 0
+			if (dev) { cout << "V#" << v << " - C#" << c << " len: " << L; }
+			#endif
+			
+			if (L<0.01)
+			{
+				isInvalid = 1;
+				
+				#if DEBUG > 0
+				if (dev>1) { cout << " - Double" << endl; }
+				#endif
+				
+				break; // break cycle if double (won't be added to clean vlist)
+			}
+			#if DEBUG > 0
+			else { if (dev) { cout << " - Unique ("<<cleanList.size()<<")..." << endl; } }
+			system("pause");
+			#endif
+		}
+		if(!isInvalid) cleanList.push_back(V);
+	}
+	
+	#if DEBUG > 0
+	if (dev) { cout << cleanList.size() << " out of previously " << vertexList.size() << " vertices are unique and will therfor be used...\n\n"; }
+	if (dev) system("pause");
+	#endif
+	
+	vertexList.erase(vertexList.begin(), vertexList.end());
+	vertexList = cleanList;
+	
+	
+	// and compare it to each clean vertex, if it's a double
+	/*if(!isInvalid)
+	{
+		if(cleanVertices.size()==0) cleanVertices.push_back(newVertices[i]);
+		for(int j=0; j<cleanVertices.size(); j++) // clean vertex loop
+		{
+			vertex &V2 = cleanVertices[j];
+			
+			// check distance between vertices: close distances mean it's a double
+			gvector Vec1 = GetVector(V1, V2);
+			float d = GetVecLen(Vec1);
+			
+			#if DEBUG > 0
+			if (dev) { cout << "V1#" << i << " - V2#" << j <<"\t = Vector: " << Vec1 << "\t Length: " << d; }
+			#endif
+			
+			if (d<0.01) {
+				isInvalid = true;
+				
+				#if DEBUG > 0
+				if (dev) { cout << " - IS A DOUBLE!" << endl; }
+				#endif
+				
+				break; // break cycle if double (won't be added to clean vlist)
+			}
+			#if DEBUG > 0
+			else { if (dev) { cout << " - not a double! gets pushed back. Size now "<<cleanVertices.size()<<"..." << endl; } }
+			#endif
+		}
+		if(!isInvalid) cleanVertices.push_back(V1);
+	}*/
 }
 
 

@@ -42,14 +42,20 @@ struct vertex
 	void set(float n);
 	void setall(float a, float b, float c);
 	void operator=(gvector Vec);
+	void operator=(vertex Vert);
 	void Add(vertex V);
 	void Add(gvector Vec);
 	void rotate(float degx, float degy, float degz);
 	void rotateOrigin(float degx, float degy, float degz, vertex orig);
+	void mirrorOrigin(int m, vertex o);
 	void push (int i);
 	void move(float moveX, float moveY, float moveZ);
 	void scale(float n);
 	void ScaleOrigin(float n, vertex Origin);
+	
+	// DEV
+	
+	void printSimple(bool r = 1);
 	
 	vertex () {}
 	vertex (float a, float b, float c);
@@ -74,6 +80,8 @@ vertex Add(vertex V, gvector Vec);
 bool IsVertexInList(vertex &V, vertex *VList, int vcount, bool UsePrecision, int deci);
 bool IsVertexInList(vertex &V, vector<vertex> VList, bool UsePrecision, int deci);
 bool IsVertexXYInList(vertex &V, vector<vertex> VList, bool UsePrecision, int deci);
+bool IsVertexNan(vertex V);
+void vertexListRemoveDoubles(vector<vertex>&vertexList);
 
 vertex operator+(vertex &V, gvector &Vec);
 vertex operator-(vertex &V, gvector &Vec);

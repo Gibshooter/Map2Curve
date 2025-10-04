@@ -88,7 +88,7 @@ struct face
 	void RevOrder(bool C);
 	void AddHeight(float height);
 	void pushVerts (int i);
-	void RoundVertices();
+	void RoundVertices(int g);
 	void RefreshEdges();
 	void GetCentroid();
 	void GetCentroidClassic();
@@ -104,12 +104,14 @@ struct face
 	void MiniShift();
 	void ConvertToShearedTri(bool IsWedge2, bool IsInside, bool Reverse, brush &Brush, int g);
 	void ConvertToSheared(int g);
-	void SortVertices(gvector nVec);
+	void SortVertices(gvector nVec, bool printDev = 0);
 	int IsFaceBeyondPlane(gvector nVec);
+	void DeleteDoppel();
 	int CarveFace(gvector Plane);
 	void AddNewVertex(vertex N);
 	void Move(gvector &Vec);
 	bool FaceIsValid(int CheckForID, bool CheckIsDraw, bool CheckIsNotNull, bool CheckIsNotNullHintTex);
+	void GetFaceDimensions(float (&D)[3]);
 	void SetFace(int vc, vertex Verts[], string Tex)
 	{
 		vcount = vc;
@@ -122,6 +124,9 @@ struct face
 		}
 		GetNormal();
 	}
+	
+	// dev
+	void printSimple(bool r = 1);	
 	
 	face () {}
 	face (int vc, vertex Verts[], string Tex)
@@ -163,6 +168,9 @@ double GetDistFaceVertex(face &Face, vertex &V);
 bool IsVertexOnPlane(gvector &Normal, vertex &V, int deci);
 double GetDistPlaneVertex(gvector &Normal, vertex &V);
 bool DoFacesShareVertices(face &F1, face &F2);
+void vertexListRemoveAllBeyondFaces(vector<vertex>&vertexList, face *Faces, int t_faces);
+void vertexListRemoveAllNotOnFaces(vector<vertex>&vertexList, face *Faces, int t_faces); // unnecessary
+bool DoTheseFacesShareAnEdge(face &F1, face &F2);
 
 void CoutBrushFacesDevInfo(brush &Brush, int b, int g, bool IsInRange);
 void CoutFacesDevInfo(brush &Brush, face &Face, int f);

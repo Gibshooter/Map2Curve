@@ -47,6 +47,7 @@ bool CompareFloatDeci(float N1, float N2, int deciplace);
 float GetRandInRange(float min, float max);
 int IsBorderliner(float n, int prec);
 float easing(float x, int mode);
+bool IsCloseToInt(float d, int i, float threshold);
 
 /* ===== SMALL MATH FUNCTIONS ===== */
 

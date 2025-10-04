@@ -5,7 +5,10 @@
 #include "dimensions.h"
 #include "LSE.h"
 #include "file.h"
+#include "messages.h"
+#include "teestream.h"
 
+#include <vector>
 #include <string>
 #include <iomanip> // precision
 #include <fstream>
@@ -24,6 +27,7 @@ extern ctable *cTable;
 extern float def_spikesize;
 extern string def_nulltex;
 extern file *gFile;
+extern int ErrorCode;
 
 /* ===== BRUSH METHODS ===== */
 
@@ -48,6 +52,25 @@ brush::brush(int tf, int tv)
 			Face.Vertices = new vertex[tv];
 		}
 	}
+}
+
+bool brush::IsBrushSloped() // new as of v0.81 May 2024
+{
+	brush &Brush = *this;
+	
+	if ( Brush.draw && Brush.valid )
+	{
+		for (int f = 2; f<Brush.t_faces; f++)
+		{
+			face &Face = Brush.Faces[f];
+			
+			if ((Face.Orient==2||Face.Orient==3) && Face.Normal.z!=1 && Face.Normal.z!=-1 )
+			{
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 void brush::GetBrushDimensions(bool Overwrite)
@@ -98,13 +121,13 @@ bool brush::IsOriginBrush()
 	else return 0;
 }
 
-void brush::CarveBrush(gvector Plane)
+void brush::CarveBrush(gvector Plane, bool rebuild)
 {
 	brush &Brush = *this;
 	
 	#if DEBUG > 0
 	bool dev = 0;
-	if(dev) cout << endl << "BRUSH Carving Brush [" << Brush.name << "] with Plane " << Plane << " (yaw " <<GetVecAlign(Plane,0) <<")" <<endl;
+	if(dev) cout << endl << "BRUSH Carving Brush sec ["<<Brush.SecID<<"] seg "<<Brush.SegID<<" [" << Brush.name << "] with Plane " << Plane << " (yaw " <<GetVecAlign(Plane,0) <<")" <<endl;
 	#endif
 	
 	bool DoCarve = 0;
@@ -114,13 +137,18 @@ void brush::CarveBrush(gvector Plane)
 	if(dev) cout << "BRUSH Checking Face status..." << endl;
 	#endif
 	
+//	if (Brush.SegID==3){
+//	ExportBrushToOBJDev((gFile->p_path+gFile->name+"_preCARVE.obj"), Brush, 0);
+//	WAIT();
+//	}
+	
 	for(int f=0; f<t_faces; f++)
 	{
 		face &Face = Faces[f];
 		if(Face.draw) {
 			int Status = Face.CarveFace(Plane);
-			if(Status==2) DoCarve = 1;
-			if(Status==1) FacesBeyond++;
+			if(Status==2) { DoCarve = 1; }
+			if(Status==1) { FacesBeyond++; Face.draw = 0; }
 			
 			#if DEBUG > 0
 			if(dev) {cout << "BRUSH Face "<< f<<" "; if(Status==0) cout << " is inside of bounds!"<<endl; else if(Status==1) cout << " is out of bounds!"<<endl; else cout << " has been CARVED!"<<endl;  }
@@ -130,7 +158,6 @@ void brush::CarveBrush(gvector Plane)
 	
 	#if DEBUG > 0
 	if(dev) cout << "BRUSH Faces Beyond: " << FacesBeyond << endl;
-	if(dev) system("pause");
 	#endif
 	
 	// since Faces of this brush were carved, create a new face of all the new vertices to fill the hole
@@ -145,11 +172,10 @@ void brush::CarveBrush(gvector Plane)
 		for(int f=0; f<t_faces; f++)
 		{
 			face &Face = Faces[f];
-			if(Face.draw)
 			for(int v=0; v<Face.vcount; v++)
 			{
 				vertex &V = Face.Vertices[v];
-				if(IsVertexOnPlane(Plane, V, 2))
+				if(IsVertexOnPlane(Plane, V, 10))
 					V_New.push_back(V);
 			}
 		}
@@ -164,7 +190,9 @@ void brush::CarveBrush(gvector Plane)
 		{
 			vertex &S = V_New[v];
 			if(  !IsVertexInList(S, V_Unique, 1, 1)  )
+			{
 				V_Unique.push_back(S);
+			}
 		}
 		
 		#if DEBUG > 0
@@ -190,12 +218,12 @@ void brush::CarveBrush(gvector Plane)
 		
 		Filler.Normal = Plane;
 		
-		#if DEBUG > 0
-		if(dev) cout << "BRUSH   Filler normal " << Filler.Normal << endl;
-		#endif
-		
 		Filler.Texture = def_nulltex;
 		AlignToWorld(Filler);
+		
+		#if DEBUG > 0
+		if(dev) cout << "BRUSH   Filler vcount "<< Filler.vcount << " normal " << Filler.Normal << " ("<<Filler.Texture<<")" << endl;
+		#endif
 		
 		// add new face to brush
 		face *F_New = new face[t_faces+1];
@@ -203,6 +231,11 @@ void brush::CarveBrush(gvector Plane)
 		{
 			face &Target = F_New[f];
 			face &Source = Faces[f];
+			
+			#if DEBUG > 0
+			if(dev) { cout << "BRUSH   Face f" <<f<< " original vcount "  << Source.vcount << endl; }
+			#endif
+			
 			Target.CopyFace(Source,1);
 		}
 		F_New[t_faces].CopyFace(Filler, 1);
@@ -211,13 +244,14 @@ void brush::CarveBrush(gvector Plane)
 		t_faces++;
 		
 		#if DEBUG > 0
-		if(dev) cout << "BRUSH   Faces now "  << t_faces << endl;
+		if(dev) cout << "BRUSH   Faces now "  << t_faces << " New Face vcount " << Faces[t_faces-1].vcount << endl;
 		#endif
 		
 		// fix borderliner (e.g. 15.9999 = 16.0)
 		for(int f=0; f<t_faces; f++)
 		{
 			face &Face = Faces[f];
+			if(Face.draw)
 			for(int v=0; v<Face.vcount; v++)
 			{
 				vertex &V = Face.Vertices[v];
@@ -227,11 +261,16 @@ void brush::CarveBrush(gvector Plane)
 			}
 		}
 		
+		#if DEBUG > 0
+		if(dev) cout << "Fixing Borderliner..."<< endl;
+		#endif
+		
 		// care for identical vertex X/Y coordinates on different heights (X 1 Y 1)!=(X 1.001 Y 0.999) if there are differences
 		vector<vertex> agents;
 		for(int f=0; f<t_faces; f++)
 		{
 			face &Face = Faces[f];
+			if(Face.draw)
 			for(int v=0; v<Face.vcount; v++)
 			{
 				vertex &V = Face.Vertices[v];
@@ -240,10 +279,15 @@ void brush::CarveBrush(gvector Plane)
 			}
 		}
 		
+		#if DEBUG > 0
+		if(dev) cout << "compare agents with all other carved vertices..."<< endl;
+		#endif
+		
 		// compare agents with all other carved vertices
 		for(int f=0; f<t_faces; f++)
 		{
 			face &Face = Faces[f];
+			if(Face.draw)
 			for(int v=0; v<Face.vcount; v++)
 			{
 				vertex &V = Face.Vertices[v];
@@ -268,6 +312,64 @@ void brush::CarveBrush(gvector Plane)
 				}
 			}
 		}
+
+		//if (Brush.SegID==3&&!Brush.valid)
+//		{
+//		ExportBrushToOBJDev((gFile->p_path+gFile->name+"_AFTER_CARVE.obj"), Brush, 0);
+//		WAIT();
+//		}
+
+		Brush.CleanUpBrush();
+		Brush.GetBrushDimensions(1); // XXXXXXXXXXXX neccessary?
+		
+		if(rebuild)
+		{
+			Brush.CheckValidity();
+			
+			if(Brush.valid)
+			{
+				// recalculate all important Brush information
+				Brush.GetFaceOrients();
+				Brush.GetTVecAligns();
+				
+				for(int f=0; f<Brush.t_faces; f++)
+				{
+					face &Face = Brush.Faces[f];
+					Face.SortVertices(Face.Normal);
+					
+					/*if(f==0){
+					cout << " OLD Baseshift: " << Face.BaseShiftX << " " << Face.BaseShiftY << endl;
+					cout << " OLD Offset: " << Face.OffsetX << " " << Face.OffsetY << endl;
+					cout << " OLD Edges: " << Face.Vertices[Face.BaseX] << endl << Face.Vertices[Face.BaseX2] << endl << Face.Vertices[Face.BaseY] << endl << Face.Vertices[Face.BaseY2] << endl << endl;
+					}*/
+				}
+				
+				// reconstruct: contents of ReconstructMap() and GetGroupVertexList()
+//				Brush.GetBrushVertexList();
+//				Brush.GetRconVertices();
+//				Brush.GetFaceCentroidsC();
+//				Brush.ConvertVerticesC2V();
+				Brush.GetBrushVertexList();
+				
+				Brush.CheckDivisibility();
+				Brush.GetFaceShifts();
+				
+				for (int f = 0; f<t_faces; f++)
+				{
+					face &Face = Faces[f];
+					if (Face.draw)
+					{
+						/*if(f==0){
+						cout << " NEW Baseshift: " << Face.BaseShiftX << " " << Face.BaseShiftY << endl;
+						cout << " NEW Offset: " << Face.OffsetX << " " << Face.OffsetY << endl;
+						cout << " NEW Edges: " << Face.Vertices[Face.BaseX] << endl << Face.Vertices[Face.BaseX2] << endl << Face.Vertices[Face.BaseY] << endl << Face.Vertices[Face.BaseY2] << endl << endl;
+						}*/
+						Face.ShiftX = Face.BaseShiftX + Face.OffsetX;
+						Face.ShiftY = Face.BaseShiftY + Face.OffsetY;
+					}
+				}
+			}
+		}
 	}
 	// all faces of this brush are beyond plane. Brush is completely out of bound and can therefor be discarded!
 	else if(!DoCarve&&FacesBeyond==t_faces)
@@ -277,12 +379,116 @@ void brush::CarveBrush(gvector Plane)
 		#endif
 		
 		Brush.draw = 0;
+		Brush.valid = 0;
 	}
 	
 	#if DEBUG > 0
-	if(dev) { cout << "BRUSH END" << endl<<endl; system("pause"); }
+	if(dev) { cout << "BRUSH END" << endl<<endl; }
 	#endif
 }
+
+void brush::GetBrushVertexList(bool Override)
+{
+	GetSimpleCentroid();
+	ClearVertexList();
+	GetVertexAngles();
+	GetFaceVertexSE();
+	GetVertexListSE();
+	GetVertexList(Override);
+}
+
+void brush::GetVertexAngles()
+{
+	#if DEBUG > 0
+	bool dev = 0;
+	if(dev) cout<< endl << " Getting Vertex Angles..." << endl;
+	#endif
+	
+	brush &Brush = *this;
+	
+	float &sangle = Brush.vAngle_s;
+	float &bangle  = Brush.vAngle_b;
+	
+	#if DEBUG > 0
+	if(dev) cout << "  Brush Centroid " << Brush.centroid << endl;
+	#endif
+	
+	int i = 0;
+	for (int f = 0; f<Brush.t_faces; f++)
+	{
+		face &Face = Brush.Faces[f];
+		#if DEBUG > 0
+		if(dev) cout<< "   Face " << f << endl;
+		#endif
+		
+		if (Face.fID==2 && Face.draw)
+		{
+			for (int v = 0; v<Face.vcount; v++) // changed from Face.vcount to 3
+			{
+				vertex ev = Face.Vertices[v];
+				#if DEBUG > 0
+				if(dev) cout << "     Vertex " << v << ev << endl;
+				#endif
+				
+				ev.x = 0.0;
+				vertex &cv = Brush.centroid;
+				gvector vec = GetVector(ev, cv);
+				
+				gvector achecker(0.0,0.0,-1.0); //angle checker vector
+				float &vangle = Face.Vertices[v].angle;
+				float angle = GetVecAng(achecker, vec);
+				
+				if (ev.y>=cv.y)	vangle = angle;
+				else 			vangle = 360.0-angle;
+				
+				#if DEBUG > 0
+				if(dev) cout << "     vangle " << vangle << " angle " << angle << endl;
+				#endif
+				
+				// for comparison, save smallest and largest vertex angle as floating point number to each brush
+				if (i==0) sangle = vangle;
+				if (vangle < sangle)
+				{
+					#if DEBUG > 0
+					if(dev) cout << "     angle ("<<vangle<<") is smaller than smallest ("<<sangle<<"). angle is new smallest!" << endl;
+					#endif
+					
+					sangle = vangle;
+				}
+				if (vangle > bangle)
+				{
+					#if DEBUG > 0
+					if(dev) cout << "     angle ("<<vangle<<") is bigger  than biggest  ("<<bangle<<"). angle is new biggest!" << endl;
+					#endif
+					
+					bangle = vangle;
+				}
+	
+				#if DEBUG > 0
+				if(dev) cout << "     i: "<<i<<", Face " << f << ", Vertex " << v<< "\t " <<ev << "\t Angle: " << Face.Vertices[v].angle << endl;
+				#endif
+				
+				i++;
+			}
+		}
+	}
+	#if DEBUG > 0
+	if(dev) cout << "  smallest angle of this brush: " << sangle << ", biggest: " << bangle << endl;
+	#endif
+	
+	i = 0;
+}
+
+void brush::printSimple(bool r)
+{
+	cout << "### PRINT BRUSH SIMPLE ###" << endl;
+	for (int f=0; f<t_faces; f++){
+		cout << "  Face #[" << f+1 << "/" << t_faces << "]" << endl;
+		Faces[f].printSimple(r);
+	}
+	cout << "### END ###" << endl << endl;
+}
+
 
 void brush::Scale(float n)
 {
@@ -451,6 +657,7 @@ void brush::RotOrigin(float x, float y, float z, vertex Origin, int g)
 			
 			Face.VecX.rotate(x,y,z);
 			Face.VecY.rotate(x,y,z);
+			Face.Normal.rotate(x,y,z); // added as of v0.87 sept 2025
 			
 			#if DEBUG > 0
 			if (dev) cout << "   Getting Edges and BaseShift... " << endl;
@@ -476,6 +683,88 @@ void brush::RotOrigin(float x, float y, float z, vertex Origin, int g)
 	}
 }
 
+void brush::MirrorOrigin(int mode, vertex Origin, bool fixShifts, bool getEdges)
+{
+	for (int f = 0; f<t_faces; f++)
+	{
+		face &Face = Faces[f];
+		if (Face.draw)
+		{
+			// Textures
+			if(fixShifts)
+			{
+				GetBaseEdges(Face);
+				GetBaseShift(Face,0,1,0);
+				GetTexOffset(Face,0);
+			}
+			
+			Face.GetNormal();
+			
+			#if DEBUG > 0
+			bool dev = 0;
+			if(dev) {
+				cout << "Normal: " << Face.Normal << endl;
+				cout << "Centroid: " << Face.Centroid << endl;
+				cout << "MIRROR Vertex List OLD:" << endl;
+			}
+			#endif
+			
+			for (int v = 0; v<Face.vcount; v++){
+				vertex &V = Face.Vertices[v];
+				
+				#if DEBUG > 0
+				if(dev)cout << " v " << v << V << endl;
+				#endif
+				
+				V.mirrorOrigin(mode, Origin);
+			}
+			
+			Face.Centroid.mirrorOrigin(mode, Origin);
+			
+			Face.VecX.mirror(mode);
+			Face.VecY.mirror(mode);
+			Face.Normal.mirror(mode);
+			
+			Face.SortVertices(Face.Normal, 0);
+			
+			#if DEBUG > 0
+			if(dev) {
+				cout << "Normal: " << Face.Normal << endl;
+				cout << "Centroid: " << Face.Centroid << endl;
+				cout << "MIRROR Vertex List NEW:" << endl;
+				for (int v = 0; v<Face.vcount; v++){
+					vertex &V = Face.Vertices[v];
+					cout << " v " << v << V << endl;
+				}
+				cout << endl;
+			}
+			#endif
+		}
+	}
+	
+	if(fixShifts)
+	{
+		if(getEdges)
+		{
+			GetBrushVertexList(1);
+			GetFaceOrients();
+			GetTVecAligns();
+		}
+		
+		for (int f = 0; f<t_faces; f++)
+		{
+			face &Face = Faces[f];
+			if (Face.draw)
+			{
+				GetBaseEdges(Face);
+				GetBaseShift(Face, 0, 1, 0);
+				Face.ShiftX = Face.BaseShiftX + Face.OffsetX;
+				Face.ShiftY = Face.BaseShiftY + Face.OffsetY;
+			}
+		}
+	}
+
+}
 
 void brush::Copy(brush &Source)
 {
@@ -504,6 +793,7 @@ void brush::Copy(brush &Source)
 	entID 	= Source.entID;
 	bID		= Source.bID;
 	IsOrigin= Source.IsOrigin;
+	AllFacesNull = Source.AllFacesNull;
 	
 	vlist = new int[t_faces-2];
 	if (Source.vlist!=nullptr)
@@ -518,7 +808,6 @@ void brush::Copy(brush &Source)
 		Gap = new brush;
 		Gap->CopySimple(*Source.Gap);
 	}
-	
 	for (int f = 0; f<t_faces; f++)
 	{
 		face &OFace = Source.Faces[f];
@@ -547,8 +836,8 @@ void brush::Copy(brush &Source)
 		Face.BaseY2		= OFace.BaseY2;
 		Face.tID		= OFace.tID;
 		Face.Orient 	= OFace.Orient;
-		Face.Vertices 	= new vertex[Face.vcount];
-		Face.VerticesC 	= new vertex[Face.vcountC];
+		Face.Vertices 	= new vertex[OFace.vcount];
+		Face.VerticesC 	= new vertex[OFace.vcountC];
 		Face.draw		= OFace.draw;
 		Face.BaseShiftX = OFace.BaseShiftX;
 		Face.BaseShiftY = OFace.BaseShiftY;
@@ -583,12 +872,12 @@ void brush::Copy(brush &Source)
 			//cout << " Face.BaseListX["<<i<<"] " << Face.BaseListX[i]<< endl;
 			//cout << " Face.BaseListY["<<i<<"] " << Face.BaseListY[i]<< endl;
 		}
-		for (int v = 0; v<Face.vcount; v++) {
+		for (int v = 0; v<OFace.vcount; v++) {
 			vertex &OVert = OFace.Vertices[v];
 			vertex &Vert = Face.Vertices[v];
 			Vert = OVert;
 		}
-		for (int v = 0; v<Face.vcountC; v++) {
+		for (int v = 0; v<OFace.vcountC; v++) {
 			vertex &OVertC = OFace.VerticesC[v];
 			vertex &VertC = Face.VerticesC[v];
 			VertC = OVertC;
@@ -613,6 +902,7 @@ void brush::CopySimple(brush &Source)
 	bID		= Source.bID;
 	IsOrigin= Source.IsOrigin;
 	IsWedge = Source.IsWedge;
+	AllFacesNull = Source.AllFacesNull;
 	
 	for (int f = 0; f<t_faces; f++)
 	{
@@ -658,6 +948,8 @@ void brush::CopySimple(brush &Source)
 			vertex &OVert = OFace.Vertices[v];
 			vertex &Vert = Face.Vertices[v];
 			Vert = OVert;
+			Vert.DoAddHeight 	= OVert.DoAddHeight;
+			Vert.DoRound 		= OVert.DoRound;
 		}
 	}
 }
@@ -781,18 +1073,24 @@ void brush::GetSimpleCentroid()
 		for (int f = 0; f<Brush.t_faces; f++)
 		{
 			face &Face = Brush.Faces[f];
-			// get smallest and biggest Y/Z vertex coordinate for each brush
-			for (int v = 0; v<3; v++)
+			if(Face.draw)
 			{
-				vertex &ev = Face.Vertices[v];
-
-				// smallest/biggest X/Y
-				if (f==0&&v==0) {sy=ev.y; hy=ev.y; sz=ev.z; hz=ev.z; }
-				else {
-					if (ev.y<sy) {sy = ev.y; }
-					if (ev.y>hy) {hy = ev.y; }
-					if (ev.z<sz) {sz = ev.z; }
-					if (ev.z>hz) {hz = ev.z; }
+				// get smallest and biggest Y/Z vertex coordinate for each brush
+				for (int v = 0; v<3; v++)
+				{
+					vertex &ev = Face.Vertices[v];
+	
+					// smallest/biggest X/Y
+					if (f==0&&v==0) {sy=ev.y; hy=ev.y; sz=ev.z; hz=ev.z; }
+					else {
+						if (ev.y<sy) {sy = ev.y; }
+						if (ev.y>hy) {hy = ev.y; }
+						if (ev.z<sz) {sz = ev.z; }
+						if (ev.z>hz) {hz = ev.z; }
+					}
+					#if DEBUG > 0
+					if(dev) { cout << "b: " << Brush.bID << " f " << f << " v " << v << " = " << ev << endl; }
+					#endif
 				}
 			}
 		}
@@ -810,7 +1108,7 @@ void brush::GetFaceVertexSE()
 {
 	#if DEBUG > 0
 	bool dev = 0;
-	if(dev) cout << endl << " Smallest and Biggest Face Vertex Angle..." << endl;
+	if(dev) cout << "\n\n SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS Smallest and Biggest Face Vertex Angle... SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS" << endl;
 	#endif
 	
 	brush &Brush = *this;
@@ -826,7 +1124,7 @@ void brush::GetFaceVertexSE()
 			vertex &face_smallest = Face.Vertices[sv_ID]; // vertex that has smallest angle face-wide (at beginning always 0)
 			vertex &face_biggest  = Face.Vertices[bv_ID]; // vertex that has biggest  angle face-wide (at beginning always 0)
 			
-			if (Face.fID==2) // only body faces
+			if (Face.fID==2&&Face.draw) // only body faces
 			{
 				for (int v = 1; v<Face.vcount; v++) // vertex loop // changed from Face.vcount to vcount 3
 				{
@@ -835,7 +1133,7 @@ void brush::GetFaceVertexSE()
 					if (candidate.angle < Face.Vertices[sv_ID].angle)
 					{
 						#if DEBUG > 0
-						if(dev) cout << "    Face "<<f<<" tex "<< Face.Texture << " candidate angle (" << round(candidate.angle) << ") is smaller than smallest angle of face (" << round(Face.Vertices[sv_ID].angle) << ")" << endl;
+						if(dev) cout << "    Face "<<f<<" tex "<< Face.Texture << " Normal: " << Face.Normal << " candidate angle (" << candidate.angle << ") is smaller than smallest angle of face (" << Face.Vertices[sv_ID].angle << ")" << endl;
 						#endif
 						
 						sv_ID = v;
@@ -844,7 +1142,7 @@ void brush::GetFaceVertexSE()
 					if (candidate.angle > Face.Vertices[bv_ID].angle)
 					{
 						#if DEBUG > 0
-						if(dev) cout << "    Face "<<f<<" tex "<< Face.Texture << " candidate angle (" << round(candidate.angle) << ") is bigger than biggest angle of face (" << round(Face.Vertices[bv_ID].angle) << ")" << endl;
+						if(dev) cout << "    Face "<<f<<" tex "<< Face.Texture << " Normal: " << Face.Normal << " candidate angle (" << candidate.angle << ") is bigger than biggest angle of face (" << Face.Vertices[bv_ID].angle << ")" << endl;
 						#endif
 						
 						bv_ID = v;
@@ -870,7 +1168,8 @@ void brush::GetFaceVertexSE()
 	}
 	
 	#if DEBUG > 0
-	if(dev) system("pause");
+	if(dev) cout << " SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS END SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS\n\n";
+	if(dev) WAIT();
 	#endif
 }
 
@@ -880,7 +1179,7 @@ void brush::GetVertexListSE()
 {
 	#if DEBUG > 0
 	bool dev = 0;
-	if(dev) cout<< endl << " First and Last Vertex of a whole Brush..." << endl;
+	if(dev) cout << "\n\nFLFLFLFLFLFLFLFLFLFLFLFLFLFLFLFLFL First and Last Vertex of a whole Brush... FLFLFLFLFLFLFLFLFLFLFLFLFLFLFLFLFL" << endl;
 	#endif
 	
 	brush &Brush = *this;
@@ -890,34 +1189,41 @@ void brush::GetVertexListSE()
 		int &first_entry = Brush.vlist[0];
 		int &last_entry  = Brush.vlist[Brush.t_faces-3];
 		
-		float &sangle = Brush.vAngle_s; // smallest vertex angle of whole brush
-		float &bangle = Brush.vAngle_b; // biggest  vertex angle of whole brush
+		float &g_smallest = Brush.vAngle_s; // smallest vertex angle of whole brush
+		float &g_biggest = Brush.vAngle_b; // biggest  vertex angle of whole brush
 		
 		#if DEBUG > 0
-		if(dev) cout << "Brush " << Brush.SegID << ", smallest vertex angle: " << sangle << ", biggest: " << bangle << endl;
+		if(dev) cout << "Brush " << Brush.SegID << ", smallest vertex angle: " << g_smallest << ", biggest: " << g_biggest << endl;
 		#endif
 		
 		for (int f = 0; f<Brush.t_faces; f++)
 		{
 			face &Face = Brush.Faces[f];
-			vertex &sfv = Face.Vertices[Face.vAngle_s]; // vertex of this face that has smallest angle
-			vertex &bfv  = Face.Vertices[Face.vAngle_b]; // ... biggest angle
+			vertex &l_smallest = Face.Vertices[Face.vAngle_s]; // vertex of this face that has smallest angle
+			vertex &l_biggest  = Face.Vertices[Face.vAngle_b]; // ... biggest angle
 			
-			if (Face.fID==2) // only body faces
+			if (Face.fID==2&&Face.draw) // only body faces
 			{
 				#if DEBUG > 0
-				if(dev) cout << " Face " << f << ", smallest angle: " << Face.Vertices[Face.vAngle_s].angle << ", vertex "<< Face.vAngle_s << Face.Vertices[Face.vAngle_s] << ", biggest angle: " << Face.Vertices[Face.vAngle_b].angle << ", vertex "<< Face.vAngle_b << Face.Vertices[Face.vAngle_b] << endl;
+				if(dev) cout << " Face " << f << " Normal: " << Face.Normal << ", smallest angle: " << Face.Vertices[Face.vAngle_s].angle << ", vertex "<< Face.vAngle_s << Face.Vertices[Face.vAngle_s] << ", biggest angle: " << Face.Vertices[Face.vAngle_b].angle << ", vertex "<< Face.vAngle_b << Face.Vertices[Face.vAngle_b] << endl;
 				#endif
 				
-				// a brush has 2 faces, that share the smallest vertex angle, but only one face can be the first, the other one is the last
-				if		(sfv.angle == sangle && bfv.angle < bangle) // the first face cant have the biggest vertex angle in it
-				first_entry = f;
-				
-				else if (sfv.angle == sangle && bfv.angle == bangle) // only the last face can have the biggest vertex angle in it
+				// a brush has 2 faces that share the smallest vertex angle, but only one face can be the first, the other one is the last
+				if		(l_smallest.angle == g_smallest && l_biggest.angle < g_biggest) // the first face cant have the biggest vertex angle in it
+				{
+					first_entry = f;
+				}
+				else if (l_smallest.angle == g_smallest && l_biggest.angle == g_biggest) // only the last face can have the biggest vertex angle in it
 				{
 					last_entry = f;
 					Face.vAngle_s = Face.vAngle_b;
 				}
+				/*else
+				{
+					last_entry = f;
+					Face.vAngle_s = Face.vAngle_b;
+
+				}*/
 			}
 		}
 		
@@ -930,13 +1236,14 @@ void brush::GetVertexListSE()
 	}
 	
 	#if DEBUG > 0
-	if(dev) system("pause");
+	if(dev) cout << "FLFLFLFLFLFLFLFLFLFLFLFLFLFLFLFLFL END FLFLFLFLFLFLFLFLFLFLFLFLFLFLFLFLFL\n\n";
+	if(dev) WAIT();
 	#endif
 }
 
 
 // sort the rest of the vertices (only one vertex per face left)
-void brush::GetVertexList()
+void brush::GetVertexList(bool Override)
 {
 	#if DEBUG > 0
 	bool dev = 0;
@@ -944,10 +1251,11 @@ void brush::GetVertexList()
 	#endif
 	
 	brush &Brush = *this;
-		
-	if (Brush.vlist[0]<0||Brush.vlist[Brush.t_faces-3]<0)
+	
+	if ((Brush.vlist[0]<0||Brush.vlist[Brush.t_faces-3]<0)&&!Override)
 	{
-		cout << "|    [ERROR] There was a problem reconstructing a Brush, skipping..." << endl;
+		/* COUT */ MESSENGER( MSG_ERR_BRCONFAIL );
+		
 		Brush.valid = 0;
 	}
 	
@@ -983,7 +1291,7 @@ void brush::GetVertexList()
 			{
 				face &Face = Brush.Faces[f];
 				//cout << "    Face #" << f+1 << endl;
-				if (Face.fID==2)
+				if (Face.fID==2&&Face.draw)
 				{
 					#if DEBUG > 0
 					if(dev) cout << "    Current List Entry # " << s << ", Candidate Face#" << f << ", Vertex #" << Face.vAngle_s << ", Angle: " << Face.Vertices[Face.vAngle_s].angle << endl;
@@ -1029,7 +1337,6 @@ void brush::GetVertexList()
 	}
 	
 	#if DEBUG > 0
-	if(dev) cout << "Press any Button to continue!" << endl;
 	if(dev) system("pause");
 	#endif
 }
@@ -1240,13 +1547,10 @@ void brush::GetTVecAligns()
 				//if (Face.FaceAlign==1)
 				if (!IsValid) // Check if Face-Align of this Face is valid
 				{
-					//cout << "Face vector " << Face.VecX<< " is Hor("<<Face.VecX.IsHor<<") " << Face.VecY << " is Hor(" << Face.VecY.IsHor <<")" << endl;
+					/* COUT */ MESSENGER( MSG_WARN_CVWALIGN, vector<string>{ Face.Texture }, vector<int>{ f, Brush.SegID }, vector<float>{} );
 					
-					cout << "|    [WARNING] Face #" << f+1 << " of Brush #"<<Brush.SegID+1<<" (Tex: " << Face.Texture << ")"<< endl;
-					cout << "|              has no valid align for arc generation."<<endl;
-					cout << "|              World Align is being applied." << endl;
-					cout << "|" << endl;
 					AlignToWorld(Face);
+					ErrorCode = 2;
 				}
 				
 				// get orientation of horizontal vectors for correct baseshift calculation
@@ -1296,9 +1600,16 @@ void brush::GetFaceShifts()
 		for (int f = 0; f<t_faces; f++)
 		{
 			face &Face = Faces[f];
+			
+			//cout << " OLD Tex Offset X " << Face.OffsetX << endl;
+			//cout << " OLD Tex Offset Y " << Face.OffsetY << endl;
+			
 			GetBaseEdges(Face);
 			GetBaseShift(Face, 0, 1, 0);
 			GetTexOffset(Face, 0);
+			
+			//cout << " NEW Tex Offset X " << Face.OffsetX << endl;
+			//cout << " NEW Tex Offset Y " << Face.OffsetY << endl<< endl;
 		}
 	}
 }
@@ -1396,8 +1707,8 @@ void brush::CheckDivisibility()
 					}
 				}
 			}
-			if (foundFront&&foundBack&&Brush.t_faces==6) Brush.IsDivisible = 1;
-			else if ((foundFront||foundBack)&&Brush.t_faces==5) Brush.IsDivisible = 1;
+			if (foundFront&&foundBack&&Brush.t_faces==6) { Brush.IsDivisible = 1; }
+			else if ((foundFront||foundBack)&&Brush.t_faces==5) { Brush.IsDivisible = 1; }
 			else Brush.IsDivisible = 0;
 		}
 		
@@ -1422,7 +1733,7 @@ void brush::CreateGap(int g)
 	
 	Gap->Faces[0].GetNormal();
 	gvector nEdge = Gap->Faces[0].Normal;
-	nEdge.mult(cTable[g].gaplen); // make the gap brush 256 units long
+	nEdge.mult(cTable[g].gaplen); // make the gap brush X units long
 	nEdge.flip();
 	
 	// Fix Head Faces
@@ -1444,20 +1755,39 @@ void brush::CreateGap(int g)
 	}
 	Head.RevOrder(0);
 	
+	#if DEBUG > 0
+	if (dev) cout << "   Gap-Faces: "<< Gap->t_faces << " Original Faces: " << Source.t_faces << endl;
+	#endif
+	
 	// Fix Body Faces
 	for (int f = 2; f<Gap->t_faces; f++)
 	{
 		face &Face = Gap->Faces[f];
+
+		vertex *temp = Face.Vertices;
+		Face.Vertices = new vertex[4];
+		Face.vcount = 4;
 		vertex &V0 = Face.Vertices[0];
 		vertex &V1 = Face.Vertices[1];
+		V0 = temp[0];
+		V1 = temp[1];
+		if(Source.IsWedge&&Face.draw==0) {
+		Face.draw = 1;
+		}
+		delete[] temp;
+		
 		vertex &V2 = Face.Vertices[2];
 		vertex &V3 = Face.Vertices[3];
 		V2 = Add(V1, nEdge);
 		V3 = Add(V0, nEdge);
 		
 		#if DEBUG > 0
-		if (dev) cout << "     Body Vertex 3 now " << V3 << " = V0 " << V0 << " + nEdge " << nEdge << endl;
-		if (dev) cout << "     Body Vertex 2 now " << V2 << " = V1 " << V1 << " + nEdge " << nEdge << endl;
+		if (dev) Face.GetNormal();
+		if (dev) cout << "     Face #[" << f+1 << "/" << Source.t_faces << "] vcount " << Face.vcount << " Draw " << Face.draw << " Normal " << Face.Normal << endl;
+		if (dev) cout << "           |-> Body V0 " << V0 << endl;
+		if (dev) cout << "           |-> Body V1 " << V1 << endl;
+		if (dev) cout << "           |-> Body V2 " << V2 << endl;
+		if (dev) cout << "           |-> Body V3 " << V3 << endl;
 		#endif
 	}
 }
@@ -1491,6 +1821,353 @@ void brush::FixBorderliner(int prec)
 	}
 }
 
+
+// This new reconstruction function will generate all missing vertices from a plane-based brush __ NEW as of version 0.82 - May 23rd 2025
+void brush::Reconstruct2025(bool onlyCurveBrushes)
+{
+	// this function was overhauled for v0.87 in 2025
+	
+	#if DEBUG > 0
+	bool dev = 0;
+	if (dev) {
+		cout << " ================ Brush Reconstruction START =================" << endl << endl;
+		system("pause");
+	}
+	#endif
+	
+	brush &Brush = *this;
+	
+	Brush.GetFaceNormals();
+	vector<vertex> newVertices;
+	vector<string> BlackList;
+	
+	// is brush a valid curve brush at all?
+	// this checks if all body faces have straight (90 degree) normals
+	// this check is probably unnecessary from hereby on, so I will comment it out (August 8th 2025)
+	/*bool IsValidInput = true;
+	if(onlyCurveBrushes)
+	for (int f=0; f<t_faces; f++)
+	{
+		face &F = Brush.Faces[f];
+		
+		#if DEBUG > 0
+		if (dev) { cout << "f " << f << "/"<<t_faces << " NORMAL " << F.Normal << endl; }
+		#endif
+		
+		if(
+		F.Normal.x!=1&&
+		F.Normal.x!=0&&
+		F.Normal.x!=-1
+		) {
+			IsValidInput = false;
+			break;
+		}
+	}*/
+	
+	//#if DEBUG > 0
+	//if (dev) { cout << "is brush valid at all?: "; if (IsValidInput)cout << "Yes!\n";else cout << "NO!\n"; }
+	//#endif
+	
+	// intersect all brush faces/planes with each other to get all possible vertices
+	// also create a Blacklist to do it somewhat efficient
+	//if(IsValidInput)
+	Brush.IntersectAllFaces(newVertices, BlackList);
+	
+	#if DEBUG > 0
+	if (dev) { cout << " Total new Vertices: " << newVertices.size() << endl << endl; system("pause"); }
+	#endif
+	
+	if(newVertices.size()>0)
+	{
+		// Removing vertices that lie beyond all of the brushes planes
+		vertexListRemoveAllBeyondFaces(newVertices, Brush.Faces, t_faces);
+	}
+	
+	#if DEBUG > 0
+	if (dev) { cout << "\n\n Cleaned Vertex List: " << endl;
+	for(int j=0; j<newVertices.size(); j++)
+	cout << " #" << j << " " << newVertices[j] << endl;
+	system("pause");
+	}
+	if (dev) {cout << "Adding vertices to their faces..." << endl;}
+	#endif
+	
+	// cycle through faces and add all clean new vertices to the current face which are crossing it
+	if(newVertices.size()>0)
+	for (int f=0; f<t_faces; f++)
+	{
+		face &Face = Brush.Faces[f];
+		#if DEBUG > 0
+		if (dev) { cout << "Face #" << f << endl; }
+		#endif
+		
+		// add vertices on face to a new list
+		int new_vcount = 0;
+		vector<vertex> NewFaceVerts;
+		for (int vn = 0; vn<newVertices.size(); vn++)
+		{
+			vertex &V = newVertices[vn];
+			
+			if (  IsVertexOnFace(Face,V,1) && !IsVertexInList(V,NewFaceVerts,1,2)  )
+			{
+				#if DEBUG > 0
+				if (dev) {cout << "Vertex #" << vn << " " << V << " is on Face, now there are " << NewFaceVerts.size()+1 << endl;}
+				#endif
+
+				NewFaceVerts.push_back(V);
+				new_vcount++;
+			}
+		}
+
+		#if DEBUG > 0
+		if (dev) {cout << " Old Face #"<<f<<" normal " << Face.Normal<< " Vertices:"<<endl;
+		for (int v=0;v<Face.vcount; v++) cout << Face.Vertices[v] << endl;}
+		#endif
+		
+		if (new_vcount>=3)
+		{
+			// transform vector list into pointer array
+			vertex *NewVertexPointer = new vertex[new_vcount];
+			for (int vn = 0; vn<new_vcount; vn++) {
+				NewVertexPointer[vn] = NewFaceVerts[vn];
+			}
+			
+			delete[] Face.Vertices;
+			Face.Vertices = NewVertexPointer;
+			
+			Face.vcount = new_vcount;
+			
+			// sort face vertices
+			Face.SortVertices(Face.Normal);
+			Face.GetNormal();
+		}
+		else
+		{
+			Brush.valid = 0;
+			//break;  // XXXXXXXXXXXXXXXXXXX added test-vise Sept 9th 2025
+		}
+		
+		#if DEBUG > 0
+		if (dev) {cout << " New Face #"<<f<<" normal " << Face.Normal<< "new vcount: " << new_vcount << endl;
+		for (int v=0;v<Face.vcount; v++) cout << Face.Vertices[v] << endl;
+		cout << endl;}
+		#endif
+	}
+	
+	// fix borderliner (e.g. 15.9999 = 16.0)
+	if(Brush.valid)
+	for(int f=0; f<t_faces; f++)
+	{
+		face &Face = Faces[f];
+		for(int v=0; v<Face.vcount; v++)
+		{
+			vertex &V = Face.Vertices[v];
+			if(IsBorderliner(V.x,2)==1) V.x = round(V.x);
+			if(IsBorderliner(V.y,2)==1) V.y = round(V.y);
+			if(IsBorderliner(V.z,2)==1) V.z = round(V.z);
+		}
+	}
+	
+	if(Brush.valid) Brush.RCON = 1; // XXXXXXXXXXXXXXXXXXX added test-vise Sept 9th 2025
+	
+	#if DEBUG > 0
+	if (dev) {
+		cout << " RECONSTRUCT END " << endl << endl;
+		system("pause");
+	}
+	#endif
+}
+
+void brush::IntersectAllFaces(vector<vertex>&newVertices, vector<string>&BlackList)
+{
+	#if DEBUG > 0
+	bool dev = 0;
+	#endif
+	
+	brush &Brush = *this;
+	
+	for (int fa=0; fa<t_faces; fa++)
+	{
+		for (int fb=0; fb<t_faces; fb++)
+		{
+			for (int fc=0; fc<t_faces; fc++)
+			{
+				if (fa!=fb&&fa!=fc&&fb!=fc)
+				{
+					face &FA = Brush.Faces[fa];
+					face &FB = Brush.Faces[fb];
+					face &FC = Brush.Faces[fc];
+					
+					// get Dotproducts 
+					float D1 = GetDot(FA.Normal, FB.Normal);
+					float D2 = GetDot(FA.Normal, FC.Normal);
+					float D3 = GetDot(FB.Normal, FC.Normal);
+					
+					// create sorted Index for Blacklist
+					int BLI[3] = { fa, fb, fc };
+					if(BLI[2]<BLI[1]) swap(BLI[2], BLI[1]);
+					if(BLI[1]<BLI[0]) swap(BLI[0], BLI[1]);
+					if(BLI[2]<BLI[1]) swap(BLI[2], BLI[1]);
+					string BLI_string = to_string(BLI[0]) + "_" + to_string(BLI[1]) + "_" + to_string(BLI[2]);
+					
+					bool isBListed = false;
+					for(int i = 0; i<BlackList.size(); i++) { if(BlackList[i] == BLI_string ) { isBListed = true; break; } }
+					
+					// check if all faces are relevant with Dotproduct and Blacklist
+					if (!isBListed && D1>-1 && D2>-1 && D3>-1)
+					{
+						double matrice[3][4];
+						SetMat(matrice, FA,FB,FC);
+						
+						vertex Vert;
+						
+					    partial_pivot(matrice, 3);
+					    back_substitute(matrice, 3, Vert);
+					    
+					    if(Vert.IsValid)
+						newVertices.push_back(Vert);
+						
+						#if DEBUG > 0
+						if (dev) {
+							DevVertices.push_back(Vert);
+							cout << " Current (sorted) Blacklist Index a["<<fa<<"]b["<<fb<<"]c["<<fc<<"]: " << BLI_string << " new Vertex #" << newVertices.size() << Vert << endl;
+							//cout << " Dots: " << D1 << ", " << D2 << ", " << D3 << endl;
+							//cout << " Faces " << FA.Normal << " " << FB.Normal << " " << FC.Normal << endl;
+							//cout << " Face0 " << FA;
+							//cout << " Face1 " << FB;
+							//cout << " Face2 " << FC;
+						}
+						#endif
+						
+						// add Index to Blacklist
+						BlackList.push_back(BLI_string);
+					}
+				}
+			}
+		}
+	}
+	#if DEBUG > 0
+	if (dev) cout << " New vertices: "<< newVertices.size() << endl;
+	#endif
+}
+
+bool brush::IsThisBrushMadeOfTrianglesEntirely()
+{
+	#if DEBUG > 0
+	bool dev = 0;
+	#endif
+	
+	bool condition = 1;
+	int check[t_faces];
+	for (int i=0; i<t_faces; i++) check[i]=0;
+	
+	// check how many edges this face shares with all other faces
+	// when a face has 3 vertices and 3 edges in common this could/should mean that it is actually a triangle polygon
+	for (int fa=0; fa<t_faces; fa++)
+	{
+		face &F1 = Faces[fa];
+		
+		for (int fb=0; fb<t_faces; fb++)
+		{
+			face &F2 = Faces[fb];
+			
+			if (fa!=fb)
+			{
+				if(  DoTheseFacesShareAnEdge( F1, F2 )  )
+				{
+					check[fa]++;
+				}
+			}
+		}
+		#if DEBUG > 0
+		if(dev)cout << " Face #" << fa << " has " << check[fa] << " edges in common with " << t_faces << " other faces" << endl;
+		#endif
+		
+		if(check[fa]!=Faces[fa].vcount) condition = 0;
+	}
+	
+	#if DEBUG > 0
+	if(dev) { 	if (condition)cout << " Brush IS made of triangles only!"<< endl << endl;
+				else cout << " Brush is NOT made of triangles only!"<< endl<< endl; }
+	#endif
+	
+	return condition;
+}
+
+// a face can either be defined by vertices or just a plane, this function checks which one it is
+// 0 =  vertices, 1 = plane
+int brush::FaceMethod()
+{
+	#if DEBUG > 0
+	bool dev = 0;
+	#endif
+	
+	brush &Brush = *this;
+	
+	Brush.GetBrushDimensions(1);
+	float B_D[3] = {
+		Brush.D.xb - Brush.D.xs,
+		Brush.D.yb - Brush.D.ys,
+		Brush.D.zb - Brush.D.zs
+	};
+	#if DEBUG > 0
+	if(dev)cout << " Brush Dimensions: " << B_D[0] << ", " << B_D[1] << ", " << B_D[2] << endl;
+	#endif
+	
+	float FB[3];
+	for (int f = 0; f<t_faces; f++)
+	{
+		face &Face = Brush.Faces[f];
+		float F_D_L[3] = {0,0,0};
+		Face.GetFaceDimensions(F_D_L);
+		
+		if(f==0) {
+			FB[0] = F_D_L[0];
+			FB[1] = F_D_L[1];
+			FB[2] = F_D_L[2];
+		} else {
+			if (F_D_L[0]>FB[0]) FB[0] = F_D_L[0];
+			if (F_D_L[1]>FB[1]) FB[1] = F_D_L[1];
+			if (F_D_L[2]>FB[2]) FB[2] = F_D_L[2];
+		}
+		
+		#if DEBUG > 0
+		if(dev)cout << " Face #" << f << " Dimensions: " << F_D_L[0] << ", " << F_D_L[1] << ", " << F_D_L[2] << endl;
+		#endif
+	}
+	
+	// check if some calculated face dimensions equal brush dimensions; one per axis shoud be enough
+	if(B_D[0]==FB[0] && B_D[1]==FB[1] && B_D[2]==FB[2]) {
+		#if DEBUG > 0
+		if(dev)cout << " This Brushs Faces are entirely made up by real vertices!" << endl;
+		if(dev)system("pause");
+		#endif
+		return 0;
+	}
+	else if (
+		B_D[0]>1 && 
+		B_D[1]>1 && 
+		B_D[2]>1 && 
+		B_D[0]>FB[0] && 
+		B_D[1]>FB[1] && 
+		B_D[2]>FB[2]) {
+		#if DEBUG > 0
+		if(dev)cout << " This Brushs Faces are entirely made up by planes!" << endl;
+		if(dev)system("pause");
+		#endif
+		return 1;
+	}
+	else {
+		#if DEBUG > 0
+		if(dev)cout << " Unclear, so better be safe!" << endl;
+		if(dev)system("pause");
+		#endif
+		return 1;
+	}
+}
+
+// removed due to v0.87 overhaul in 2025
+/*
 void brush::Reconstruct()
 {
 	#if DEBUG > 0
@@ -1503,7 +2180,7 @@ void brush::Reconstruct()
 		DoRcon[f] = 1;
 	vector< vector<int> > ConList(t_faces); // connected Faces index list
 
-	ConList.resize(t_faces);
+	ConList.resize(t_faces); // is this resize even neccessary?
 	// when a brush is being imported from a map file, each of its faces consists of 3 vertices
 	// in order to be able to get their original texture offsets, their remaining vertices have to be calculated
 	
@@ -1546,12 +2223,12 @@ void brush::Reconstruct()
 						if (dev) cout << "   Match! V " << v << V << " of F " << fc << " ("<<CFace.Texture <<") is on Face " << f << " ("<<Face.Texture<<") NVec "<< Face.Normal << " Listsize " << NewFaceVerts.size() << endl;
 						#endif
 					}
+					#if DEBUG > 0
 					else
 					{
-						#if DEBUG > 0
 						if (dev) cout << "   NO Match! Vertex " << v << V << " of Face " << fc << " ("<<CFace.Texture <<") wasnt found on Face " << f << " ("<<Face.Texture<<")!" << endl;
-						#endif
 					}
+					#endif
 				}
 			}
 		}
@@ -1607,20 +2284,6 @@ void brush::Reconstruct()
 		#endif
 	}
 	
-	#if DEBUG > 0
-	if (dev) cout << "  New vertex lists..." << endl;
-	if (dev)
-	for (int f = 0; f<t_faces; f++)
-	{
-		face &Face = Brush.Faces[f];
-		for (int v = 0; v<Face.vcount; v++)
-		{
-			vertex &V = Face.Vertices[v];
-			cout << "    Face " << f<< " Tex " << Face.Texture << " v " << v << V << endl;
-		}
-	}
-	#endif
-	
 	// sort face vertices
 	for (int f = 0; f<t_faces; f++)
 	{
@@ -1630,12 +2293,27 @@ void brush::Reconstruct()
 	}
 	
 	#if DEBUG > 0
+	if (dev) cout << "  New vertex lists..." << endl;
+	if (dev)
+	for (int f = 0; f<t_faces; f++)
+	{
+		face &Face = Brush.Faces[f];
+		for (int v = 0; v<Face.vcount; v++)
+		{
+			vertex &V = Face.Vertices[v];
+			cout << "    Face " << f<< " NORMAL " << Face.Normal << " Tex " << Face.Texture << " v " << v << V << endl;
+		}
+	}
+	#endif
+	
+	#if DEBUG > 0
 	if (dev) cout << " FINISH!" << endl;
 	if (dev) system("pause");
 	#endif
 	// Skip reconstruction entirely, if brush is only made of triangles! (but this isnt possible. theres no way to tell if thats true without further checking)
 	// solution: if every face of a brush has 2 connected faces initially, the brush consists only of triangles (correct?? NO!!)
 }
+*/
 
 void brush::CheckForHoles(vector<int> &Neighbors)
 {
@@ -1684,7 +2362,7 @@ void brush::CheckForHoles(vector<int> &Neighbors)
 	
 	// DEV PURPOSES: EXPORT BRUSH TO OBJ FILE
 	//string Output = gFile->p_path+gFile->name;
-	//ExportBrushToOBJ(Output, Brush);
+	//ExportBrushToOBJDev(Output, Brush);
 	
 	// 3 connected Neighbors are necessary to get the missing vertex; otherwise ignore hole ¯\_(")_/¯
 	#if DEBUG > 0
@@ -1797,6 +2475,8 @@ bool brush::IsEdgeInBrush(vertex &E1, vertex &E2, int Exclude)
 }
 	
 
+// MADE UNNECESSARY IN THE v0.87 OVERHAUL UPDATE 2025
+/*
 void brush::FixHoles()
 {
 	#if DEBUG > 0
@@ -1804,6 +2484,8 @@ void brush::FixHoles()
 	if(dev) cout << endl << " Fixing Holes..."<< endl;
 	#endif
 	brush &Brush = *this;
+	
+	//ExportBrushToOBJDev((gFile->p_path+gFile->name+"_pre.obj"), Brush);
 	
 	vector<int> Neighbors;
 	CheckForHoles(Neighbors);
@@ -1815,16 +2497,58 @@ void brush::FixHoles()
 		
 		#if DEBUG > 0
 		if(dev) cout << "   Getting intersection point of 3 faces..."<< endl;
-		if(dev) for(int i=0;i<3; i++) cout << "    Neighbor Face #" << i << " [" << Neighbors[i] << "]" << endl << Faces[Neighbors[i]] << endl;
+		if(dev) for(int i=0;i<3; i++) {
+					cout << "    Neighbor Face #" << i << " [" << Neighbors[i] << "]" << endl;
+					for(int v=0;v<Faces[Neighbors[i]].vcount; v++) { cout << "      Vertex #" << v << " " << Faces[Neighbors[i]].Vertices[v] << endl; }
+				}
 		#endif
 		
+		// v0.87 addition - August 2nd 2025 - added partial pivot method as fallback if solution of gaussianElimination was NAN
+		
 		double mat[3][4];
-		SetMat(mat, F1,F2,F3);
 		vertex Isect;
+		int foundValid = 0;
+		SetMat(mat, F1,F2,F3);
 		
 		if(gaussianElimination(mat, Isect))
 		{
-			// add new vertex to each of the faces, that surround the hole
+			if(!IsVertexNan(Isect)) { foundValid++; }
+			
+			#if DEBUG > 0
+			if(dev) cout << " Solution of gaussianElimination: " << Isect << endl;
+			#endif
+		}
+		if(foundValid==0)
+		{
+			SetMat(mat, F1,F2,F3);
+			partial_pivot(mat, 3);
+			back_substitute(mat, 3, Isect);
+			
+			if(!IsVertexNan(Isect)) { foundValid++; }
+			
+			#if DEBUG > 0
+			if(dev) cout << " Solution of partial_pivot: " << Isect << endl;
+			#endif
+		}
+		
+		// pre v0.87 code
+//		if(gaussianElimination(mat, Isect))
+//		{
+//			// add new vertex to each of the faces, that surround the hole
+//			F1.AddNewVertex(Isect);
+//			F2.AddNewVertex(Isect);
+//			F3.AddNewVertex(Isect);
+//			
+//			#if DEBUG > 0
+//			if(dev) cout << "   Intersection point " << Isect << endl;
+//			if(dev) for(int i=0;i<3; i++) {
+//				cout << "    Neighbor Face #" << i << " [" << Neighbors[i] << "]" << endl;
+//				for(int v=0;v<Faces[Neighbors[i]].vcount; v++) { cout << "      Vertex #" << v << " " << Faces[Neighbors[i]].Vertices[v] << endl; }
+//			}
+//			#endif
+//		}
+		if(foundValid>0)
+		{
 			F1.AddNewVertex(Isect);
 			F2.AddNewVertex(Isect);
 			F3.AddNewVertex(Isect);
@@ -1832,7 +2556,7 @@ void brush::FixHoles()
 		else
 		{
 			cout << "|    [WARNING] Hole found in imported Brush could not be fixed!"<< endl;
-			
+			ErrorCode = 2;
 			#if DEBUG > 0
 			if(dev) {
 			F1.Texture = "RED";
@@ -1843,7 +2567,10 @@ void brush::FixHoles()
 			#endif
 		}
 	}
+	
+	//ExportBrushToOBJDev((gFile->p_path+gFile->name+"_after.obj"), Brush);
 }
+*/
 
 void brush::CreateTent()
 {
@@ -1933,21 +2660,21 @@ void brush::ClearVertexList()
 	}
 }
 
-void brush::RoundVertices()
+void brush::RoundVertices(int g)
 {
 	brush &Brush = *this;
 	
-	if (   Brush.valid && Brush.draw  )
+	if (   Brush.valid && Brush.draw   )
 	for (int f = 0; f<Brush.t_faces; f++)
 	{
 		face &Face = Brush.Faces[f];
-		Face.RoundVertices();
+		Face.RoundVertices(g);
 		
 		// Gaps
 		if(Brush.Gap!=nullptr)
 		{
 			face &Face = Brush.Gap->Faces[f];
-			Face.RoundVertices();
+			Face.RoundVertices(g);
 		}
 	}
 }
@@ -2006,14 +2733,13 @@ void brush::MarkFaceVertices(face &Candidate, int Mode, bool Overwrite)
 				if(dev) cout << "     Vertex " << v << V << endl;
 				#endif
 				
-				if (CompareVerticesXY(C,V))
+				if (CompareVertices(C,V)) //(CompareVerticesXYDeci(C,V,2))
 				{
 					#if DEBUG > 0
 					if(dev) cout << "       Match Found!" << endl;
 					#endif
-					
-					if (Mode==1)	V.DoAddHeight = 1;
-					if (Mode==0)	V.DoRound = 1;
+					if (Mode==1) V.DoAddHeight = 1;
+					if (Mode==0) V.DoRound = 1;
 				}
 			}
 		}
@@ -2023,7 +2749,7 @@ void brush::MarkFaceVertices(face &Candidate, int Mode, bool Overwrite)
 	#endif
 }
 
-void brush::CheckNULLFaces()
+void brush::CheckNULLFaces(bool markDraw)
 {
 	brush &Brush = *this;
 	int Ncount = 0;
@@ -2049,8 +2775,9 @@ void brush::CheckNULLFaces()
 	#if DEBUG > 0
 	if (dev) cout << "  Final Null Count of this Brush " << Ncount << " of total " << Brush.t_faces << endl<< endl;
 	#endif
+	if(Ncount == Brush.t_faces) AllFacesNull = 1;
 	
-	if (Ncount == Brush.t_faces)
+	if (markDraw && Ncount == Brush.t_faces)
 	Brush.draw = 0;
 }
 
@@ -2151,7 +2878,7 @@ void brush::Triangulate()
 		}
 		else
 		{
-			// Brush isnt divisible effectively, so it has to be split up into as many triangle-brushes as necessary, but not more, to keep it efficient
+			// Brush isnt divisible efficiently, so it has to be split up into as many triangle-brushes as necessary, but not more, to keep it efficient as possible
 			#if DEBUG > 0
 			if (dev) cout << " Triangulating Complex Brush..." << endl;
 			#endif
@@ -2437,6 +3164,7 @@ void brush::TriComplex()
 			brush* Head = Face2Brush(Brush.Faces[1]);
 			Brush.Tri[0].CopySimple(*Base);
 			Brush.Tri[1].CopySimple(*Head);
+			Brush.Tri[1].MarkFaceVertices(Brush.Faces[1],1,1);
 			delete Base;
 			delete Head;
 		}
@@ -2469,6 +3197,7 @@ void brush::TriComplex()
 					
 					brush* HeadFan = Face2BrushTriBridge(Brush.Faces[1], ov);
 					Brush.Tri[tb].CopySimple(*HeadFan);
+					Brush.Tri[tb].MarkFaceVertices(Brush.Faces[1],1,1);
 					delete HeadFan;
 					tb++;
 				}
@@ -2583,7 +3312,7 @@ void brush::GetFaceOrients()
 	#if DEBUG > 0
 	bool dev = 0;
 	bool devtex = 0;
-	if (dev) cout << " determine Orientation of all body Faces..." << endl;
+	if (dev) cout << "\n\nOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO determine Orientation of all body Faces... OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO" << endl;
 	#endif
 	
 	// 0 = Left, 1 = Right, 2 = Top, 3 = Down, 4 = Front, 5 = Back
@@ -2647,6 +3376,9 @@ void brush::GetFaceOrients()
 		}
 		// if top and down faces cant be identified but front/back faces were and brush qualifies as a potential Cuboid (6 faces):
 	}
+	#if DEBUG > 0
+	if (dev) cout << "OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO END OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO\n\n";
+	#endif
 }
 
 bool brush::CheckValidity()
@@ -2661,7 +3393,7 @@ bool brush::CheckValidity()
 	Brush.HeadID=-1;
 
 	#if DEBUG > 0
-	if(dev) cout << "  Checking Validity of Brush " << Brush.SegID<< endl;
+	if(dev) cout << "\n\nVVVVVVVVVVVVVVVVVVVVVVVVVVVVV Checking Validity of Brush VVVVVVVVVVVVVVVVVVVVVVVVVVVVV " << Brush.SegID<< endl;
 	#endif
 	
 	int ctr_base = 0;
@@ -2669,7 +3401,7 @@ bool brush::CheckValidity()
 	int ctr_body = 0;
 	
 	// look for base and head faces. everything else must be a body face (supposedly)
-	// also check of faces are planar, because Face Normals are calculated of only 3 vertices
+	// also check if faces are planar, because Face Normals are calculated of only 3 vertices
 	for(int f = 0; f<Brush.t_faces; f++)
 	{
 		face &Face = Brush.Faces[f];
@@ -2743,7 +3475,11 @@ bool brush::CheckValidity()
 				for (int h = 0; h<Base.vcount; h++)
 				{
 					vertex &H = Head.Vertices[h];
-					if (B.x!=H.x&&B.y==H.y&&B.z==H.z) {
+					if //(B.x!=H.x&&B.y==H.y&&B.z==H.z) // CHANGED AS OF v0.87 - June 2nd, 2025
+						(!CompareFloatDeci(B.x,H.x,2)&& // REDUCED from 3 to 2 DECIMAL PLACES to avoid invalid brushes when really not invalid; UPDATE v0.87 - September 22 2025
+						CompareFloatDeci(B.y,H.y,2)&& // ^
+						CompareFloatDeci(B.z,H.z,2)) // ^
+					{
 						mCtr++;
 						
 						#if DEBUG > 0
@@ -2764,17 +3500,21 @@ bool brush::CheckValidity()
 		else if (!RCON) Mirror = 1; // if Brushes arent reconstructed yet, theres no point in checking for mirrored vertices
 	}
 	#if DEBUG > 0
-	if (dev) system("pause");
 	if(dev) {
 		cout << " ctr_head " << ctr_head << " ctr_base " << ctr_base << " ctr_body " << ctr_body << " tfaces " << Brush.t_faces << " Mirror " << Mirror << endl;
+		cout << " VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV " << endl << endl;
 	}
+	if (dev) WAIT();
 	#endif
 	
 	if (ctr_head!=1||ctr_base!=1||ctr_body!=Brush.t_faces-2||!Mirror)
 	{
 		Brush.valid = 0;
-		cout << "|  [WARNING] Brush ["<<Brush.bID<<"] of Entity ["<<Brush.entID<<"] seems to have an invalid mesh and won't be processed." << endl;
-		cout << "|" << endl;
+		Brush.t_faces = 0;
+		Brush.draw = 0;
+		// invalid brush warning
+		MESSENGER( MSG_WARN_INVALBRU, vector<string>{}, vector<int>{Brush.bID, Brush.entID}, vector<float>{} );
+		ErrorCode = 2;
 		return false;
 	}
 	else return true;
@@ -2949,38 +3689,98 @@ brush* Face2BrushTriFan(face &SrcFace, int VID)
 
 
 
-void ExportBrushToOBJ(string Output, brush &Brush)
+void ExportBrushToOBJDev(string Output, brush &Brush, bool append)
 {
-	ofstream objfile;
-	objfile.open(Output+"_Brush_"+Brush.name+".obj");
+	vector<vertex>vertexList;
 	
-	objfile << "g brush_export" << endl;
+	// obj format can be used with absolute and relative vertex indices
+	bool relative = 1;
 	
-	for (int f = 0; f < Brush.t_faces; f++)
+	// get full vertex list
+	if(!relative)
+	for (int f = 0, vc; f < Brush.t_faces; f++)
 	{
 		face &Face = Brush.Faces[f];
-		int tverts = Face.vcount;
-		
 		if (Face.draw)
+			for(int v = 0; v < Face.vcount; v++)
+			{
+				vertexList.push_back(Face.Vertices[v]);
+			}
+	}
+	/*for(int i = 0; i < Brush.DevVertices.size(); i++) {
+		vertexList.push_back(Brush.DevVertices[i]);
+	}*/
+	
+	// write brush faces with respective vertex indices
+	ofstream objfile;
+	
+	if(append&&CheckIfFileExists(Output))
+		objfile.open(Output, ios_base::app);
+	else 
+		objfile.open(Output);
+	
+	
+	// write vertices and faces
+	if(append)
+	objfile << "\n\n" << endl;
+	objfile << "o Brush" << endl;
+	
+	if(!relative)
+	{
+		for(int v = 0; v < vertexList.size(); v++) {
+			objfile << "v " << vertexList[v].x << " " << vertexList[v].y << " " << vertexList[v].z << endl;
+		}
+		
+		objfile << "s 0\n";
+		
+		int vc = 0;
+		
+		for (int f = 0; f < Brush.t_faces; f++)
 		{
-			for(int v = 0; v < tverts; v++)
+			face &Face = Brush.Faces[f];
+			int tverts = Face.vcount;
+			
+			if (Face.draw)
 			{
-				vertex &V = Face.Vertices[v];
-				objfile << "v " << V.x << " " << V.y << " " << V.z << " ";
+				objfile << "f ";
 				
-				// FOR DEV PURPOSES: color this vertex red
-				if(V.DoSplit) objfile << "1 0 0" << endl;
-				else objfile << endl;
+				for(int i = 0; i < tverts; i++)
+				{
+					objfile << vc+1 << " ";
+					vc++;
+				}
+				objfile << endl;
 			}
+		}
+		
+		/*for(int v = 0; v < Brush.DevVertices.size(); v++) {
+				objfile << "p " << vc+1 << endl;
+				vc++;
+		}*/
+	}
+	else
+	{
+		for (int f = 0; f < Brush.t_faces; f++)
+		{
+			face &Face = Brush.Faces[f];
+			int tverts = Face.vcount;
 			
-			objfile << "f";
-			
-			for(int i = 0; i < tverts; i++)
+			if (Face.draw)
 			{
-				objfile << " -" << i+1;
+				for(int v = 0; v < tverts; v++)
+				{
+					objfile << "v " << Face.Vertices[v].x << " " << Face.Vertices[v].y << " " << Face.Vertices[v].z << "\n";
+				}
+				
+				objfile << "f";
+				
+				for(int i = 0; i < tverts; i++)
+				{
+					objfile << " -" << i+1;
+				}
+				
+				objfile << endl << endl;
 			}
-			
-			objfile << endl << endl;
 		}
 	}
 	
@@ -3148,7 +3948,88 @@ void brush::VecToBrush(gvector &Vec, gvector Normal, string Tex)
 	F2.RevOrder(0);
 }
 
+void brush::CleanUpBrush()
+{
+	brush &Brush = *this;
+	
+	#if DEBUG > 0
+	bool dev = 0;
+	if (dev) {cout << " CLEANUP BRUSH START " << Brush.name << endl;}
+	#endif
+	
+	int ValidFaces = 0;
+	
+	// count valid faces
+	for(int f = 0; f<Brush.t_faces; f++)
+	{
+		face &Face = Brush.Faces[f];
+		if(Face.vcount<3) Face.draw = 0;
+		if(Face.draw) Face.DeleteDoppel();
+		if(Face.draw) ValidFaces++;
+		
+		#if DEBUG > 0
+		if (dev) {cout << " CLEANUP BRUSH Valid Face Check f#" << f << " ("<<f+1<<"/"<< Brush.t_faces <<") Draw " << Face.draw << " vcount " << Face.vcount << endl;}
+		#endif
+	}
+	
+	#if DEBUG > 0
+	if (dev) {cout << " CLEANUP BRUSH Valid Face Check Result: ["<<ValidFaces<<"/"<<Brush.t_faces<<"] original Facecount" << endl;}
+	#endif
+	
+	// only continue if there were invalid faces
+	if(ValidFaces<Brush.t_faces&&ValidFaces>=4) //XXXXXXXXXXXXXXXXXX turned from 5 to 4 - Sept 9th 2025
+	{
+		#if DEBUG > 0
+		if (dev) {cout << " CLEANUP BRUSH Removing "<<Brush.t_faces-ValidFaces<<" invalid faces from Array of "<<Brush.t_faces<<"..." << endl;}
+		#endif
+		
+		// create new faces
+		face *NewFaces = new face[ValidFaces];
+		
+		for(int f=0, fn=0; f<t_faces; f++)
+		{
+			face &Source = Brush.Faces[f];
+			face &Target = NewFaces[fn];
+			if(Source.draw)
+			{
+				#if DEBUG > 0
+				if (dev) {cout << " CLEANUP BRUSH Copying Face #["<< f+1<<"/"<<t_faces<<"] to new array ["<<fn+1<<"/"<<ValidFaces<<"] vcount " << Source.vcount << endl;}
+				#endif
+				
+				Target.CopyFace(Source,1);
+				fn++;
+			}
+		}
+		delete[] Brush.Faces;
+		Brush.Faces = NewFaces;
+		Brush.t_faces = ValidFaces;
+	}
+	else if(ValidFaces<4) //XXXXXXXXXXXXXXXXXX turned from 5 to 4 - Sept 9th 2025
+	{		
+		Brush.valid = 0;
+	}
+	
+	#if DEBUG > 0
+	if     (!Brush.valid&&dev) {cout << " CLEANUP BRUSH END -> Less than 5 faces found. THIS BRUSH IS INVALID!!!" << endl;}
+	else if (Brush.valid&&dev) {cout << " CLEANUP BRUSH END -> Brush valid!" << endl;}
+	
+	if(dev) cout << endl;
+	#endif
+}
 
+void brush::ApplyTempTex()
+{
+	brush &Brush = *this;
+	
+	if(Brush.AllFacesNull)
+	for (int f=0; f<t_faces; f++)
+	{
+		face &Face = Faces[f];
+		
+		Face.tID = 0;
+		Face.Texture = "DEV666ABCDE";
+	}
+}
 
 
 
@@ -3166,6 +4047,4 @@ ostream &operator<<(ostream &ostr, brush &Brush)
 	
 	return ostr;
 }
-
-
 

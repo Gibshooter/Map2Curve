@@ -5,6 +5,8 @@
 #include "WAD3.h"
 #include "utils.h"
 #include "face.h"
+#include "export.h"
+#include "messages.h"
 
 #include <iostream>
 #include <string>
@@ -31,6 +33,7 @@ extern vector<WADFile> WADFiles;
 extern vertex Zero;
 extern file *gFile;
 extern bool G_DEV;
+extern int ErrorCode;
 
 /* ===== FILE METHODS ===== */
 
@@ -85,9 +88,9 @@ void file::GetInfo() {
 	int ext_start = fullpath.rfind(".");
 	int name_start = fullpath.rfind(bracket)+1;
 	
-	if (name_start!=-1)	p_path = fullpath.substr(0,name_start);
+	if (name_start!=-1)	p_path = fullpath.substr(0,name_start); // File Dir
 	else				p_path = "";
-	if (ext_start!=-1)	name = fullpath.substr(name_start, ext_start-name_start);
+	if (ext_start!=-1)	name = fullpath.substr(name_start, ext_start-name_start); // Filename
 	else				name = fullpath.substr(0, ext_start);
 	
     if (type==1) // *.txt file
@@ -96,19 +99,13 @@ void file::GetInfo() {
 		path_map = p_path+name+".map";
 	}
     else if (type==2) // *.map file
-    {
+	{
 		path_cfg = p_path+name+".txt"; //"defaults.txt";
 		path_map = fullpath;
-    }
- 	if (type==1) {
-		cout << "|    Type: Preset-File (*.txt): \t" << endl;
-		cout << "|    Path: " << fullpath << endl;
-	} else {
-		cout << "|    Type: Map-File (*.map)" << endl;
-		cout << "|    Path: " << fullpath << endl;
 	}
-	cout << "|    " << endl;
-   
+	
+	/* COUT */ MESSENGER( MSG_GETI_FILEPATH, vector<string>{fullpath}, vector<int>{type}, vector<float>{} );
+	
 	str_cfg = LoadTextFile(path_cfg);
 	CheckForCustomSource();
 	string str_map_temp = path_map;
@@ -127,28 +124,20 @@ void file::GetInfo() {
 	}
 	
 	if (str_cfg=="ERR") valid_cfg = 0;
-	
-	if (!valid_map) {
-		cout << "|    [ERROR] Map-file not found or empty! Aborting..." << endl;
-		cout << "|            File: "<< str_map_temp << endl;
-		cout << "|" << endl;
+
+	if (!valid_map)
+	{
+		/* COUT */ MESSENGER( MSG_ERR_MAPNOTFOU, vector<string>{str_map_temp}, vector<int>{}, vector<float>{} );
 	}
 	
 	if (type==2&&!InternalMapSettings)
 	{
-		if (!valid_cfg) {
-			cout << "|    [INFO] No matching preset-file ("<< name <<".txt) or entity (info_curve) found in map-file!" << endl;
-			cout << "|           Using default settings..." << endl;
-			cout << "|" << endl;
-		} else {
-			cout << "|    [INFO] No preset-entity (info_curve) found in map-file!" << endl;
-			cout << "|           Using preset-file ("<<path_cfg<<")..." << endl;
-			cout << "|" << endl;
-		}
+		/* COUT */ MESSENGER( MSG_NFO_NOPRESETF, vector<string>{name,path_cfg}, vector<int>{valid_cfg}, vector<float>{} );
 	}
-	else if (type==2&&InternalMapSettings) {
-	cout << "|    [INFO] Using preset-entity (info_curve) from map-file!" << endl;
-	cout << "|" << endl;}
+	else if (type==2&&InternalMapSettings)
+	{
+		/* COUT */ MESSENGER( MSG_NFO_INTPRESET );
+	}
 }
 
 
@@ -181,14 +170,11 @@ void file::CheckForCustomSource()
 				
 				if (value!="ERR"&&CheckIfFileExists(value))
 				{
-					cout << "|    [INFO] Custom source file ("<< value <<") found!" << endl;
-					cout << "|" << endl;
+					/* COUT */ MESSENGER( MSG_NFO_CUSTOMSRC, vector<string>{value}, vector<int>{}, vector<float>{} );
 					path_map = value;
 					break;
 				} else {
-					cout << "|    [ERROR] Custom source file ("<< value <<") not found!"<<endl;
-					cout << "|            Trying original source file ("<<path_map /*name+".map"*/<<")..." << endl;
-					cout << "|" << endl;
+					/* COUT */ MESSENGER( MSG_ERR_CUSTOMSRC, vector<string>{value}, vector<int>{}, vector<float>{} );
 				}
 			}
 			f_pos = str_cfg.find(phrase, f_pos+1);
@@ -467,9 +453,12 @@ void file::TransformDetailObj(int g)
 	for (int d = 0; d<Set.t_groups; d++)
 	{
 		group &dGroup = Set.Groups[d];
+		
 		dGroup.FillUnsetKeySettings();
 		int res = cTable[g].res;
+		
 		float offset = cTable[g].offset_NO; // difference (offset) between new and old (N/O) curve radius (original map position and generated one from rad+offset setting)
+		
 		vertex &Origin = dGroup.Origin;
 		
 		bool L_YAW   	= dGroup.d_autoyaw;
@@ -600,10 +589,23 @@ void file::TransformDetailObj(int g)
 					for(int i=0, v=0;i<res;i++)
 					{
 						vertex &V = Spline.Vertices[v];
+						
 						if (T_Pos[i]!=0&&T_Pos[i]!=1)
+						{
 							T_Yaw[i] = V.Yaw;
-						else {
-							T_Yaw[i] = V.YawB;
+						}
+						else
+						{
+							if(T_Pos[i]==0)
+							{
+								T_Yaw[i] = V.YawB;
+							}
+							else
+							{
+								T_Yaw[i] = Spline.Vertices[v+2].YawB;
+								//if(i<res-1) T_Yaw[i] = Spline.Vertices[v+1].YawB;
+								//else 		T_Yaw[i] = Spline.Vertices[0].YawB;
+							}
 						}
 						v+=2;
 					}
@@ -752,7 +754,7 @@ void file::TransformDetailObj(int g)
 			dGroup.RotOriginSecs(Dummy, Dummy, T_Yaw, OriginN, 1);
 		}
 	}
-	
+
 	// create Intersection Planes
 	if(cTable[g].type==0)
 	{
@@ -762,7 +764,6 @@ void file::TransformDetailObj(int g)
 			if( Group.d_enable>0 && Group.d_carve>0 )
 			Group.CreateIsects();
 		}
-		
 		// Carve Detail Objects
 		for (int d = 0; d<Set.t_groups; d++)
 		{
@@ -771,7 +772,6 @@ void file::TransformDetailObj(int g)
 			Group.CarveGroupSections();
 		}
 	}
-	
 	// print all
 	#if DEBUG > 0
 	if(dev)
@@ -921,7 +921,8 @@ void file::LoadSpline(int g)
 		PathList.resize(t_arcs);
 	
 	#if DEBUG > 0
-	if (dev) cout << "Loading Path #"<<g+1<<"..." << endl; if (dev) system("pause");
+	if (dev) cout << "Loading Path #"<<g+1<<"..." << endl;
+	if (dev) system("pause");
 	if (dev) cout << "  Scanning map dir for valid path file ("<<cTable[g].path<<")..." << endl;
 	#endif
 	
@@ -931,6 +932,7 @@ void file::LoadSpline(int g)
 	if (cTable[g].path!="UNSET")
 	{
 		filename = cTable[g].path;
+		
 		if (filename[0]=='\"')
 		{
 			filename.erase(0,1);
@@ -971,8 +973,10 @@ void file::LoadSpline(int g)
 		PathList[g].Scale(cTable[g].p_scale);
 		PathList[g].Analyze();
 		
-		if (PathList[g].valid) {
-			cout << "|    [INFO] Spline file #"<<g+1<<" ("<<filename<<") successfully loaded!"<< endl;
+		if (PathList[g].valid)
+		{
+			/* COUT */ MESSENGER( MSG_SPLINE_LOADED, vector<string>{filename}, vector<int>{g}, vector<float>{} );
+			
 			if (cTable[g].type==2)
 			{
 				cTable[g].res = PathList[g].t_corners-PathList[g].t_paths+PathList[g].Gaps;
@@ -983,11 +987,14 @@ void file::LoadSpline(int g)
 			}
 			
 			#if DEBUG > 0
-			if (dev) cout << " Path res now " << cTable[g].res << " (if type==2: total corners "<<PathList[g].t_corners<< " - total paths "<<PathList[g].t_paths<<" + Gaps "<<PathList[g].Gaps<<")" << endl;if (dev)  system("pause");
+			if (dev) cout << " Path res now " << cTable[g].res << " (if type==2: total corners "<<PathList[g].t_corners<< " - total paths "<<PathList[g].t_paths<<" + Gaps "<<PathList[g].Gaps<<")" << endl;
+			if (dev)  system("pause");
 			#endif
+		}
+		else
+		{
+			/* COUT */ MESSENGER( MSG_SPLINE_INVALD, vector<string>{filename}, vector<int>{g}, vector<float>{} );
 			
-		} else {
-			cout << "|    [ERROR] Spline file #"<<g+1<<" ("<<filename<<") contains invalid information!"<< endl;
 			PathList[g].valid = 0;
 			sGroup[g].ValidSpline = 0;
 			cTable[g].heightmode = 0;
@@ -997,7 +1004,8 @@ void file::LoadSpline(int g)
 	}
 	else
 	{
-		cout << "|    [ERROR] Spline file #"<<g+1<<" ("<<filename<<") does NOT exist!" << endl;
+		/* COUT */ MESSENGER( MSG_SPLINE_NOTFND, vector<string>{filename}, vector<int>{g}, vector<float>{} );
+		
 		PathList[g].valid = 0;
 		sGroup[g].ValidSpline = 0;
 		cTable[g].heightmode = 0;
@@ -1085,7 +1093,8 @@ void file::RampIt(int g)
 		int sec = Brush.SecID;
 		
 		#if DEBUG > 0
-		if (dev) {cout << " creating Ramp of arc " << g << " brush " << b << "/"<<bGroup[g].t_brushes << " sec " << sec<<" type " << " step "<< Brush.step << endl; system("pause");}
+		if (dev) {cout << " creating Ramp of arc " << g << " brush " << b << "/"<<bGroup[g].t_brushes << " sec " << sec<<" type " << " step "<< Brush.step << endl;
+		system("pause");}
 		#endif
 		
 		if (Brush.valid && Brush.draw && !Brush.IsGap && Group.IsSecInRange(sec) )
@@ -1122,6 +1131,7 @@ void file::RampIt(int g)
 				for (int bt=0; bt<Brush.t_tri; bt++)
 				{
 					brush &TriBrush = Brush.Tri[bt];
+					
 					for (int f = 0; f<TriBrush.t_faces; f++)
 					{
 						face &Face = TriBrush.Faces[f];
@@ -1266,13 +1276,56 @@ void file::LoadMap_GetEntities()
 	bool dev = 0;
 	#endif
 	
+	// first of all remove all comments from file string (Trenchbroom adds comments)
+	string tempfile;
+	int lastpos = 0;
+	if(str_map.find("//")!=-1) // is there a comment at all?
+	{
+		#if DEBUG > 0
+		if(dev) {cout << endl << endl << "Imported Map String BEFORE Cleanup:" << endl << str_map << endl << endl; system("pause");}
+		#endif
+		
+		while (lastpos<str_map.length())
+		{
+			int nlpos = str_map.find("\n", lastpos); // new line pos
+			
+			string sub = str_map.substr(lastpos, nlpos-lastpos+1); // copy of current line
+			int subCP = sub.find("//"); // current line comment position
+			
+			if(subCP!=-1) // there is a comment
+			{
+				if (subCP>0) { // comment somwhere behind content? copy line but cut comment
+					tempfile += sub.substr(0, subCP);
+					tempfile += "\n"; // don't forget to re-add new line eh?
+				}
+				
+				// comment at pos 0 ? ignore whole line
+			}
+			else
+			{
+				tempfile += sub; // there is no comment, copy whole line to new string
+			}
+			
+			lastpos = nlpos+1;
+		}
+		
+		str_map = tempfile;
+		str_map += "\n";
+		
+		#if DEBUG > 0
+		if(dev){cout << endl << endl << "Imported Map String AFTER Cleanup:" << str_map << endl << endl; system("pause");}
+		#endif
+	}
+	
+	
 	// count entities in map file and save start pos and Entity ID of each one
 	int findEntStart = 0;
 	int lastEntPos = 0;
 	int eID = 0;
 	while (findEntStart!=-1)
 	{
-		findEntStart = str_map.find("{\n\"classname\"", lastEntPos);
+		// findEntStart = str_map.find("{\n\"classname\"", lastEntPos); // OLD METHOD CHANGED 26th April 2025 because this only works when classname ist first attribute (Hammer does it; Trenchbroom doesn't apparently)
+		findEntStart = str_map.find("{\n\"", lastEntPos); // new method is more universal
 		
 		if (findEntStart!=-1)
 		{
@@ -1280,19 +1333,20 @@ void file::LoadMap_GetEntities()
 			E.eID = eID;
 			EntityList.push_back(E);
 			entity &Entity = EntityList[eID];
+			
 			Entity.pos_start = findEntStart;
 			lastEntPos = findEntStart+1;
 			eID++;
 			
 			#if DEBUG > 0
-			if (dev) cout << " Entity detected - ID " << E.eID << endl;
+			if (dev) {cout << " Entity detected - ID " << E.eID << endl; system("pause");}
 			#endif
 		}
 	}
 	
 	// determine end pos of each entity and save content to new string
 	#if DEBUG > 0
-	if (dev) cout << " Determine end pos of each entity..." << endl;
+	if (dev) {cout << " Determine end pos of each entity..." << endl; system("pause");}
 	#endif
 	
 	for (int i = 0, t_ents = EntityList.size(); i<EntityList.size(); i++)
@@ -1306,7 +1360,7 @@ void file::LoadMap_GetEntities()
 	
 	// determine entity types
 	#if DEBUG > 0
-	if (dev) cout << " Determine entity types..." << endl;
+	if (dev) {cout << " Determine entity types..." << endl; system("pause");}
 	#endif
 	
 	for (int i = 0; i<EntityList.size(); i++)
@@ -1339,7 +1393,7 @@ void file::LoadMap_GetEntities()
 	
 	// determine internal head end pos
 	#if DEBUG > 0
-	if (dev) cout << " Determine internal head end pos..." << endl;
+	if (dev) {cout << " Determine internal head end pos..." << endl; system("pause");}
 	#endif
 	for (int i = 0; i<EntityList.size(); i++)
 	{
@@ -1376,7 +1430,7 @@ void file::LoadMap_GetEntities()
 	}
 	
 	#if DEBUG > 0
-	if (dev) cout << " Check if entity is part of a detail group..." << endl;
+	if (dev) {cout << " Check if entity is part of a detail group..." << endl; system("pause");}
 	#endif
 	// check if entity is part of a detail group
 	for (int i = 0, c=0; i<EntityList.size(); i++)
@@ -1424,6 +1478,9 @@ void file::LoadMap_GetEntities()
 	}
 	
 	// Get specific Keys and KeyValues of all Solid and Point Entities
+	#if DEBUG > 0
+	if (dev){cout << " Get specific Keys and KeyValues of all Solid and Point Entities " << endl << endl; system("pause");}
+	#endif
 	for (int i = 0; i<EntityList.size(); i++)
 	{
 		entity &Entity = EntityList[i];
@@ -1432,11 +1489,17 @@ void file::LoadMap_GetEntities()
 	}
 	
 	// Get internal map settings from settings entity info_curve and store them in settingsM variable
+	#if DEBUG > 0
+	if (dev){cout << " Get internal map settings " << endl << endl; system("pause");}
+	#endif
 	GetInternalMapSettings();
 	/*for (int i = 0; i<settingsM.size()-1; i+=2)
 		cout << " settingsM #" << i << " "<<settingsM[i] << " = " << settingsM[i+1] << endl;*/
 	
 	//count total unique dgroups
+	#if DEBUG > 0
+	if (dev){cout << " count total unique dgroups " << endl << endl; system("pause");}
+	#endif
 	vector<string> unique_gnames;
 	for (int i = 0; i<EntityList.size(); i++)
 	{
@@ -1489,6 +1552,7 @@ void file::LoadMap_GetEntities()
 	#endif
 	
 	mDetailGroup = new group[t_dgroups]; // create original detail object group
+	
 	#if DEBUG > 0
 	if (dev) cout << "Created " << t_dgroups << " detail object groups! " << endl;
 	#endif
@@ -1508,7 +1572,12 @@ void file::LoadMap_GetEntities()
 	if (dev) cout << " Total Map Brushes " << mGroup->t_brushes << endl;
 	#endif
 	
+	
+	
+	
+	
 	// create Brushes of each Entity (World and Solid)
+	// INCLUDES EARLY RECONSTRUCTION OF ALL BRUSHES / VERTICES
 	#if DEBUG > 0
 	if (dev) cout << " Creating Brushes for "<<EntityList.size()<<" Entities... " << endl;
 	#endif
@@ -1516,8 +1585,16 @@ void file::LoadMap_GetEntities()
 	for (int i = 0; i<EntityList.size(); i++)
 	{
 		entity &Entity = EntityList[i];
-		Entity.CreateBrushes();
+		
+		Entity.CreateBrushes(); // v0.87 - added reconstruction here as an early step
 	}
+	
+	
+	
+	
+	
+	
+	
 	
 	// assign detail group ID to each entity brush and Entity
 	#if DEBUG > 0
@@ -1685,131 +1762,151 @@ void file::TransformSource()
 	for (int g = 0; g<mGroup->t_arcs; g++)
 	{
 		group &Group = sGroup[g];
-		float scale_x = cTable[g].scale_src.x;
-		float scale_y = cTable[g].scale_src.y;
-		float scale_z = cTable[g].scale_src.z;
+		float &scale_x = cTable[g].scale_src.x;
+		float &scale_y = cTable[g].scale_src.y;
+		float &scale_z = cTable[g].scale_src.z;
 		
-		float rot_x = cTable[g].rot_src.x;
-		float rot_y = cTable[g].rot_src.y;
-		float rot_z = cTable[g].rot_src.z;
-					
-		if (Group.valid)
+		float &rot_x = cTable[g].rot_src.x;
+		float &rot_y = cTable[g].rot_src.y;
+		float &rot_z = cTable[g].rot_src.z;
+		
+		int &mirror = cTable[g].mirror_src;
+		vertex G_Origin;
+		if (Group.valid) 	G_Origin = Group.Origin;
+		
+		if (Group.valid && Group.t_brushes>0)
 		{
-			#if DEBUG > 0
-			if (dev) cout << "   Group "<<g<<"..." <<endl;
-			#endif
+			//ExportGroupToObjDev( Group , gFile->p_path+gFile->name+"_PRE_TRANSFORM.obj");
 			
+			// Curve Brushes
 			for (int b = 0; b<Group.t_brushes; b++)
 			{
 				brush &Brush = Group.Brushes[b];
+				
 				if (Brush.valid)
 				{
-					#if DEBUG > 0
-					if (dev&&b==0) cout << "     Scale "  << scale_x << endl;
-					if (cTable[g].scale_src.IsSet)
-					#endif
-					
-					Brush.ScaleOrigin(scale_x, Group.Origin, g);
-					
-					#if DEBUG > 0
-					if (dev&&b==0) cout << "     Rot "  << rot_x << "," << rot_y << "," <<rot_z << endl;
-					#endif
-					
-					if (cTable[g].rot_src.IsSet)
-					Brush.RotOrigin(rot_x,rot_y,rot_z, Group.Origin, g);
+					// mirror X, Y and Z axis // new as of v0.87 August 2025
+					if (mirror>0)					Brush.MirrorOrigin( mirror, G_Origin, 1, 1 );
+					if (cTable[g].scale_src.IsSet)	Brush.ScaleOrigin ( scale_x, G_Origin, g );
+					if (cTable[g].rot_src.IsSet)	Brush.RotOrigin   ( rot_x,rot_y,rot_z, G_Origin, g );
 				}
 			}
 			
-			if (cTable[g].rot_src.y!=0||cTable[g].rot_src.z!=0)
-			{
-				#if DEBUG > 0
-				if(dev) cout << "  rot_src active -> Rounding Vertices..." << endl;
-				#endif
-				
+			if (cTable[g].rot_src.y!=0||cTable[g].rot_src.z!=0) {
 				Group.RoundBrushVertices(1);
 			}
 			
+			Group.CheckBrushValidity();
+			Group.CleanUpGroup();
+			Group.GetGroupVertexList();
+			Group.GetBrushFaceOrients();
+			Group.GetBrushTVecAligns();
+			Group.CheckBrushDivisibility();
+			Group.GetGroupDimensions(1,0);
+		}
+		//ExportGroupToObjDev( Group , gFile->p_path+gFile->name+"_POST_TRANSFORM.obj");
+		
+		// Detail Objects
+		group_set &Set = sDetailSet[g];
+		for (int d = 0; d<t_dgroups; d++)
+		{
+			group &dGroup = Set.Groups[d];
+			
+			if(!Group.valid || Group.t_brushes<=0 )
+			G_Origin = dGroup.Origin;
+			
+			for (int b = 0; b<dGroup.t_brushes; b++)
+			{
+				brush &Brush = dGroup.Brushes[b];
+
+				// mirror X, Y and Z axis // new as of v0.87 August 2025
+				if (mirror>0)					Brush.MirrorOrigin ( mirror, G_Origin, 1, 0 );
+				if (cTable[g].scale_src.IsSet)	Brush.ScaleOrigin  ( scale_x, G_Origin, g );
+				if (cTable[g].rot_src.IsSet)	Brush.RotOrigin    ( rot_x, rot_y, rot_z, G_Origin, g );
+			}
+			for (int e = 0; e<dGroup.t_ents; e++)
+			{
+				entity &Entity = dGroup.Entities[e];
+				
+				// mirror X, Y and Z axis // new as of v0.87 August 2025
+				if (mirror>0)					Entity.MirrorOrigin ( mirror, G_Origin );
+				if (cTable[g].scale_src.IsSet)	Entity.ScaleOrigin  ( scale_x, G_Origin );
+				if (cTable[g].rot_src.IsSet)	Entity.RotateOrigin ( rot_x, rot_y, rot_z, G_Origin);
+				Euler RotEuler(rot_x,rot_y,rot_z);
+				if (cTable[g].rot_src.IsSet)	Entity.RotateEntity ( RotEuler,1);
+			}
+			dGroup.CleanUpGroup();
+			dGroup.GetGroupDimensions(1,1);
+			
+//			cout << " EXPORT S DETAIL GROUP POST TRANSFORM SRC..." << endl;
+//			dGroup.ExportGroupToOBJDev(gFile->p_path+gFile->name+"_sDETAIL_POST_TFORM.obj");
+//			WAIT();
+		}
+	}
+	
+	// Export to Map to check for Transformation Errors
+//	ExportToMapO();
+//	WAIT();
+}
+
+
+// new as of v0.87 (July 2024)
+void file::CarveSource()
+{
+	gvector Vec(0,-1,0); // carving plane
+	
+	// carve all source groups and their detail objects
+	for (int g = 0; g<mGroup->t_arcs; g++)
+	{
+		group &Group = sGroup[g];
+		
+//		cout << " PRINT PRE CARVING..." << endl;
+//		Group.printSimple(1);
+		
+		if (Group.valid && cTable[g].mapcarve>0)
+		{
+			bool off = 0;
+			if (cTable[g].offset!=0) off = 1;
+			
+			
 			// Detail Objects
-			group_set &Set = sDetailSet[g];
 			for (int d = 0; d<t_dgroups; d++)
 			{
-				group &dGroup = Set.Groups[d];
+				group &dGroup = sDetailSet[g].Groups[d];
 				vertex nOrigin = Group.Origin;
-				//nOrigin.x = 0;
 				
-				for (int b = 0; b<dGroup.t_brushes; b++)
-				{
-					brush &Brush = dGroup.Brushes[b];
-					
-					if (cTable[g].scale_src.IsSet)	Brush.ScaleOrigin(scale_x, nOrigin, g);
-					if (cTable[g].rot_src.IsSet)	Brush.RotOrigin(rot_x,rot_y,rot_z, nOrigin, g);
-				}
-				for (int e = 0; e<dGroup.t_ents; e++)
-				{
-					entity &Entity = dGroup.Entities[e];
-					
-					if (cTable[g].scale_src.IsSet)	Entity.ScaleOrigin(scale_x,nOrigin);
-					if (cTable[g].rot_src.IsSet)	Entity.RotateOrigin(rot_x,rot_y,rot_z, nOrigin);
-					Euler RotEuler(rot_x,rot_y,rot_z);
-					if (cTable[g].rot_src.IsSet)	Entity.RotateEntity(RotEuler,1);
-				}
-				dGroup.GetGroupDimensions(1,1);
+				if(off) dGroup.Move(0,cTable[g].offset,0,1);
+						dGroup.CarveGroup(Vec, 0);
+				if(off) dGroup.Move(0,-cTable[g].offset,0,1);
 				
-				// fix position of basic detail objects
-				/*if (dGroup.Origin.x!=0)
-				{
-					for (int b = 0; b<dGroup.t_brushes; b++)
-					{
-						brush &Brush = dGroup.Brushes[b];
-						Brush.Move(-(dGroup.Origin.x),0,0,1);
-					}
-					for (int k = 0; k<dGroup.t_ents; k++)
-					{
-						entity &Entity = dGroup.Entities[k];
-						Entity.Origin.x -= dGroup.Origin.x;
-					}
-				}
-				dGroup.Origin.x = 0;*/
+				dGroup.CleanUpGroup();
+				//dGroup.GetGroupBrushVertexList(1); // XXXXXXXXXXXXXXXXX? ?????????????????????
+				
+//				dGroup.GetGroupDimensions(1,1);
 			}
-			#if DEBUG > 0
-			if (dev) cout << "   Getting Dimensions..." <<endl;
-			#endif
+			sDetailSet[g].GetGroupSetDimensions(1);
 			
-			Group.GetGroupDimensions(1,0);
+//			cout << " EXPORT S DETAIL GROUP POST CARVE SRC..." << endl;
+//			ExportGroupToObjDev(sDetailSet[g], gFile->p_path+gFile->name+"_sDETAIL_POST_CARVE.obj");
+//			WAIT();
 			
-			#if DEBUG > 0
-			if (dev) cout << "   Checking Brush Validity..." <<endl;
-			#endif
-			
-			Group.CheckBrushValidity();
-			
-			#if DEBUG > 0
-			if (dev) cout << "   Getting Face Orients..." <<endl;
-			#endif
-			
-			Group.GetBrushFaceOrients();
-			
-			#if DEBUG > 0
-			if (dev) cout << "   Getting Texture Aligns..." <<endl;
-			#endif
-			
-			Group.GetBrushTVecAligns();
-			
-			#if DEBUG > 0
-			if (dev) cout << "   Updating Vertex List..." <<endl;
-			#endif
-			
-			Group.GetGroupVertexList();
-			
-			#if DEBUG > 0
-			if (dev) cout << "   Checking Brush Divisibility..." <<endl;
-			#endif
-			
-			Group.CheckBrushDivisibility();
+			if(Group.t_brushes>0)
+			{
+				// Curve Brushes
+				if(off) Group.Move(0,cTable[g].offset,0,1);
+						Group.CarveGroup(Vec, 1);
+				if(off) Group.Move(0,-cTable[g].offset,0,1);
+				
+				Group.CleanUpGroup(); // v0.87; july 27th 2025; run cleanup again, since brushes that were marked as invalid before weren't removed so they caused issues later on...
+				Group.GetGroupDimensions(1,0);
+				
+//				cout << " PRINT AFTER CARVING..." << endl;
+//				Group.printSimple(1);
+//				WAIT();
+			}
 		}
 	}
 }
-
 
 void file::TransformFinal(int g)
 {
@@ -1831,12 +1928,14 @@ void file::TransformFinal(int g)
 	float rot_y = cTable[g].rot.y;
 	float rot_z = cTable[g].rot.z;
 	
+	int &mirror = cTable[g].mirror;
+	
 	bool scale_valid = 1; 	if(scale_x==0&&scale_x==1) 			scale_valid = 0;
 	bool rot_valid = 1; 	if(rot_x==0&&rot_y==0&&rot_z==0) 	rot_valid = 0;
 	bool move_valid = 1; 	if(move_x==0&&move_y==0&&move_z==0) move_valid = 0;
 	
 	#if DEBUG > 0
-	if (dev) cout << " ######## Final Transformation: ######## " << cTable[g].rot << endl;
+	if (dev) cout << " ######## Final Transformation: ######## " << cTable[g].scale << cTable[g].rot << cTable[g].move << endl;
 	#endif
 	
 	// Apply custom transformations
@@ -1855,10 +1954,20 @@ void file::TransformFinal(int g)
 				}
 				
 				if (cTable[g].rot.IsSet&&rot_valid)
+				{
 					Brush.Rot(rot_x,rot_y,rot_z);
+					//Brush.FixBorderliner(g);
+				}
 					
 				if (cTable[g].move.IsSet&&move_valid)
+				{
 					Brush.Move(move_x,move_y,move_z,1,g);
+				}
+				
+				if (mirror>0)
+				{
+					Brush.MirrorOrigin(mirror, Zero, 0, 0);
+				}
 			}
 			
 			if (Brush.Tri!=nullptr)
@@ -1869,6 +1978,7 @@ void file::TransformFinal(int g)
 					if (cTable[g].scale.IsSet&&scale_valid)		TriBrush.Scale(scale_x);
 					if (cTable[g].rot.IsSet&&rot_valid)			TriBrush.Rot(rot_x,rot_y,rot_z);
 					if (cTable[g].move.IsSet&&move_valid)		TriBrush.Move(move_x,move_y,move_z,1,g);
+					if (mirror>0)								TriBrush.MirrorOrigin(mirror, Zero, 0, 0);
 				}
 			}
 		}
@@ -1878,20 +1988,37 @@ void file::TransformFinal(int g)
 	for (int d = 0; d<t_dgroups; d++)
 	{
 		group &EGroup = DetailSet[g].Groups[d];
+	
+		#if DEBUG > 0
+		if (dev) cout << " FTRANS Detail objects, mirror: " << mirror << " Rstart " << EGroup.range_start << " Rend " << EGroup.range_end << endl;
+		#endif
+		
 		for (int b = 0; b<EGroup.t_brushes; b++)
 		{
 			brush &Brush = EGroup.Brushes[b];
+			
+			#if DEBUG > 0
+			if (dev) cout << " FTRANS Detail Group " << d << " Brush " << b << " secID " << Brush.SecID << " valid [" << Brush.valid << "] draw [" << Brush.draw << "] IsInRange: " << EGroup.IsSecInRange(Brush.SecID) << endl;
+			#endif
 			
 			if( Brush.valid && Brush.draw && EGroup.IsSecInRange(Brush.SecID) )
 			{
 				if (cTable[g].scale.IsSet&&scale_valid)	Brush.Scale(scale_x);
 				if (cTable[g].rot.IsSet&&rot_valid)		Brush.Rot(rot_x,rot_y,rot_z);
 				if (cTable[g].move.IsSet&&move_valid)	Brush.Move(move_x,move_y,move_z,1,d);
+				if (mirror>0)							Brush.MirrorOrigin(mirror,Zero,0,0);
 			}
+			#if DEBUG > 0
+			else {if (dev)cout << " NO!\n";}
+			#endif
 		}
 		for (int e = 0; e<EGroup.t_ents; e++)
 		{
 			entity &Entity = EGroup.Entities[e];
+			
+			#if DEBUG > 0
+			if (dev) cout << " FTRANS Detail Group " << d << " Entity " << e << " secID " << Entity.SecID << "draw [" << Entity.draw << "] IsInRange: " << EGroup.IsSecInRange(Entity.SecID) << endl;
+			#endif
 			
 			if( Entity.draw && EGroup.IsSecInRange(Entity.SecID) )
 			{
@@ -1900,7 +2027,11 @@ void file::TransformFinal(int g)
 				Euler RotEuler(rot_x,rot_y,rot_z);
 				if (cTable[g].rot.IsSet&&rot_valid)		Entity.RotateEntity(RotEuler,1);
 				if (cTable[g].move.IsSet&&move_valid)	Entity.Origin.move(move_x,move_y,move_z);
+				if (mirror>0)							Entity.MirrorOrigin(mirror,Zero);
 			}
+			#if DEBUG > 0
+			else {if (dev)cout << " NO!\n";}
+			#endif
 		}
 	}
 }
@@ -1940,6 +2071,16 @@ void file::createGroupMap()
 				brush &Brush = mGroup->Brushes[b];
 				Brush.Copy(Entity.Brushes[eb]);
 				Brush.SegID = b;
+				
+				#if DEBUG > 0
+				if (dev) cout << "Reconstructing b#" << eb << " of entity #" << e << " type " << Entity.type << endl;
+				#endif
+				
+				// restore missing vertices of each face (including Trenchbrooms plane-based saving-method) // NEW AS OF v0.87 22.5.2025 XXXXXXXXXBOOKMARKXXXXXXXXXXX
+				// MADE UNNECESSARY BY ADDING IT EARLIER IN LoadMap_GetEntities()
+				//if(Brush.FaceMethod()==1)
+				//Brush.Reconstruct2025(true);
+				
 				b++;
 			}
 		}
@@ -1952,8 +2093,8 @@ void file::createGroupMap()
 	mGroup->GetGroupDimensions(0,0);
 	
 	#if DEBUG > 0
-	if (dev) system("pause");
 	/*
+	if (dev) system("pause");
 	cout << " Dimensions: x " << mGroup->Dimensions.xs << " " << mGroup->Dimensions.xb << endl;
 	cout << " Dimensions: y " << mGroup->Dimensions.ys << " " << mGroup->Dimensions.yb << endl;
 	cout << " Dimensions: z " << mGroup->Dimensions.zs << " " << mGroup->Dimensions.zb << endl;
@@ -2004,11 +2145,7 @@ void file::LoadMap_GetTexInfo()
 			last_pos = WADline.find(".wad", found_end+5);
 		}
 		
-		//cout << endl << "    Used WADs in Map File: " << endl;
-		cout << "|" <<endl;
-		cout << "|    [INFO] " << WadListMap.size() << " WAD files are listed in this map file:" << endl;
-		for (int i = 0; i<WadListMap.size(); i++)
-		cout << "|           #" << i+1 << " " << WadListMap[i] << endl;
+		/* COUT */ MESSENGER( MSG_WAD_FILES_LST, vector<string>(WadListMap.begin(), WadListMap.end()), vector<int>{}, vector<float>{} );
 		
 		// compare scanned wads from map file with WAD directory of Map2Curve
 		for (int i = 0, succeed=0; i<WadListMap.size(); i++)
@@ -2024,11 +2161,7 @@ void file::LoadMap_GetTexInfo()
 			
 			if (i==WadListMap.size()-1)
 			{
-				if (succeed==WadListMap.size()) 	{cout << "|           ALL";}
-				else if (succeed==0) 				{cout << "|           NONE";}
-				else 							{cout << 	 "|           " << succeed;}
-				cout << " of them are known by Map2Curve!" << endl;
-				cout << "|" <<endl;
+				/* COUT */ MESSENGER( MSG_WAD_FILES_KWN, vector<string>(), vector<int>{ int(WadListMap.size()), succeed }, vector<float>{} );
 			}
 		}
 	}
@@ -2095,12 +2228,9 @@ void file::LoadMap_GetTexInfo()
 		// at the end of texture list, check if there were failed textures and display a User-message
 		if (i==tTable_name.size()-1&&fail_tex.size()>0)
 		{
-			cout << "|    [WARNING] Could not get informations of " << fail_tex.size() << " texture(s):" << endl;
-			for (int i = 0; i<fail_tex.size(); i++)
-			cout << "|              " << fail_tex[i] << endl;
-			cout << "|              Using default width and height (128px)."<< endl;
-			cout << "|              Texture Offsets will probably be wrong!" << endl;
-			cout << "|" << endl;
+			/* COUT */ MESSENGER( MSG_WARN_UNKWNTEX, vector<string>( fail_tex.begin(), fail_tex.end() ), vector<int>{}, vector<float>{} );
+			
+			ErrorCode = 2;
 		}
 	}
 	
@@ -2316,6 +2446,9 @@ void file::createDetailGroupSource()
 			dGroup.Origin 		= mDetailGroup[d].Origin;
 			dGroup.groupname 	= mDetailGroup[d].groupname;
 			dGroup.HasOrigin	= mDetailGroup[d].HasOrigin;
+			
+			dGroup.range_end	= cTable[a].range_end;
+			dGroup.range_start	= cTable[a].range_start;
 		}
 	}
 	// fill source detail object groups
@@ -2339,6 +2472,10 @@ void file::createDetailGroupSource()
 				entity &Entity = dGroup.Entities[e];
 				Entity.CopySimple(mDetailGroup[d].Entities[e]);
 			}
+			
+//			cout << " EXPORT S DETAIL GROUP..." << endl;
+//			dGroup.ExportGroupToOBJDev(gFile->p_path+gFile->name+"_sDETAIL.obj");
+//			WAIT();
 		}
 	}
 }
@@ -2586,6 +2723,8 @@ void file::createDetailGroup(int g)
 					}
 				}
 			}
+//			ExportGroupToObjDev( dGroup , gFile->p_path+gFile->name+"_dGroup["+to_string(d)+"].obj" );
+//			WAIT();
 		}
 	}
 	
@@ -2649,7 +2788,7 @@ void file::createGroupSource()
 		}
 		else
 		{
-			cout << "|    [WARNING] Something went horribly wrong! The Source Map doesn't contain valid brushes ("<< mGroup->t_brushes-mGroup->invalids << ")!" << endl;
+			/* COUT */ MESSENGER( MSG_WARN_HORWRONG, vector<string>{}, vector<int>{ (mGroup->t_brushes-mGroup->invalids) }, vector<float>{} );
 		}
 	}
 	
@@ -2667,18 +2806,18 @@ void file::LoadMap()
 	#if DEBUG > 0
 	if (dev) cout << " createGroupMap..."<<endl;
 	#endif
-	createGroupMap();
+	file::createGroupMap();
 	
 	#if DEBUG > 0
 	if (dev) cout << " LoadMap_GetTexInfo..."<<endl;
 	#endif
 	// get dimensions (width and height) of all textures that were used in the source map
-	LoadMap_GetTexInfo();
+	file::LoadMap_GetTexInfo();
 	
 	#if DEBUG > 0
 	if (dev) cout << " Create Detail Objects..."<<endl;
 	#endif
-	LoadMap_DetailObj();
+	file::LoadMap_DetailObj();
 	
 	#if DEBUG > 0
 	if (dev) cout << " CheckBrushValidity..."<<endl;
@@ -2694,6 +2833,7 @@ void file::LoadMap()
 	#if DEBUG > 0
 	if (dev) cout << " ReconstructMap..."<<endl;
 	#endif
+	// THIS WAS MADE PARTLY UNNECESSARY DUE TO v0.87 RECONSTRUCTION OVERHAUL AND ADDED EARLIER TO createGroupMap()
 	mGroup->ReconstructMap(); // get all of the missing vertices for further calculations (map-files only save 3 vertices per plane)
 	
 	#if DEBUG > 0
@@ -2702,14 +2842,14 @@ void file::LoadMap()
 	mGroup->CheckBrushDivisibility(); // check whether a brush can be triangulated or not
 	
 	#if DEBUG > 0
-	if (dev) cout << " GetRconBrushShifts..."<<endl;
+	if (dev) cout << " Get Reconstructed Brush Shifts..."<<endl;
 	#endif
 	mGroup->GetBrushShifts(); // get original texture shifts
 	
 	#if DEBUG > 0
 	if (dev) cout << " LoadMap_ConvertWorld2Face..."<<endl;
 	#endif
-	LoadMap_ConvertWorld2Face(); // turn world alignment of faces into face alignment, so the new vectors can easily be created from a generated mesh 1:1
+	file::LoadMap_ConvertWorld2Face(); // turn world alignment of faces into face alignment, so the new vectors can easily be created from a generated mesh 1:1
 	
 	
 	#if DEBUG > 0
@@ -2725,8 +2865,9 @@ void file::LoadMap_DetailObj()
 	if (dev) system("pause");
 	#endif
 	
-	// reconstruct original detail brushes and get their texute offsets
-	for (int e = 0; e<EntityList.size(); e++)
+	// reconstruct original detail brushes and get their texture offsets
+	// THIS WAS MADE UNNECESSARY BY ADDING IT EARLIER DUE TO OVERHAUL v0.87 in 2025
+	/*for (int e = 0; e<EntityList.size(); e++)
 	{
 		entity &Entity = EntityList[e];
 		if (Entity.IsDetail)
@@ -2759,7 +2900,7 @@ void file::LoadMap_DetailObj()
 				Brush.FixHoles();
 			}
 		}
-	}
+	}*/
 	
 	#if DEBUG > 0
 	if (dev) cout << "  Getting original detail brushes Texture Shifts..." << endl;

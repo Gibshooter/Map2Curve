@@ -5,19 +5,19 @@
 #define MAP2CURVE_PRIVATE_H
 
 /* VERSION DEFINITIONS */
-#define VER_STRING	"0.8.0.4434"
+#define VER_STRING	"0.8.7.6877"
 #define VER_MAJOR	0
 #define VER_MINOR	8
-#define VER_RELEASE	0
-#define VER_BUILD	4434
+#define VER_RELEASE	7
+#define VER_BUILD	6877
 #define COMPANY_NAME	""
-#define FILE_VERSION	"0.8.0.4434"
+#define FILE_VERSION	"0.8.7.6877"
 #define FILE_DESCRIPTION	"Map2Curve"
 #define INTERNAL_NAME	""
 #define LEGAL_COPYRIGHT	""
 #define LEGAL_TRADEMARKS	""
 #define ORIGINAL_FILENAME	""
 #define PRODUCT_NAME	""
-#define PRODUCT_VERSION	"0.8.0.4434"
+#define PRODUCT_VERSION	"0.8.7.6877"
 
 #endif /*MAP2CURVE_PRIVATE_H*/

@@ -4,6 +4,8 @@
 #include "settings.h"
 #include "file.h"
 #include "group.h"
+#include <vector>
+#include <stdexcept>
 
 #include <math.h>
 #include <iostream>
@@ -41,6 +43,7 @@ void CoutBrushFacesDevInfo(brush &Brush, int b, int g, bool IsInRange)
 		cout << "|Brush " << b << " curve " << g << endl;
 		cout << "| F";
 		cout << "|O";
+		cout << "|vc";
 		cout << "| G";
 		cout << "|Sec";
 		cout << "|" << setw(11) << "  Texture  ";
@@ -85,13 +88,14 @@ void CoutFacesDevInfo(brush &Brush, face &Face, int f)
 	cout << fixed;
 	cout << "|" << setw(2) << f;
 	cout << "|" << Face.Orient;
+	cout << "|" << setw(2) << Face.vcount;
 	cout << "|" << setw(2) << Face.group;
 	cout << "|" << setw(3) << Brush.SecID;
 	cout << "|" << setw(11) << Face.Texture;
-	cout << "|" << setw(5) << setprecision(1) << Face.ScaleX;
-	cout << "|" << setw(5) << setprecision(1) << Face.ScaleY;
-	cout << "|" << setw(7) << setprecision(0) << round(Face.ShiftX);
-	cout << "|" << setw(7) << setprecision(0) << round(Face.ShiftY);
+	cout << "|" << setw(5) << setprecision(2) << Face.ScaleX;
+	cout << "|" << setw(5) << setprecision(2) << Face.ScaleY;
+	cout << "|" << setw(7) << setprecision(2) << round(Face.ShiftX);
+	cout << "|" << setw(7) << setprecision(2) << round(Face.ShiftY);
 	cout << "|" << setw(7) << setprecision(0) << round(Face.BaseShiftX);
 	cout << "|" << setw(7) << setprecision(0) << round(Face.BaseShiftY);
 	cout << "|" << setw(7) << setprecision(0) << round(Face.HShiftL);
@@ -127,7 +131,8 @@ bool face::FaceIsValid(int CheckForID, bool CheckIsDraw, bool CheckIsNotNull, bo
 			CheckIsNotNullHintTex
 			) || !CheckIsNotNullHintTex
 		)
-	) {
+	)
+	{
 		//if(CheckForID==-1&&!CheckIsDraw&&!CheckIsNotNull)cout << "++++++ TRUE +++++++ fID " << Face.fID << " CHK(" << CheckForID << ") Face.draw " << Face.draw << " CHK(" << CheckIsDraw << ") !Face.Null " << Face.IsNULL << " CHK(" << CheckIsNotNull << ") Face.Tex " << Face.Texture << " CHK(" << CheckIsNotNullHintTex <<")" << endl;
 		return 1;
 	}
@@ -146,22 +151,25 @@ void face::Move(gvector &Vec)
 
 void face::AddNewVertex(vertex N)
 {
-	// create new vertex array
-	vertex *NewVerts = new vertex[vcount+1];
-	
-	// copy old array
-	for (int v=0; v<vcount; v++)
+	if(!IsVertexNan(N))
 	{
-		NewVerts[v] = Vertices[v];
+		// create new vertex array
+		vertex *NewVerts = new vertex[vcount+1];
+		
+		// copy old array
+		for (int v=0; v<vcount; v++)
+		{
+			NewVerts[v] = Vertices[v];
+		}
+		NewVerts[vcount] = NewVerts[vcount-1]; // copy last original vertex, to copy possible settings
+		NewVerts[vcount].setall(N.x,N.y,N.z); // copy coords of new vertex
+		
+		delete[] Vertices;
+		Vertices = NewVerts;
+		vcount++;
+		
+		SortVertices(Normal);
 	}
-	NewVerts[vcount] = NewVerts[vcount-1]; // copy last original vertex, to copy possible settings
-	NewVerts[vcount].setall(N.x,N.y,N.z); // copy coords of new vertex
-	
-	delete[] Vertices;
-	Vertices = NewVerts;
-	vcount++;
-	
-	SortVertices(Normal);
 }
 
 void face::MiniShift()
@@ -202,18 +210,29 @@ void face::MiniShift()
 	}
 }
 
-void face::RoundVertices()
+void face::RoundVertices(int g)
 {
+	//vector<float>Lengths;
+	//Lengths = vector<float>(4,1.0);
+	
+	//TexFixPrep(g, Lengths); // Texture fix preparations
+	
 	for (int v = 0; v<vcount; v++)
 	{
 		vertex &V = Vertices[v];
 		if (V.DoRound)
 		{
-			V.x = round(V.x);
-			V.y = round(V.y);
-			V.z = round(V.z);
+			float sx = cTable[g].gridsize.x; // gridsizes x, y, z; 0 = no rounding
+			float sy = cTable[g].gridsize.y;
+			float sz = cTable[g].gridsize.z;
+			
+			if (sx>0) V.x = round(V.x/sx)*sx; //round(V.x);
+			if (sy>0) V.y = round(V.y/sy)*sy; //round(V.y);
+			if (sz>0) V.z = round(V.z/sz)*sz; //round(V.z);
 		}
 	}
+
+	//TexFix(g, Lengths); // Texture fix
 }
 
 void face::pushVerts (int i)
@@ -393,12 +412,13 @@ void face::RefreshTent(face &Base)
 	}
 }
 
-void face::SortVertices(gvector nVec)
+void face::SortVertices(gvector nVec, bool printDev)
 {
 	face &Face = *this;
 	
 	#if DEBUG > 0
 	bool dev = 0;
+	if(printDev&&Face.vcount==8) dev=1;
 	if(dev) cout<< " Sorting Face Vertices - Tex " << Face.Texture << " nVec "<< nVec << endl;
 	#endif
 	
@@ -504,8 +524,9 @@ void face::SortVertices(gvector nVec)
 	#if DEBUG > 0
 	if(dev) {
 	cout << "     Final Vertex List..." << endl;
-	for(int v=0; v<vcount; v++) { cout << "        #" << v << " " << Vertices[v] << endl; } system("pause"); cout << endl; }
+	for(int v=0; v<vcount; v++) { cout << "        #" << v << " " << Vertices[v] << endl; } system("pause"); cout << endl;
 	system("pause");
+	}
 	#endif
 }
 
@@ -525,7 +546,7 @@ void face::ConvertToSheared(int g)
 	Face.OffsetX = Face.HSourceL->OffsetX;
 	else
 	Face.OffsetX = Face.HSourceS->OffsetX;
-		
+	
 	Face.RefreshEdges();
 	Face.GetLenHor(0);
 	
@@ -553,8 +574,9 @@ void face::ConvertToSheared(int g)
 		if		(vcount==4&&Face.Orient==3) HLenN = GetAdjaLen(GetVector(Vertices[1],Vertices[3]), *Face.VecH);
 		else if (vcount==4&&Face.Orient==2) HLenN = GetAdjaLen(GetVector(Vertices[0],Vertices[2]), *Face.VecH);
 		else if (vcount==3) HLenN = GetAdjaLen(GetVector(Vertices[0],Vertices[2]), *Face.VecH);
-		
 		float m = HLenO/HLenN;
+		if (m<0) m *= -1;
+		
 		if(Face.VecX.IsHor) {
 			Face.ScaleX /= m; } else {
 			Face.ScaleY /= m; }
@@ -587,13 +609,13 @@ void face::ConvertToSheared(int g)
 	else
 	{
 		// get old Hor Face Lengths
-		float HLenO = Face.HSourceL->EdgeLenL;
-		float HLenN = Face.EdgeLenL;
-		float m = HLenO / HLenN;
+		//float HLenO = Face.HSourceL->EdgeLenL;
+		//float HLenN = Face.EdgeLenL;
+		//float m = HLenO / HLenN;
 		
-		#if DEBUG > 0
-		if(dev) cout << " HLenO " << HLenO << " HLenN " << HLenN << " m " << m << endl;
-		#endif
+		//#if DEBUG > 0
+		//if(dev) cout << " HLenO " << HLenO << " HLenN " << HLenN << " m " << m << endl;
+		//#endif
 		
 		GetBaseShift(Face,0,1,0);
 		
@@ -714,6 +736,37 @@ void face::ConvertToShearedTri(bool IsLongEdge, bool IsInside, bool Reverse, bru
 	#endif
 }
 
+void face::GetFaceDimensions(float (&D)[3])
+{
+	float D_L[6]; // local smallest/biggest XYZ
+	
+	for (int v = 0; v<vcount; v++)
+	{
+		vertex &V = Vertices[v];
+		if(v==0){
+			D_L[0] = V.x;
+			D_L[1] = V.x;
+			D_L[2] = V.y;
+			D_L[3] = V.y;
+			D_L[4] = V.z;
+			D_L[5] = V.z;
+		} else {
+			if(V.x < D_L[0]) D_L[0] = V.x;
+			if(V.x > D_L[1]) D_L[1] = V.x;
+			if(V.y < D_L[2]) D_L[2] = V.y;
+			if(V.y > D_L[3]) D_L[3] = V.y;
+			if(V.z < D_L[4]) D_L[4] = V.z;
+			if(V.z > D_L[5]) D_L[5] = V.z;
+		}
+	}
+	
+	// Face Dimensions/Lengths on X Y Z
+	D[0] = D_L[1] - D_L[0];
+	D[1] = D_L[3] - D_L[2];
+	D[2] = D_L[5] - D_L[4];
+}
+
+
 int face::IsFaceBeyondPlane(gvector nVec)
 {
 	#if DEBUG > 0
@@ -741,7 +794,7 @@ int face::IsFaceBeyondPlane(gvector nVec)
 	{
 		// All Vertices of this face are beyond Plane. Face is completely out of bound and can be discarded!
 		#if DEBUG > 0
-		if(dev) cout << "    | 111111111111 All Vertices of this face are beyond Plane!" << endl << "    +----" << endl << endl;
+		if(dev) cout << "    | All Vertices of this face are beyond Plane!" << endl << "    +----" << endl << endl;
 		if(dev) system("pause");
 		#endif
 		
@@ -752,7 +805,7 @@ int face::IsFaceBeyondPlane(gvector nVec)
 	{
 		// No Vertex of this face is beyond Plane. Face wont be carved at all!
 		#if DEBUG > 0
-		if(dev) cout << "    | 000000000000 No Vertex of this face is beyond Plane!" << endl << "    +----" << endl << endl;
+		if(dev) cout << "    | No Vertex of this face is beyond Plane!" << endl << "    +----" << endl << endl;
 		if(dev) system("pause");
 		#endif
 		
@@ -762,7 +815,7 @@ int face::IsFaceBeyondPlane(gvector nVec)
 	{
 		// Some vertices of this face are on the one and some on the other side of the Plane. Face will be carved!
 		#if DEBUG > 0
-		if(dev) cout << "    | 222222222222 Face will be carved!" << endl << "    +----" << endl << endl;
+		if(dev) cout << "    | Face will be carved!" << endl << "    +----" << endl << endl;
 		if(dev) system("pause");
 		#endif
 		
@@ -781,7 +834,7 @@ int face::CarveFace(gvector Plane)
 	
 	Face.GetNormal();
 	int IsBeyond = Face.IsFaceBeyondPlane(Plane);
-	if(IsBeyond==2)
+	if(IsBeyond==2) // Some vertices of this face are on the one and some on the other side of the Plane. Face will be carved!
 	{
 		Plane.rotate(0,0,-90); // cutting plane vector is currently a normal vector, so rotate it by 90 degree to get an intersection line
 		vector<vertex> V_New;
@@ -872,8 +925,8 @@ int face::CarveFace(gvector Plane)
 		
 		return 2;
 	}
-	else if(IsBeyond==1) return 1;
-	else if(IsBeyond==0) return 0;
+	else if(IsBeyond==1) return 1; // All Vertices of this face are beyond Plane. Face is completely out of bound and can be discarded!
+	else if(IsBeyond==0) return 0; // No Vertex of this face is beyond Plane. Face wont be carved at all!
 }
 
 void face::CreateRamp(int g, int b, int f, int SecID, bool IsWedge2, float Bstep)
@@ -898,6 +951,8 @@ void face::CreateRamp(int g, int b, int f, int SecID, bool IsWedge2, float Bstep
 	V3ptr = &Face.Vertices[3];
 	vertex &V0 = *V0ptr, &V1 = *V1ptr, &V2 = *V2ptr, &V3 = *V3ptr;
 	
+	brush &Brush = bGroup[g].Brushes[b];
+	
 	/*=========================================================================++
 	|| Height Tables, steps
 	++=========================================================================++*/
@@ -919,7 +974,15 @@ void face::CreateRamp(int g, int b, int f, int SecID, bool IsWedge2, float Bstep
 		float HLengthN = 1;
 		float VLengthN = 1;
 			
-		if (Face.fID==0) {}
+		if (Face.fID==0)
+		{
+			// new as of v0.87 Sept 2025
+			for (int v = 0; v<Face.vcount; v++)
+			{
+				vertex &V = Face.Vertices[v];
+				if (V.DoAddHeight) V.z+=step;
+			}
+		}
 		else if (Face.fID==1)
 		{
 			GetBaseShift(Face,0,1,0);
@@ -1016,7 +1079,7 @@ void face::CreateRamp(int g, int b, int f, int SecID, bool IsWedge2, float Bstep
 				if (V.DoAddHeight) V.z+=step;
 			}
 		}
-			
+		
 		if (Face.fID==2&&!Face.IsNULL)
 		{
 			Face.RefreshEdges(); // Important!!
@@ -1412,8 +1475,17 @@ void face::RevOrder(bool C = 0)
 
 void face::AddHeight(float height)
 {
-	for (int i = 0; i<vcount; i++)
-	Vertices[i].z += height;
+	for (int v = 0; v<vcount; v++)
+	{
+		vertex &V = Vertices[v];
+//		bool IsZeroed = 0;
+//		if( IsCloseToInt( V.x, 0, 0.0001 ) && 
+//		    IsCloseToInt( V.y, 0, 0.0001 ))
+//			IsZeroed = 1;
+//		
+//		if(!IsZeroed)
+		V.z += height;
+	}
 }
 
 void face::GetCentroid()
@@ -1729,16 +1801,37 @@ bool IsVertexOnPlane(gvector &Normal, vertex &V, int deci)
 	// distance
 	double d = GetDistPlaneVertex(Normal,V);
 	
+	// brushes that are too small might lead to issues with this! THRESHOLD 0.001 CAN BE INCREASED/DECREASED FURTHER TO SOLVE ISSUES // August 8th 2025
+	if ( (	d<0.001&&d>=0) ||
+		(	d>-0.001&&d<=0) )
+			return true;
+	else 	return false;
+}
+
+// OLD ONE; THIS WAS SOME BULLSHIT
+/*
+bool IsVertexOnPlane(gvector &Normal, vertex &V, int deci)
+{
+	int p = pow(10,deci); // precision
+	if (p==0) p=1;
+	
+	// distance
+	double d = GetDistPlaneVertex(Normal,V);
+	
 	#if DEBUG > 0
 	bool dev = 0;
 	if(dev) cout << " Distance d " << d << " rounded by deci " << deci << " = " << (floorf(d*p)/p) << endl;
-	if(dev) system("pause");
 	#endif
 	
-	int d_rounded = floorf(d*p);
-	if ( d_rounded/p==0 ) return true;
-	else return false;
-}
+	int a = floorf(d*p);
+	int b = a/p;
+	if ( b==0 ) {
+		return true;
+	}
+	else {
+		return false;
+	}
+}*/
 
 double GetDistPlaneVertex(gvector &Normal, vertex &V)
 {
@@ -1766,13 +1859,36 @@ double GetDistPlaneVertex(gvector &Normal, vertex &V)
 
 bool IsVertexOnFace(face &Face, vertex &V, int deci)
 {
+	#if DEBUG > 0
+	bool dev = 0;
+	if (dev) { cout << endl << " ----------- IsVertexOnFace?... ----------- " << endl; }
+	#endif
+	
 	int p = pow(10,deci); // precision
 	if (p==0) p=1;
+	
+	#if DEBUG > 0
+	if (dev) {
+	cout << "Plane: " << Face.Vertices[0] << Face.Vertices[1] << Face.Vertices[2] << endl;
+	cout << "Vertex: " << V << endl;
+	cout << "Deci: " << deci << endl;
+	cout << "precision: " << p << endl;
+	}
+	#endif
 	
 	// distance
 	double d = GetDistFaceVertex(Face,V);
 	int d_rounded = round(d);
 	float d_multi = d_rounded*p;
+	
+	#if DEBUG > 0
+	if (dev)cout << "distance: " << d << endl;
+	if (dev)cout << "distance rounded: " << d_rounded << endl;
+	if (dev)cout << "d_multi (d_rounded*p): " << d_multi << endl;
+	if (dev)cout << "d_multi/p: " << d_multi/p << " (0=IsOnFace, else=NotOnFace)" << endl;
+	if (dev) { cout << endl << " ----------- END ----------- " << endl; }
+	#endif
+	
 	if ( d_multi/p==0 ) return true;
 	else return false;
 }
@@ -2348,6 +2464,52 @@ void WriteFaceMAP(ostream &ostr, face &Face)
 }
 
 
+void face::DeleteDoppel()  // or collapsed? aka are there vertices that share the same location?
+{
+	vector<vertex> V_Unique;
+	V_Unique.push_back(Vertices[0]);
+	
+	for(int v=1; v<vcount; v++)
+	{
+		vertex &S = Vertices[v];
+
+		if( !IsVertexInList(S, V_Unique, 1, 2) ) // changed from precision 1 to 2 as of v0.87 update, Sept 28th 2025 to find more Doppelgangers
+		{
+			V_Unique.push_back(S);
+		}
+	}
+	
+	// create new vertex list if doppelgangers were found
+	if(V_Unique.size()>2)
+	{
+		if(V_Unique.size()<vcount)
+		{
+			delete[] Vertices;
+			vcount = V_Unique.size();
+			Vertices = new vertex[vcount];
+			
+			for(int v=0; v<vcount; v++)
+			{
+				Vertices[v] = V_Unique[v];
+			}
+			
+			SortVertices(Normal);
+			GetNormal();
+		}
+	}
+	else	draw = 0;
+}
+
+
+void face::printSimple(bool r)
+{
+	for (int v=0; v<vcount; v++){
+		cout << "    V #[" << v+1 << "/" << vcount << "] ";
+		Vertices[v].printSimple(r);
+	}
+}
+
+
 ostream &operator<<(ostream &ostr, face &Face)
 {
 	ostr << endl << " ### Printing Face ###" << endl;
@@ -2364,7 +2526,7 @@ ostream &operator<<(ostream &ostr, face &Face)
 	ostr << "  ScaleX " << Face.ScaleX << endl;
 	ostr << "  ScaleY " << Face.ScaleY << endl;
 	ostr << endl;
-	
+
 	return ostr;
 }
 
@@ -2383,6 +2545,139 @@ bool DoFacesShareVertices(face &F1, face &F2)
 	return 0;
 }
 
+bool DoTheseFacesShareAnEdge(face &F1, face &F2)
+{
+	for (int v = 0; v<F1.vcount; v++)
+	{
+		int xa = v, xb = 0;
+		if(v<F1.vcount-1) xb = v+1;
+	
+		vertex e1a = F1.Vertices[xa];
+		vertex e1b = F1.Vertices[xb];
+		
+		//cout << " current edge indices e1[" << xa << "," << xb << "]"; e1a.printSimple(1); cout << " | "; e1b.printSimple(1); cout << endl;
+		
+		for (int w = 0; w<F2.vcount; w++)
+		{
+			int ya = w, yb = 0;
+			if(w<F2.vcount-1) yb = w+1;
+			
+			vertex e2a = F2.Vertices[ya];
+			vertex e2b = F2.Vertices[yb];
+			
+			//cout << "                      e2[" << ya << "," << yb << "]"; e2a.printSimple(1); cout << " | "; e2b.printSimple(1);
+			
+			if	(	(CompareVerticesDeci(e1a, e2b, 2) && CompareVerticesDeci(e1b, e2a, 2))  ||
+					(CompareVerticesDeci(e1a, e2a, 2) && CompareVerticesDeci(e1b, e2b, 2))
+				)
+			{
+				//cout << "X"<< endl;
+				return true;
+			}
+			//else cout << endl;
+		}
+		//system("pause");
+	}
+	return false;
+}
+
+void vertexListRemoveAllBeyondFaces(vector<vertex>&vertexList, face *Faces, int t_faces)
+{
+	#if DEBUG > 0
+	bool dev = 0;
+	#endif
+	
+	vector<vertex>CleanList;
+	
+	// remove vertices that lie outside of even a single plane
+	// vertices can be located on the inside or ON any face but not outside of even a single one
+	// this can be checked by using 
+	
+	for(int v=0; v<vertexList.size(); v++) // cycle through new vertices
+	{
+		vertex &V = vertexList[v];
+		bool isValid = !IsVertexNan(V);
+		
+		// check if vertex lies beyond any of the brushes planes
+		if(isValid)
+		for (int f=0; f<t_faces; f++)
+		{
+			face &Face = Faces[f];
+			vertex &F = Face.Vertices[0];
+			
+			gvector Hypo(V, F);
+			float AdjaLen = GetAdjaLen(Hypo,Face.Normal);
+			
+			#if DEBUG > 0
+			if(dev)cout << " v# " << v << " AdjaLen " << AdjaLen << endl;
+			#endif
+			
+			if(AdjaLen<-0.01)
+			{
+				isValid = 0;
+				break;
+			}
+		}
+		if(isValid) CleanList.push_back(vertexList[v]);
+		
+		#if DEBUG > 0
+		if(dev&&!isValid) { cout << "  Vertex #" <<v << " OUTSIDE\n"; }
+		#endif
+	}
+	
+	#if DEBUG > 0
+	if (dev)cout << CleanList.size() <<  " out of " << vertexList.size() << " new Vertices for this Brush are ON or INSIDE of the brush and will be used...\n\n";
+	if (dev)system("pause");
+	#endif
+	
+	vertexList.erase(vertexList.begin(), vertexList.end()); // empty old vector
+	
+	copy(CleanList.begin(), CleanList.end(), back_inserter(vertexList));
+	
+	//vertexList = CleanList; // copy new list to old vector
+}
 
 
-
+void vertexListRemoveAllNotOnFaces(vector<vertex>&vertexList, face *Faces, int t_faces)
+{
+	#if DEBUG > 0
+	bool dev = 0;
+	#endif
+	
+	vector<bool>isValid;
+	isValid.resize(vertexList.size());
+	
+	// on how many faces lies this vertex?
+	for(int i=0; i<vertexList.size(); i++) // cycle through new vertices
+	{
+		vertex &V = vertexList[i];
+		isValid[i] = 0;
+		
+		for (int f=0; f<t_faces; f++)
+		{
+			face &Face = Faces[f];
+			
+			bool temp = IsVertexOnFace(Face, V, 2);
+			if (temp) isValid[i] = temp;
+			
+			if(isValid[i]) break; // if vertex crosses only one face, that is already enough to break the loop
+		}
+		#if DEBUG > 0
+		if(dev>1)cout << " v#" << i << " is on any face " << isValid[i] << endl;
+		#endif
+	}
+	
+	// copy all valids to new vector
+	vector<vertex>CleanList;
+	
+	for (int i = 0; i<vertexList.size(); i++)
+		if(isValid[i]) CleanList.push_back(vertexList[i]);
+	
+	#if DEBUG > 0
+	if (dev)cout << CleanList.size() <<  " out of " << vertexList.size() << " new Vertices for this Brush are lying on a face and will be used...\n\n";
+	if (dev)system("pause");
+	#endif
+	
+	vertexList.erase(vertexList.begin(), vertexList.end()); // empty old vector
+	vertexList = CleanList; // copy new list to old vector
+}

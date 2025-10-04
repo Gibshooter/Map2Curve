@@ -90,6 +90,7 @@ struct entity
 	void CreateBrushes();
 	void CopySimple(entity &Source);
 	void RotateOrigin(float x, float y, float z, vertex Origin);
+	void MirrorOrigin(int mode, vertex Origin);
 	void GetKeyValues();
 	void GetKeyValues_M2C();
 	void GetIntMapSettings(vector<string> &MapSettings);

@@ -3,6 +3,7 @@
 #include "utils.h"
 #include "group.h"
 #include "settings.h"
+#include "messages.h"
 
 #include <iostream>
 
@@ -12,6 +13,7 @@ extern group *sGroup;
 extern group *mGroup;
 extern ctable *cTable;
 extern group *bGroup;
+extern int ErrorCode;
 
 #define DEBUG 0
 
@@ -416,7 +418,7 @@ void path_set::Analyze()
 				if (EdgeLen==0||!IsValid(EdgeLen))
 				{
 					valid=0;
-					cout << "|    [ERROR] Spline contains invalid knots! Path #"<<p<< ", Knot #" << c << Corner1.pos << ", section has invalid length: " << EdgeLen << endl;
+					/* COUT */ MESSENGER( MSG_SPLINE_ERR_IK, vector<string>{}, vector<int>{ p, c }, vector<float>{ Corner1.pos.x, Corner1.pos.y, Corner1.pos.z, EdgeLen } );
 					break;
 				}
 				
@@ -675,15 +677,19 @@ void circle::GetAngles(int g)
 	{
 		vertex &V = Vertices[v];
 		vertex &VN = Vertices[v+1];
-		gvector Vec = GetVector( V, VN );
+		gvector Vec = Normalize( GetVector( V, VN ) );
 		
 		if (!CompareVerticesR(V,VN))
 		{
 			if(!IsSpline) V.Yaw = GetVecAlign(Vec, 0);
-			if(sec>0) {
-				vertex &VL = Vertices[v-2];
-				gvector Vec2 = Normalize(GetVector( VL, V ));
-				V.YawB = GetVecAlign(VecAdd(Normalize(Vec), Vec2),0);
+			
+			if(sec>0)
+			{
+				vertex &VL		= Vertices[v-2];
+				gvector Vec2 	= Normalize( GetVector( VL, V ) ); // VL, V
+				V.YawB 			= GetVecAlign( VecAdd( Vec, Vec2 ), 0);
+				
+				//cout << " Vec " << Vec << "\nVec2 " << Vec2 <<  "\nVL "; VL.printSimple(1); cout << "\nV "; V.printSimple(1); cout << "\nVN "; VN.printSimple(1); cout << "\nV.YawB " <<  V.YawB <<endl;
 			}
 			gvector VecPitch(0,0,1);
 			V.Pitch = GetVecAng(Vec, VecPitch)-90;
@@ -1465,8 +1471,12 @@ void ParseCornerFile(string pFile, path_set &PathList)
 		
 		if (CleanCorners.size()>0)
 		{
-			if (Discarded) {
-				cout << "|    [WARNING] Spline contains single knots which had been discarded!" << endl;
+			if (Discarded)
+			{
+				/* COUT */ MESSENGER( MSG_SPLINE_WRN_SK );
+				
+				ErrorCode = 2;
+				
 				//tpaths = 0;
 				// fix pIDs in case of deleted knots
 				/*for (int p=0, n_pID=0; p<c_pID+1; p++) {
@@ -1536,7 +1546,7 @@ void ParseCornerFile(string pFile, path_set &PathList)
 		}
 		else
 		{
-			cout << "|    [ERROR] Spline only contains single knots!" << endl;
+			/* COUT */ MESSENGER( MSG_SPLINE_ERR_SK );
 			PathList.valid = 0;
 		}
 		

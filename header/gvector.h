@@ -27,6 +27,7 @@ struct gvector
 	float len();
 	gvector flip();
 	void rotate(float degx, float degy, float degz);
+	void mirror(int m);
 	void CopyCoords(gvector &Source);
 	void Normalize();	
 	void AddVec(gvector AVec);

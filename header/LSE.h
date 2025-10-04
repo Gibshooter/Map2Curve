@@ -14,6 +14,7 @@ using namespace std;
 
 void SetMat(double mat[3][4], face Faces[3]);
 void SetMat(double mat[3][4], face &F1, face &F2, face &F3);
+void InverseMat(double mat[3][4]);
 
 // function to reduce matrix to r.e.f.  Returns a value to  
 // indicate whether matrix is singular or not 
@@ -25,6 +26,13 @@ void backSub(double mat[N][N+1], vertex &Isect);
 bool gaussianElimination(double mat[N][N+1], vertex &Isect);
 void swap_row(double mat[N][N+1], int i, int j);
 void print(double mat[N][N+1]);
+
+
+
+
+
+void partial_pivot(double A[N][N+1], int n);
+void back_substitute(double A[N][N+1], int n, vertex &Isect);
 
 
 

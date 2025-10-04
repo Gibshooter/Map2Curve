@@ -476,6 +476,19 @@ void gvector::rotate(float degx, float degy, float degz)
 	}
 }
 
+void gvector::mirror(int m)
+{
+	bool X=0, Y=0, Z=0;
+	if	(m==1||m==4||m==5||m==7)	X=1;
+	if	(m==2||m==4||m==6||m==7) 	Y=1;
+	if	(m==3||m==5||m==6||m==7)	Z=1;
+	
+	// subtract Origin
+	if	(X)	x*= -1;
+	if	(Y) y*= -1;
+	if	(Z)	z*= -1;
+}
+
 void gvector::Normalize()
 {
 	double ext1 = pow(x, 2) + pow(y, 2) + pow(z, 2);

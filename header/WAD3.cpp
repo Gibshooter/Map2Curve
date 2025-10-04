@@ -1,5 +1,6 @@
 
 #include "WAD3.h"
+#include "messages.h"
 #include <iostream>
 #include <string>
 #include <fstream>
@@ -7,6 +8,7 @@
 // WAD 3 texture file support
 
 using namespace std;
+extern int ErrorCode;
 
 int WADFile::FindTexture(string TexName)
 {
@@ -51,7 +53,8 @@ void WADFile::ReadWADFile(string path)
 	else
 	{
 		valid = 0;
-		cout << "|    [WARNING] There was a problem opening a WAD file ("<<path<<")!" << endl;
+		/* COUT */ MESSENGER( MSG_WAD_WRN_OPENW, vector<string>{path}, vector<int>{}, vector<float>{} );
+		ErrorCode = 2;
 	}
 }
 

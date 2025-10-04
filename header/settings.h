@@ -96,9 +96,13 @@ struct ctable {
 	int d_circlemode = -1;
 	int flatcircle = -1;
 	int hstretch = -1; // stretch texture horizontally based on current selected export range and hstretchamt
-	int hstretchamt = -1; // how often texture will be tiled/stretched along the curve horizontally; 0 = perfect fit based on current texture scale/export range; >0 = manual amount of tiling
+	float hstretchamt = -1; // how often texture will be tiled/stretched along the curve horizontally; 0 = perfect fit based on current texture scale/export range; >0 = manual amount of tiling
 	float hshiftoffset = -1;
 	int hshiftsrc = -1;
+	tform gridsize;
+	int mapcarve = -1;
+	int mirror = -1; // 0=Off, 1=x, 2=y, 3=z, 4=xy, 5=xz, 6=yz, 7=xyz
+	int mirror_src = -1; // 0=Off, 1=x, 2=y, 3=z, 4=xy, 5=xz, 6=yz, 7=xyz
 	
 	void Print();
 	void FillUnset(ctable &Filler);
@@ -214,8 +218,10 @@ struct setting_list
 		if (Settings[51].IsSet)Table.d_carve		= Settings[51].val_int;
 		if (Settings[52].IsSet)Table.d_autoassign	= Settings[52].val_int;
 		if (Settings[53].IsSet)Table.d_circlemode	= Settings[53].val_int;
-		if (Settings[58].IsSet)Table.hstretchamt	= Settings[58].val_int; // new V0.8 Update
 		if (Settings[60].IsSet)Table.hshiftsrc		= Settings[60].val_int; // new V0.8 Update
+		if (Settings[62].IsSet)Table.mapcarve		= Settings[62].val_int; // new v0.87 Update
+		if (Settings[63].IsSet)Table.mirror_src		= Settings[63].val_int; // new v0.87 Update
+		if (Settings[64].IsSet)Table.mirror			= Settings[64].val_int; // new v0.87 Update
 		
 		// floats
 		if (Settings[0].IsSet)Table.rad 			= Settings[0].val_float;
@@ -227,7 +233,9 @@ struct setting_list
 		if (Settings[33].IsSet)Table.d_pos			= Settings[33].val_float;
 		if (Settings[35].IsSet)Table.spike_height 	= Settings[35].val_float;
 		if (Settings[46].IsSet)Table.p_expand 		= Settings[46].val_float;
+		if (Settings[58].IsSet)Table.hstretchamt	= Settings[58].val_float; // new V0.8 Update
 		if (Settings[59].IsSet)Table.hshiftoffset 	= Settings[59].val_float; // new V0.8 Update
+		
 		
 		// strings
 		if (Settings[34].IsSet)Table.nulltex		= Settings[34].val_string;
@@ -245,6 +253,7 @@ struct setting_list
 		if (Settings[40].IsSet)Table.d_movey_rand	= Settings[40].val_tform;
 		if (Settings[45].IsSet)Table.p_scale		= Settings[45].val_tform;
 		if (Settings[55].IsSet)Table.d_scale_rand	= Settings[55].val_tform;
+		if (Settings[61].IsSet)Table.gridsize 		= Settings[61].val_tform; // new V0.81 Update
 	}
 	
 	void Print()

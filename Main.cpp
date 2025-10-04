@@ -6,6 +6,11 @@
 #include "header/vertex.h"
 #include "header/RMF.h"
 #include "header/LSE.h"
+#include "header/slist.h"
+#include "header/global.h"
+#include "header/messages.h"
+#include "header/export.h"
+#include "header/teestream.h"
 
 #include <iostream>
 #include <string>
@@ -15,107 +20,16 @@
 #define PI 3.14159265
 #define DEBUG 0
 
+
+#include <ostream>
+#include <iomanip>
+#include <fstream>
+
 using namespace std;
 
-/*
-	====== PREAMBLE ======
-	
-		If you're looking at this code, I assume you are interested in how to
-		work with the Goldsource map format and its elements.
-		
-		Map2Curve is my second C++ project and I had to learn a lot of things
-		during its development.
-		It is not as efficiently or elegantly written as it could be.
-		In the end I wasn't trying to create a perfect program, but to create
-		something that helps me working on my mod project and maybe even is of help
-		for the Half-Life modding community.
-		
-		Most functions are written more or less inefficiently but were left as they
-		are because of a lack of time, skill and/or motivation.
-		
-		Here are a few important things you should take a look at before you can
-		build your own map-generator (aside from a coding language ofc):
-	
-		- Trigonometry (sin, cos, tan, Pi)
-		- Geometry / Analytic geometry (Vertices, Lines, Planes)
-		- Linear Algebra (Vectors, Dot product, Cross product)
-		- Matrices (especially Rotation Matrices), Euler Angles
-		
-		I am not an expert in any one of these, I had to re-learn everything from
-		scratch and still feel like a newbie. Sometimes it took me weeks to create
-		certain functions or apply something new to to my code, but I kept trying
-		and trying until it finally worked as intended.
-	
-	====== EXTERNAL CODE I USED IN THIS PROJECT ======
-		
-		https://www.geeksforgeeks.org/gaussian-elimination/
-		by Yash Varyani
-		https://www.geeksforgeeks.org/legal/copyright-information/
-		
-		Relevant files:
-		- LSE.h
-		- LSE.cppp
-	
-	====== RESOURCES ======
-	
-		- Euler Angles: https://www.geometrictools.com/Documentation/EulerAngles.pdf
-		- WAD 3 format: http://www.j0e.io
-		
-	====== C++ Info ====== 
-	
-		Based on GNU C++ 11
-		Created in DevC++ 5.11
-		
-		
-		
-		Best regards
-		ToTac
-		March 2024
-		
-		totac@web.de
-		http://www.gibshooter.com
-*/
 
 
-// command list // 0 = bool, 1 = int, 2 = float, 3 = string, 4 = tform
-vector<string> slist    { "rad", "offset", "res", "type", "obj", "shift", "target", "append", "tri", "round", "height", "ramp", "p_cornerfix", "p_reverse", "ramptex", "p_split", "splinefile", "scale", "rot", "move", "scale_src", "rot_src", "bounds", "range_start", "range_end", "transit_tri", "transit_round", "gaps", "gaplen", "skipnull", "d_enable", "d_autoyaw", "d_autopitch", "d_pos", "nulltex", "spike_height", "d_separate", "d_autoname", "d_pos_rand", "d_rotz_rand", "d_movey_rand", "d_draw", "d_draw_rand", "d_skip", "heightmode", "p_scale", "p_expand", "p_evenout", "map", "c_enable", "texmode", "d_carve", "d_autoassign", "d_circlemode", "flatcircle", "d_scale_rand", "rmf", "hstretch", "hstretchamt", "hshiftoffset", "hshiftsrc" };
-vector<int> slist_id; 
-vector<int> slist_type  {  2,     2,        1,     1,      0,     1,       3,        0,        0,     0,       2,        0,      0,             0,           0,         0,         3,            4,       4,     4,      4,           4,         1,        2,             2,           0,             0,               0,      2,        0,          0,          0,           0,             2,       3,         2,              0,            0,            4,            4,             4,              1,        0,             1,        1,            4,         2,          0,           0,     0,          1,         1,        1,               1,               0,           4,             0,		 0,			 1,				2,			   1};
-vector<int> slist_min   { -131072,-131072,  0,     0,      0,     0,       0,        0,        0,     0,       -131072,  0,      0,             0,           0,         0,         0,            0,       0,     0,      0,           0,         0,        0,             0,           0,             0,               0,      0,        0,          0,          0,           0,             0,       0,         0,              0,            0,            0,            0,             0,              0,        0,             0,        0,            0,         -131072,    0,           0,     0,          0,         0,        0,               0,               0,           10,            0,		 0,			 0,				-131072,	   0};
-vector<int> slist_max   { 131072, 131072,   384,   3,      1,     5,       255,      1,        1,     1,       131072,   1,      1,             1,           1,         1,         255,          30,      30,    30,     30,          1,         2,        100,           100,         1,             1,               1,      131072,   1,          1,          1,           1,             1,       15,        131072,         1,            1,            30,           30,            30,             384,      1,             384,      14,           30,         131072,    1,           1,     1,          1,         1,        1,               1,               1,           10,            1,		 1,			 65536,			131072,		   1};
 
-
-// Global Objects
-	vertex Zero;
-	vector<WADFile> WADFiles;
-	
-	file *gFile = nullptr; // global pointer for current file
-	
-	ctable *cTable = nullptr; // final construction Table
-	ctable *sTable = nullptr; // original imported settings storage
-	ctable *mTable = nullptr;
-	
-	bool ValidDefaults = 1;
-	ctable *dTable = nullptr; // Defaults construction Table
-	
-	group *mGroup = nullptr; 	// Imported map
-	group *sGroup = nullptr; 	// Transformed map (1 for each curve object)
-	group *bGroup = nullptr; 	// Generated curves
-	
-	group *mDetailGroup = nullptr;	// original detail objects
-	group_set *sDetailSet = nullptr; // copied detail objects for each individual curve object
-	group_set *DetailSet = nullptr; // final detail objects
-	
-	string def_nulltex = "SOLIDHINT";
-	float def_spikesize = 4;
-	
-	bool G_LOG = 0;
-	bool G_AUTOCLOSE = 0;
-	bool G_DEV = 0;
-	
-	string ROOT = "";
-	
-	int ErrorCode = 1;
 
 int main(int argc, char *argv[])
 {
@@ -125,50 +39,80 @@ int main(int argc, char *argv[])
 	
 	srand (time(NULL)); // to generate more random numbers with rand()
 	
+	
+	
 	// Get the root directory from argv[0]
 	string MAIN(argv[0]);
 	ROOT = MAIN.substr(  0, MAIN.rfind( '\\', MAIN.length() )+1  );
 	
-	// initialize slist ID vector
-	slist_id.resize(slist.size()); for(int i=0;i<slist.size();i++) slist_id[i]=i;
+
+	
+	
+	// fill settings list ID vector
+	slist_id.resize(slist.size());
+	for(int i=0; i<slist.size(); i++) slist_id[i] = i;
+	
 	
 	if (argc >= 2)
 	{
+		
 		vector<string> CleanFileList;
+		
+		/* ======================================== STARTING PARAMETERS ======================================== */
 		// look for starting parameters at the beginning
 		for (int i = 1; i < argc; i++)
 		{
 			string C_PARAM = argv[i];
+			
 			if (C_PARAM[0]=='-') // param is probably a command
 			{
 				C_PARAM = C_PARAM.substr(1);
 				if 		(C_PARAM=="autoclose") 	G_AUTOCLOSE = 1;
-				//else if (C_PARAM=="log") 		G_LOG 		= 1;
+				else if (C_PARAM=="log") 		G_LOG 		= 1;
 				else if (C_PARAM=="dev") 		G_DEV 		= 1;
 			}
 			else CleanFileList.push_back(argv[i]); // param is probably a filepath
 		}
+		/* ... END .......................... */
+		
+		
+		
+		
+		/* ======================================== LOG FILE ======================================== */
+		
+		ofstream logFile;
+		
+		if(G_DEV||G_LOG)
+		logFile.open (ROOT+"Map2Curve.log", ofstream::out);
+		
+		teestream tee(cout, logFile);
+		tee_ptr = &tee;
+		
+		/* .......................................................................................... */
+		
+		
+	
+		
+		/* ======================================== INPUT FILE CHECK ======================================== */
 		
 		// check for valid files
-		cout << "++---------------------++\n";
-		cout << "||   Map2Curve v0.8    ||\n";
-		cout << "||      by ToTac       ||\n";
-		cout << "||   Mar 31th, 2024    ||\n";
-		cout << "++---------------------++\n\n";
 		
 		int vcount = 0; // valid files counter
 		vector<file> Filelist;
+		
+		/* COUT */ MESSENGER( MSG_INTRO_CREDITS );
+		
 		for (int i = 0; i<CleanFileList.size(); i++)
 		{
-			cout << " Checking File #" << vcount+1 << endl;
-			cout << "+-----------------------------------------------------+" << endl;
+			/* COUT */ MESSENGER( MSG_CHECKING_FILE, vector<string>{}, vector<int>{i}, vector<float>{} );
+			/* COUT */ MESSENGER( MSG_DLINE );
 			
-			string cFile = CleanFileList[i];
+			string &cFile = CleanFileList[i];
 			
 			//check if filetype is valid (txt and map)
 			int filetype = CheckFileType(cFile);
 			
-			if (filetype==1||filetype==2)
+			if (filetype==1 || filetype==2)
 			{
 				Filelist.push_back(cFile);
 				Filelist[vcount].type = filetype;
@@ -176,388 +120,635 @@ int main(int argc, char *argv[])
 				Filelist[vcount].GetInfo();
 				
 				if (!Filelist[vcount].valid_map)
-				Filelist.pop_back();
+					Filelist.pop_back();
 				else
-				vcount++;
+					vcount++;
 				
-				cout << "+-----------------------------------------------------+\n\n";
+				/* COUT */ MESSENGER( MSG_DLINE );
 			}
-			else {
-				cout << "|    [ERROR] Can't handle this file type! Please use *.txt and *.map files only!" << endl;
-				cout << "|            File: " << cFile << endl;
-				cout << "|" << endl;
-				cout << "+-----------------------------------------------------+" << endl << endl;
+			else
+			{
+				// ERROR: Can not handle this filetype
+				/* COUT */ MESSENGER( MSG_ERR_CANT_HAND, vector<string>{cFile}, vector<int>{}, vector<float>{} );
 			}
 		}
 		
-		// Preparations
+		
+		/* ... END .......................... */
+		
+		
+		
+		
+		
+		
+		/* =================================== LOAD WADS AND DEFAULT SETTINGS =================================== */
+		
+		
 		if (Filelist.size()>0)
 		{
-			cout << "     [INFO] Found " << Filelist.size() << " valid file(s)." << endl;
-			cout << endl << "            Scanning WAD Folder and WADList.txt..." << endl;
+			/* COUT */ MESSENGER( MSG_X_VALID_FILES, vector<string>{}, vector<int>{int(Filelist.size())}, vector<float>{} );
+			/* COUT */ MESSENGER( MSG_LOAD_WADS____ );
 			
 			LoadWads();
 			
-			cout << "            " << WADFiles.size() << " WAD files loaded:" << endl;
-			
-			for(int j=0; j<WADFiles.size(); j++)
-			cout << "            #" << j+1 << " " << WADFiles[j].FilePath << endl;
-			
-			cout << endl << "     [INFO] Loading Default Settings (DEFAULTS.txt) in Root Dir..." << endl;
+			/* COUT */ MESSENGER( MSG_WADS__LOADED_ );
 			
 			LoadDefaultSettings();
 			
-			if (ValidDefaults)	cout<< "            Successfully loaded!" << endl;
-			else				cout<< "            Not found or empty. Using internal Defaults!" << endl;
+			/* COUT */ MESSENGER( MSG_LOAD_DEFAULTS );
 		}
 		
+		/* ... END .......................... */
+		
 		int t_valids = 0;
-		// Process Files
+
+			
+
+
+		/* =========================== INPUT FILE PROCESS LOOP =========================== */
+		
+		// when there are multiple files forwarded to m2c.exe
+		
 		for (int i = 0; i < Filelist.size(); i++)
 		{
 			file &cFile = Filelist[i];
 			gFile = &Filelist[i];
-			cout << endl << "  Processing File #"<<i+1 << endl;
-			cout << "+-----------------------------------------------------+" << endl;
-			if (cFile.valid_cfg&&!cFile.InternalMapSettings)
+			
+			
+			
+			/* COUT */ MESSENGER( MSG_PROCESS_FILE_, vector<string>{}, vector<int>{i}, vector<float>{} );
+			
+			/* COUT */ MESSENGER( MSG_DLINE );
+			
+			if ( cFile.valid_cfg && !cFile.InternalMapSettings )
 			{
-				cout << "|  Loading external settings ("<< cFile.path_cfg <<")..." << endl;
-				GetSettings(cFile.str_cfg, cFile.settings, slist);
+				/* COUT */ MESSENGER( MSG_LOAD_EXT_SETT, vector<string>{cFile.path_cfg}, vector<int>{}, vector<float>{} );
+				
+				GetSettings( cFile.str_cfg, cFile.settings, slist );
 			}
 			
-			cout << "|  Loading Map File ("<< cFile.path_map <<")..." << endl;
+			
+			
+			
+			
+			
+			
+			
+			/* =========================== LOAD MAP FILE =========================== */
+			
+			// read map-file and create copies from it for m2c to further process the maps data
+			// this includes separating normal curve brushes from detail object brushes and point entities
+			
+			/* COUT */ MESSENGER( MSG_LOADING_MAP_F, vector<string>{cFile.path_map}, vector<int>{}, vector<float>{} );
+			
 			cFile.LoadMap();
-			cout << "|" << endl;
+			
+			/* COUT */ MESSENGER( MSG_VLINE );
+			
+			/*
+			g = curves
+			d = detail objects
+			b = brushes
+			e = brush/point entities
+				
+			File.LoadMap()
+			|
+			|-> File.createGroupMap()
+			| 	|-> File.LoadMap_GetEntities()				collect all entities from map-file and copy them into File.EntityList
+			|	|	|-> GetInternalMapSettings()		
+			|	|	|-> mDetailGroup[g]						list of detail groups is being created
+			|	|	|-> File.EntityList[e].CreateBrushes()	create Brushes for all entities found in map string (World and Solid)
+			|	|	|	|-> EntityList[e].Brushes[b]
+			|	|	|	|-> EntityList[e].Brushes[b].Reconstruct2025()
+			|	|	|
+			|	|	|-> mDetailGroup[g].Entities[e]			point entities for detail objects are being created
+			|	|	|-> mDetailGroup[g].Entities[e].CopySimple(File.EntityList[e])
+			|	|
+			| 	|-> mGroup = new group						create and fill __RAW BRUSH GROUP__ from File.EntityList
+			| 	|-> mGroup->GetGroupDimensions()
+			|
+			|-> File.LoadMap_GetTexInfo()					get dimensions (width and height) of all textures that were used in the source map
+			|-> File.LoadMap_DetailObj()					Create Detail Objects from File.EntityList
+			| 	|-> EntityList.Brushes.GetFaceShifts()		get original Texture Shifts of only the detail brushes
+			|	|	|-> GetBaseEdges()
+			|	|	|-> GetBaseShift()
+			|	|	|-> GetTexOffset()
+			|	|
+			|	|-> mDetailGroup = new group[g]				create and fill __RAW DETAIL OBJECT GROUPS__ from File.EntityList
+			|	|-> mDetailGroup[g].MarkGroupOriginObjects()
+			|	|-> mDetailGroup[g].GetGroupDimensions()
+			|
+			|-> mGroup->CheckBrushValidity()				can brushes actually be turned into curves? gets base and head (Left-Right) face ID too which is necessary for GetBrushFaceOrients()
+			|-> mGroup->GetBrushFaceOrients()				determine orientation of body faces (Up-Down-Back-Front)
+			|-> mGroup->GetBrushTVecAligns()				see if texture vectors are aligned correctly and check their orientation
+			|-> mGroup->ReconstructMap()					get certain brush information for further calculations
+			| 	|-> mGroup->GetGroupVertexList()
+			|	 	|-> Group.GetBrushSimpleCentroid()
+			|	 	|-> Group.ClearBrushVertexList()
+			|	 	|-> Group.GetBrushVertexAngles()
+			|	 	|-> Group.GetBrushFaceVertexSE()
+			|	 	|-> Group.GetBrushVertexListSE()
+			|	 	|-> Group.GetGroupBrushVertexList()
+			|
+			|->	mGroup->CheckBrushDivisibility()			check whether a brush can be triangulated or not
+			|->	mGroup->GetBrushShifts()					get original texture shifts
+			| 	|-> GetBaseEdges()							gets BaseX(2) and BaseY(2) of a face for GetBaseShift
+			|	|-> GetBaseShift()							gets base shift of a face
+			| 	|-> GetTexOffset()							gets added on top of the base shift
+			|
+			|-> File.LoadMap_ConvertWorld2Face()
+			*/
+			
+
+
+
+	
+		
+
+
+
 			
 			if (mGroup->valid)
 			{
-				cout << "|  Creating Source Objects..." << endl;
-				cFile.createGroupSource(); // copy map brushes for each curve object in case there are individual transformations
+				/* =========================== CREATE __WIP BRUSH GROUPS__ FROM PREVIOUSLY LOADED __RAW BRUSH GROUP__ =========================== */
 				
-				cout << "|  Creating Construction Tables..." << endl;
+				// copy map brushes for each curve object in case there are individual transformations
 				
-				#if DEBUG > 0
-				if(dev) cout << "cFile.type (1=txt,2=map): " << cFile.type << endl << "cFile.valid_cfg: " << cFile.valid_cfg << endl << "cFile.InternalMapSettings: " << cFile.InternalMapSettings << endl << endl;
-				#endif
+				/* COUT */ MESSENGER( MSG_CREAT_SRC_OBJ );
 				
-				if ( (cFile.type==1 && cFile.valid_cfg) || (cFile.type==2 && cFile.valid_cfg && !cFile.InternalMapSettings ) ) {
-					cout << "|  (Using settings from preset-file " << cFile.name << ".txt)" << endl;
+				cFile.createGroupSource();
+				
+				/*
+				g = curves
+				d = detail objects
+				b = brushes
+				e = brush/point entities
+				
+				File.createGroupSource()
+				|
+				|-> sGroup 			= new group[g]			create and fill __WIP BRUSH GROUPS__
+				|-> sGroup[g].Copy	(mGroup)
+				*/
+	
+				
+				
+				
+				
+				/* =========================== CREATE CONSTRUCTION TABLES =========================== */
+				
+				// ...WITH RAW CURVE SETTINGS
+				
+				/* COUT */ MESSENGER( MSG_CONSTRUCT_TAB );
+				
+				if (	(cFile.type==1 && cFile.valid_cfg) ||
+						(cFile.type==2 && cFile.valid_cfg &&
+						!cFile.InternalMapSettings ) )
+				{
+					
+					/* COUT */ MESSENGER( MSG_USING_PRESETF, vector<string>{cFile.name}, vector<int>{}, vector<float>{} );
+					
 					sTable = createTableS(mGroup->t_arcs, cFile.settings,0); // create raw settings table
+					
 				}
-				else if (cFile.type==2 && cFile.InternalMapSettings) {
-					cout << "|  (Using map-internal settings from info_curve and info_curve_export entities)" << endl;
+				else if (cFile.type==2 && cFile.InternalMapSettings)
+				{
+					/* COUT */ MESSENGER( MSG_USING_MAP_INT );
+					
 					mGroup->t_arcs = cFile.t_iarcs;
 					sTable = createTableS(cFile.t_iarcs, cFile.settingsM,1);
+					
 				}
 				else
 				{
-					cout << "|  (Using default settings)" << endl;
-					//sTable = createTableS(mGroup->t_arcs, cFile.settings,0);
+					/* COUT */ MESSENGER( MSG_USING_DEF_SET );
+					
 					sTable = new ctable[mGroup->t_arcs];
 					for (int i = 0; i<mGroup->t_arcs; i++)
 						sTable[i].CopyAll(*dTable);
+					
 				}
 				
-				if(G_DEV)
-				for (int g = 0; g<mGroup->t_arcs; g++){
-					if (sTable!=nullptr) {
-					cout << " sTable #" << g << endl;
-					sTable[g].Print();
-					system("pause");}}
+				// DEV PRINT STABLE
+				if(G_DEV) /* COUT */ MESSENGER( MSG_PRINT_S_TABLE );
 				
-				createTableC(); // create final construction tables
+				// WITH FINAL CURVE SETTINGS
+				// CREATE FINAL TABLES WITH CURVE SETTINGS
+				createTableC();
 				
-				if(G_DEV)
-				for (int g = 0; g<mGroup->t_arcs; g++) {
-					if (sTable!=nullptr) {
-					cout << " cTable #" << g << endl;
-					cTable[g].Print();
-					system("pause");}}
+				// DEV PRINT CTABLE
+				if(G_DEV) /* COUT */ MESSENGER( MSG_PRINT_C_TABLE );
+
+
 				
-				cout << "|  Creating Detail Objects..." << endl;
+				
+				
+				/* =========================== CREATE WIP DETAIL OBJECT GROUPS =========================== */
+				
+				/* COUT */ MESSENGER( MSG_CREATE_DET_OB );
+				
 				cFile.createDetailGroupSource();
 				
-				bool IsSetSTforms = 0, IsSetMap = 0, IsSetObj = 0, IsSetRMF = 0;
+				/* ... END .......................... */
+				
+				/*
+				g = curves
+				d = detail objects
+				b = brushes
+				e = brush/point entities
+				
+				File.createDetailGroupSource()
+				|
+				|-> sDetailSet 										= new group_set[g]					create and fill __WIP DETAIL OBJECT GROUPS__
+				|-> sDetailSet[g].Groups 							= new group[d]						create and fill __WIP DETAIL OBJECT GROUPS__
+				|-> sDetailSet[g].Groups[d].CopyProps				(mDetailGroup[g])					detail group properties
+				|-> sDetailSet[g].Groups[d].Brushes[b].Copy			(mDetailGroup[g].Brushes[b])		Solid Brushes of this detail group
+				|-> sDetailSet[g].Groups[d].Brushes[b].CopySimple	(mDetailGroup[g].Entities[e])		Point Entities of this detail group
+				*/
+				
+
+				
+				
+				// Check if the following functions need to be executed at all
+				
+				bool 	IsSetSTforms = 0,
+						IsSetMap = 0,
+						IsSetObj = 0,
+						IsSetRMF = 0,
+						IsSetMapCarve = 0,
+						CarveBefor = 0,
+						CarveAfter = 0;
+				
 				for (int g = 0; g<mGroup->t_arcs; g++)
 				{
-					if (cTable[g].scale_src.IsSet || cTable[g].rot_src.IsSet) IsSetSTforms = 1;
-					if (cTable[g].map>0) IsSetMap = 1;
-					if (cTable[g].obj>0) IsSetObj = 1;
-					if (cTable[g].rmf>0) IsSetRMF = 1;
+					if ( ( cTable[g].scale_src.IsSet &&
+						   cTable[g].scale_src.x!=0 &&
+						   cTable[g].scale_src.x!=1 )
+						||
+						 ( cTable[g].rot_src.IsSet && (
+						   cTable[g].rot_src.x!=0 ||
+						   cTable[g].rot_src.y!=0 ||
+						   cTable[g].rot_src.z!=0 ) )
+						||
+						   cTable[g].mirror_src>0
+					)										IsSetSTforms = 1;
+					if ( cTable[g].mapcarve>0 ) 			IsSetMapCarve = 1;
+					if ( cTable[g].mapcarve==1 ) 			CarveBefor = 1;
+					if ( cTable[g].mapcarve==2 ) 			CarveAfter = 1;
+					if ( cTable[g].map>0 ) 					IsSetMap = 1;
+					if ( cTable[g].obj>0 ) 					IsSetObj = 1;
+					if ( cTable[g].rmf>0 ) 					IsSetRMF = 1;
+				}
+				
+				
+				
+				
+				
+				
+				/* =========================== SOURCE TRANSFORMATIONS =========================== */
+				
+				// CARVING _BEFORE_ SOURCE TRANSFORMATION; new as of v0.87 update
+				if ( IsSetMapCarve && CarveBefor )
+				{
+					/* COUT */ MESSENGER( MSG_CARVING_SOURC );
+					
+					cFile.CarveSource();
 				}
 				
 				if (IsSetSTforms)
 				{
-					cout << "|  Applying Source Transformations..." << endl;
+					
+					/* COUT */ MESSENGER( MSG_APPLY_SRC_TRA );
+					
 					cFile.TransformSource();
+					
+					/*
+					g = curves
+					d = detail objects
+					b = brushes
+					e = brush/point entities
+					
+					File.TransformSource()
+					|
+					|-> sGroup[g].Brushes[b].ScaleOrigin()						SCALE
+					|-> sGroup[g].Brushes[b].RotOrigin()						ROTATE
+					|-> sGroup[g].Brushes[b].MirrorOrigin()						MIRROR
+					|-> sGroup[g].RoundBrushVertices()
+					|
+					|-> sDetailSet[g].Groups[d].Brushes[b].ScaleOrigin()		SCALE
+					|-> sDetailSet[g].Groups[d].Brushes[b].RotOrigin()			ROTATE
+					|-> sDetailSet[g].Groups[d].Brushes[b].MirrorOrigin()		MIRROR
+					|
+					|-> sDetailSet[g].Groups[d].Entities[e].ScaleOrigin()		SCALE
+					|-> sDetailSet[g].Groups[d].Entities[e].RotOrigin()			ROTATE
+					|-> sDetailSet[g].Groups[d].Entities[e].RotateEntity()		ROTATE
+					|-> sDetailSet[g].Groups[d].Entities[e].MirrorOrigin()		MIRROR
+					|
+					|-> sDetailSet[g].Groups[d].CarveGroup()					CARVE
+					|-> sDetailSet[g].Groups[d].CleanUpGroup()
+					|-> sDetailSet[g].Groups[d].GetGroupDimensions()
+					|
+					|-> sGroup[g].CarveGroup()									CARVE
+					|-> sGroup[g].CleanUpGroup()								
+					|-> sGroup[g].CheckBrushValidity()							
+					|-> sGroup[g].CleanUpGroup()								
+					|-> sGroup[g].GetGroupDimensions()							
+					|-> sGroup[g].GetBrushFaceOrients()							
+					|-> sGroup[g].GetBrushTVecAligns()							
+					|-> sGroup[g].GetGroupVertexList()							
+					|-> sGroup[g].CheckBrushDivisibility()						
+					*/
+					
+				}
+				
+				// CARVING _AFTER_ SOURCE TRANSFORMATION; new as of v0.87 update
+				if ( IsSetMapCarve && CarveAfter )
+				{
+					/* COUT */ MESSENGER( MSG_CARVING_SOURC );
+					
+					cFile.CarveSource();
+				}
+								
+				// create tables with final curve settings again because due to source transformations some values might have changed
+				if ( IsSetSTforms || IsSetMapCarve )
+				{
 					createTableC();
 				}
-				cout << "|" << endl;
-				cFile.FixDetailPos(); // fix x position of detail objects after eventual source transformation
+				
+				/* COUT */ MESSENGER( MSG_VLINE );
+				
+				
+				// fix x position of detail objects after eventual source transformation
+				cFile.FixDetailPos();
+			
+			
+				/* ... END .......................... */
+				
+				
+				
+				
+				
+				
+				
+				/* =========================== FINAL CURVE LOOP =========================== */
 				
 				int validGroups = mGroup->t_arcs;
+				
 				for (int g = 0; g<mGroup->t_arcs; g++)
 				{
 					group &Group = sGroup[g];
 					
-					cout << "|" << endl << "|  Generating Curve #"<<g+1<<"..." << endl;
+					/* COUT */ MESSENGER( MSG_GENERAT_CURVE, vector<string>{}, vector<int>{g+1}, vector<float>{} );
 					
-					//check for paths
-					if (  cTable[g].type==3 || cTable[g].type==2  || cTable[g].heightmode==1  ) {
-						cout << "|    Loading Spline File..." << endl;
-						try{
-							cFile.LoadSpline(g);
-						}
-						catch (...) {
-							cout << "|    [ERROR] There was a problem loading the Path_Corner file!" << endl;
-							Group.valid = 0;
-						}
-						if (!Group.valid) { validGroups--; } //!cFile.PathList[g].valid					
+					
+					
+					/* =========================== LOAD SPLINE FILES =========================== */
+					
+					if (  cTable[g].type==3 || cTable[g].type==2  || cTable[g].heightmode==1  )
+					{
+						/* COUT */ MESSENGER( MSG_LOAD_SPLINE_F );
+						
+						cFile.LoadSpline(g);
+						
+						if (!Group.valid) { validGroups--; }
 					}
-					if (Group.valid)
+					
+					/* ... END .......................... */
+					
+					
+					
+					
+					
+					
+					/* =========================== GENERATE CURVE =========================== */
+					
+					bool InvButDet = 0; if(sDetailSet!=nullptr || mDetailGroup!=nullptr) InvButDet = 1; // Overwrite for when main group has become invalid/empty but there are still detail objects to process
+					
+					if (Group.valid || InvButDet)
 					{
 						def_nulltex = cTable[g].nulltex;
 						for (int i=0;i<def_nulltex.length();i++) def_nulltex[i] = toupper(def_nulltex[i]);
 						def_spikesize = cTable[g].spike_height;
 						
-						int t = cTable[g].type;
-						int hm = cTable[g].heightmode;
-						cout << "|    Type:       "; if (t==0) cout << "Pi Circle" << endl; else if (t==1) cout << "Grid Circle" << endl; else if (t==2) cout << "Simple Spline Extrusion" << endl; else if (t==3) cout << "Intersecting Spline Extrusion" << endl;
-						cout << "|    Radius:     "<< cTable[g].rad << endl;
-						cout << "|    Depth:      "<< sGroup[g].SizeY << endl;
-						cout << "|    Sides:      "<< cTable[g].res << endl;
-						cout << "|    Height:     "<< cTable[g].height << endl;
-						cout << "|    Heightmode: "; if (hm==0) cout << "Linear Slope" << endl; else if (hm==1) cout << "Path-Corner" << endl; else if (hm==2) cout << "Random Jagged" << endl; else cout << "Easings #" << hm << endl;
-						cout << "|    Transform:  "<< " move " <<cTable[g].move << " rotate " << cTable[g].rot << " scale " <<cTable[g].scale << endl;
-						cout << "|    Range:      Section " << floor(cTable[g].res*(cTable[g].range_start/100.0))+1 << " - " << floor(cTable[g].res*(cTable[g].range_end/100.0)) << " of total " << cTable[g].res << endl; //
-						cout << "|" << endl;
 						
-						if (Group.valid) {
-							cout << "|    Creating Detail Objects..." << endl;
-							try {
+						// CURVE INFO
+						/* COUT */ MESSENGER( MSG_CURVE_INFO___, vector<string>{}, vector<int>{g}, vector<float>{} );
+						
+						
+						// -----> CREATE FINAL DETAIL OBJECTS <-------
+						if (Group.valid || InvButDet)
+						{
+							/* COUT */ MESSENGER( MSG_CREAT_DET_OBJ);
 							cFile.createDetailGroup(g);
-							} catch (...) {
-							cout << "|    [ERROR] There was a problem creating Detail Objects!" << endl;
-							Group.valid = 0;
-							}
 						}
 						
-						if (Group.valid) {
-							cout << "|    Creating Construction Framework..." << endl;
-							try {
+						/*
+						g = curves
+						d = detail objects
+						b = brushes
+						e = brush/point entities
+				
+						File.createDetailGroup()
+						|
+						|-> DetailSet 										= new group_set[g]
+						|-> DetailSet[g].Groups 							= new group[d]
+						|-> DetailSet[g].Groups[d].CopyProps				(sDetailSet[g].Groups[d])
+						|-> DetailSet[g].Groups[d].Brushes[b].Copy			(sDetailSet[g].Groups[d].Brushes[b])
+						|-> DetailSet[g].Groups[d].Entities[e].CopySimple	(sDetailSet[g].Groups[d].Entities[e])
+						*/
+						
+						// -----> CREATE CONSTRUCTION FRAMEWORK <-------
+						if (Group.valid || InvButDet)
+						{
+							/* COUT */ MESSENGER( MSG_CREAT_CON_FRM);
 							cFile.createFramework(g);
-							} catch (...) {
-							cout << "|    [ERROR] There was a problem creating curve framework!" << endl;
-							Group.valid = 0;
-							}
 						}
 						
-						if (Group.valid) {
-							cout << "|    Creating Curve Objects..." << endl;
-							try {
+						// -----> CREATE EMPTY BRUSHES <-------
+						if (Group.valid || InvButDet)
+						{
+							/* COUT */ MESSENGER( MSG_CREAT_CUR_OBJ);
 							cFile.createGroupBrush(g);
-							} catch (...) {
-							cout << "|    [ERROR] There was a problem creating curve brushes!" << endl;
-							Group.valid = 0;
-							}
 						}
-						
-						if (Group.valid) {
-							cout << "|    Building Curve Brushes..." << endl;
-							try {
+						// ------------> BUILD CURVE BRUSHES BASED ON PREVIOUSLY CREATED FRAMEWORK <--------------
+						if (Group.valid || InvButDet)
+						{
+							/* COUT */ MESSENGER( MSG_BUILD_CUR_BRU);
 							cFile.buildArcs(g);
-							} catch (...) {
-							cout << "|    [ERROR] There was a problem building curve brushes!" << endl;
-							Group.valid = 0;
-							}
 						}
-						
-						if (Group.valid) {
-							cout << "|    Texturing..." << endl;
-							try {
+
+						// ADD TEXTURES
+						if (Group.valid)
+						{
+							/* COUT */ MESSENGER( MSG_TEXTURING____);
 							cFile.texturize(g);
-							} catch (...) {
-							cout << "|    [ERROR] There was a problem texturing the curve brushes!" << endl;
-							Group.valid = 0;
-							}
 						}
-						
-						if (Group.valid) {
-							cout << "|    Performing Cleanup..." << endl;
-							try {
+
+						// CLEAN UP, e.g. welding vertices
+						if (Group.valid)
+						{
+							/* COUT */ MESSENGER( MSG_PERFORM_CLEAN );
 							cFile.WeldVertices(g);
 							cFile.FixBorderliner(g);
-							} catch (...) {
-							cout << "|    [ERROR] There was a problem during cleanup!" << endl;
-							Group.valid = 0;
-							}
 						}
-						
-						if (  Group.valid && ( cTable[g].tri>0 || cTable[g].ramp>0 || cTable[g].transit_tri>0 || cTable[g].round>0 || cTable[g].transit_round>0 ) && cTable[g].type!=2  ) {
-							cout << "|    Triangulating..." << endl;
-							try {
+
+						// TRIANGULATE BRUSHES
+						if (  Group.valid && ( cTable[g].tri>0 || cTable[g].ramp>0 || cTable[g].transit_tri>0 || cTable[g].round>0 || cTable[g].transit_round>0 ) && cTable[g].type!=2  )
+						{
+							/* COUT */ MESSENGER( MSG_TRIANGULATING );
 							cFile.Triangulate(g);
-							} catch (...) {
-							cout << "|    [ERROR] There was a problem triangulating the curve brushes!" << endl;
-							Group.valid = 0;
-							}
 						}
-						
-						if (  Group.valid && cTable[g].texmode==1  ) {
-							cout << "|    Shearing Textures..." << endl;
-							try {
+
+						// SHEAR TEXTURES
+						if (  Group.valid && cTable[g].texmode==1  )
+						{
+							/* COUT */ MESSENGER( MSG_SHEARING_TEXT );
 							cFile.ShearVectors(g);
-							} catch (...) {
-							cout << "|    [ERROR] There was a problem shearing texture vectors!" << endl;
-							Group.valid = 0;
-							}
 						}
-						
-						if (  Group.valid && cTable[g].ramp>0 ) {
-							cout << "|    Creating Ramp..." << endl;
-							try {
+
+						// CREATE A RAMP
+						if (  Group.valid && cTable[g].ramp>0 )
+						{
+							/* COUT */ MESSENGER( MSG_CREATING_RAMP );
 							cFile.RampIt(g);
-							} catch (...) {
-							cout << "|    [ERROR] There was a problem when creating a ramp!" << endl;
-							Group.valid = 0;
-							}
 						}
 						
-						if (  Group.valid && cTable[g].scale.IsSet || cTable[g].move.IsSet || cTable[g].rot.IsSet  ) {
-							cout << "|    Applying Final Transformations..." << endl;
-							try {
+						// FINAL TRANSFORMATION
+						if (  ( Group.valid || InvButDet ) && cTable[g].scale.IsSet || cTable[g].move.IsSet || cTable[g].rot.IsSet || cTable[g].mirror>0 )
+						{
+							/* COUT */ MESSENGER( MSG_FINAL_TRANSFO );
 							cFile.TransformFinal(g);
-							} catch (...) {
-							cout << "|    [ERROR] There was a problem with final transformations!" << endl;
-							Group.valid = 0;
-							}
 						}
 						
-						if (  Group.valid && (cTable[g].round>0 || cTable[g].transit_round>0 || cTable[g].hshiftoffset!=0)  ) {
-							cout << "|    Further Postprocessing..." << endl;
-							try {
+						// POST PROCESSING, e.g. vertex snapping
+						if (  Group.valid && (cTable[g].round>0 || cTable[g].transit_round>0 || cTable[g].hshiftoffset!=0)  )
+						{
+							/* COUT */ MESSENGER( MSG_POSTPROCESSIN );
 							cFile.postProcessing(g);
-							} catch (...) {
-							cout << "|    [ERROR] There was a problem during postprocessing!" << endl;
-							Group.valid = 0;
-							}
 						}
 						
-						if (  Group.valid && cTable[g].bound>0  ) {
-						cout << "|    Creating Bounding Boxes..." << endl;
-						cFile.createBounds(g); }
+						// CREATE BOUNDING BOXES
+						if (  Group.valid && cTable[g].bound>0  )
+						{
+							/* COUT */ MESSENGER( MSG_BOUNDING_BOXE );
+							cFile.createBounds(g);
+						}
 						
-						if (  Group.valid && G_DEV  ) {
-						cout << "|    Creating Developer Assets..." << endl;
-						cFile.CreateDevAssets(g); }
+						// DEVELOPER ASSETS
+						if (  Group.valid && G_DEV  )
+						{
+							/* COUT */ MESSENGER( MSG_DEVELOPER_ASS );
+							cFile.CreateDevAssets(g);
+						}
 						
-						cout << "|" << endl;
-						
+						// WARNING: NO OUTPUT FORMAT SET
 						if( cTable[g].map==0 && cTable[g].obj==0 && cTable[g].rmf==0 )
 						{
-							cout << "|    [WARNING] No output format set! Using RMF file format..."<< endl;
+							cTable[g].rmf=1;
+							/* COUT */ MESSENGER( MSG_WARN_NOOUTPUT);
+							//ErrorCode = 2;
 						}
-						if(!Group.valid) validGroups--;
+						
+						
+						
+						if(!Group.valid && !InvButDet) validGroups--;
 					}
 					else
 					{
-						if (!Group.ValidMesh) {
-							cout << "|    [ERROR] The source transformations caused the"<< endl;
-							cout << "|            original mesh to become invalid! Aborting..." << endl;
-							cout << "|            Transformations were:" << endl;
-							cout << "|            - rot_src   " << cTable[g].rot_src << endl;
-							cout << "|            - scale_src " << cTable[g].scale_src << endl;
-							cout << "|            For more information about valid source Brushes" << endl;
-							cout << "|            see the Online documentation." << endl;
-							cout << "|" << endl;
+						// ERROR: INVALID MESH
+						if (!Group.ValidMesh)
+						{
+							/* COUT */ MESSENGER( MSG_ERR_INVALID_M);
 						}
-						if (!Group.ValidSpline) {
-							cout << "|    [ERROR] Spline file invalid! Aborting..."<< endl;
+						// ERROR: INVALID SPLINE FILE
+						if (!Group.ValidSpline)
+						{
+							/* COUT */ MESSENGER( MSG_ERR_INVALID_S);
 						}
+						
+						
+						
 						validGroups--;
 					}
 				}
-
-				// print all detail objects
-				#if DEBUG > 0
-				if(dev)
-				for (int d = 0; d<DetailSet->t_groups; d++)
-				{
-					group &dGroup = DetailSet->Groups[d];
-					cout << dGroup;
-				}
-				if(dev) system("pause");
-				#endif
+				
+				/* ... END OF CURVE LOOP .......................... */
+				
+				
+				
+				
+				
+				/* COUT */ MESSENGER( MSG_VLINE );
 				
 				if (validGroups>0) {
 					if (IsSetMap) {
-						cout << "|  Exporting selected data to MAP file \"";
-						try { cFile.ExportToMap(); } catch (...) {
-						cout << "|  [ERROR] A Problem occured during RMF file export!"<< endl;
-						}
-						cout << "\"..." << endl;
+						/* COUT */ MESSENGER( MSG_EXPORTING_MAP );
+						ExportToMap();
 					}
 					
 					if (IsSetRMF) {
-						cout << "|  Exporting selected data to RMF file \"";
-						try { cFile.ExportToRMF(); } catch (...) {
-						cout << "|  [ERROR] A Problem occured during RMF file export!"<< endl;
-						}
-						cout << "\"..." << endl;
+						/* COUT */ MESSENGER( MSG_EXPORTING_RMF );
+						ExportToRMF();
 					}
 					
 					if (IsSetObj) {
-						cout << "|  Exporting selected data to OBJ file(s)..." << endl;
-						try { cFile.ExportToObj(); } catch (...) {
-						cout << "|  [ERROR] A Problem occured during OBJ file export!"<< endl;
-						}
+						/* COUT */ MESSENGER( MSG_EXPORTING_OBJ );
+						ExportToObj();
 					}
 				}
 				
-				cout << "|" << endl;
-				cout <<	"+-----------------------------------------------------+" << endl << endl;
+				/* COUT */ MESSENGER( MSG_VLINE );
+				/* COUT */ MESSENGER( MSG_DLINE );
 				
 				t_valids = validGroups;
 			}
-			else {
-				cout << "|  [ERROR] Map File doesn't seem to contain valid"<< endl;
-				cout << "|          Brushes for Curve-Generation! Aborting..." << endl;
-				cout << "|" << endl;
-				cout << "|          For more information about valid source Brushes" << endl;
-				cout << "|          see the Online documentation." << endl;
-				cout << "|" << endl;
-				cout <<	"+-----------------------------------------------------+" << endl << endl;
+			else
+			{
+				// ERROR: no valid Brushes
+				/* COUT */ MESSENGER( MSG_ERR_NO_VALIDS );
 			}
-			if (mGroup->valid&&t_valids>0) ErrorCode = 0;
-			if (mGroup!=nullptr) {delete mGroup;   mGroup = nullptr; }
-			if (bGroup!=nullptr) {delete[] bGroup; bGroup = nullptr; }
-			if (sGroup!=nullptr) {delete[] sGroup; sGroup = nullptr; }
-			if (cTable!=nullptr) {delete[] cTable; cTable = nullptr; }
-			if (sTable!=nullptr) {delete[] sTable; sTable = nullptr; }
-			if (mTable!=nullptr) {delete[] mTable; mTable = nullptr; }
 			
-			if (mDetailGroup!=nullptr) {delete[] mDetailGroup; mDetailGroup = nullptr; }
-			if (sDetailSet!=nullptr) {delete[] sDetailSet; sDetailSet = nullptr; }
-			if (DetailSet!=nullptr) {delete[] DetailSet; DetailSet = nullptr; }
+			if ( mGroup->valid && t_valids>0 )
+			{
+				if ( ErrorCode!=2 ) 	ErrorCode = 0;
+			}
+			else
+			{
+				if ( ErrorCode==2 ) 	ErrorCode = 1;
+			}
+			
+			
+			DELETE_ALL_POINTERS();
+			
+			
 		}
+		/* ... END OF INPUT FILE LOOP .......................... */
 		
-		if (dTable!=nullptr) {delete[] dTable; dTable = nullptr; }
-		if(G_DEV) cout << " ############## ErrorCode " << ErrorCode << "  ############## " <<endl;
-		if (!G_AUTOCLOSE) system("pause");
-		//if (G_LOG) WriteTextToFile("LOG.txt", cout);
+		DELETE_DTABLE_POINTER();
+		
+
+		// ERROR CODE MESSAGE
+		
+		if (G_DEV) /* COUT */ MESSENGER( MSG_ERROR_CODE___ );
+		
+		
+		
+		
+		// IN CASE OF FURTHER PARAMETERS
+		
+		if (!G_AUTOCLOSE&&G_LOG) WAIT();
+		if(G_DEV||G_LOG) logFile.close();
 		
 		return ErrorCode;
 	}
-	else // argc == 1
+	else
 	{
-		cout << "This program works by feeding it files.\n";
-		cout << "Valid input files are Goldsource-Map (*.map) and Map2Curve Preset-Files (*.txt).";
+		// NO INPUT FILE
+		// argc == 1
 		
-		system("pause");
+		/* COUT */ MESSENGER( MSG_NO_INPUT_FILE );
+		
 		return 0;
 	}
-	
-	return 0;
 }
 
 

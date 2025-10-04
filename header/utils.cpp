@@ -25,6 +25,8 @@ extern file *gFile;
 /* ===== NUMBER LIST GENERATOR FUNCTIONS ===== */
 
 
+
+
 void CreateSlopeLinear(float height, int size, vector<float>&List, vector<float> &Lengths, int g)
 {
 	int rs = bGroup[g].range_start;
@@ -390,7 +392,13 @@ int CheckFileType (string p)
 	else return 0;
 }
 
-
+bool IsCloseToInt(float d, int i, float threshold)
+{
+	int f = fabs(d);
+	float t = i + threshold;
+	
+	return f < t;
+}
 
 
 
@@ -581,16 +589,12 @@ bool IsNULL(double n)
 
 bool IsValid(int n)
 {
-	bool valid = 0;
-	if (isnan(n)||isinf(n)) valid = 0; else valid = 1;
-	return valid;
+	if (isnan(n)||isinf(n)) return 0; else return 1;
 }
 
 bool IsValid(float n)
 {
-	bool valid = 0;
-	if (isnan(n)||isinf(n)) valid = 0; else valid = 1;
-	return valid;
+	if (isnan(n)||isinf(n)) return 0; else return 1;
 }
 
 int GetDeciPlaces(float RawFloat) {

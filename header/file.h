@@ -11,6 +11,7 @@ using namespace std;
 
 struct brush;
 
+
 /* ===== FILE CLASS ===== */
 
 struct file {
@@ -68,6 +69,7 @@ struct file {
 	
 	// generate and process curve data
 	void TransformSource();
+	void CarveSource();
 	void createFramework(int g);
 	void buildArcs(int g);
 	void TransformDetailObj(int g);
@@ -81,14 +83,10 @@ struct file {
 	void FixBorderliner(int g);
 	void CreateDevAssets(int g);
 	
-	// export final curve data
-	void ExportToMap();
-	void ExportToMapO(string p);
-	void ExportToRMF();
-	void ExportToObj();
+	// export related
 	string GetMapEnts(string mapfile); // extracts the entity part of a map file string
 	string GetMapWorld(string mapfile); // extracts the worldspawn part of a map file string
-	
+
 	file (string p)	{
 		fullpath = p;
 	}

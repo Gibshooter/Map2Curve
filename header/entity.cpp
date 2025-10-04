@@ -16,6 +16,7 @@ using namespace std;
 extern vector<string> slist;
 extern file *gFile;
 
+#define DEBUG 0
 
 ostream &operator<<(ostream &ostr, entity &E)
 {
@@ -105,11 +106,12 @@ void entity::GetKeyValues()
 {
 	#if DEBUG > 0
 	bool dev = 0;
-	if(dev) cout << " Looking or KeyValues of an Entity..." << endl;
+	if(dev) cout << " Looking for KeyValues of an Entity..." << endl;
 	#endif
 	
 	entity &Entity = *this;
-	int start = Entity.content.find("\"classname", 0);
+	int start = Entity.content.find("\"", 0); // before 26th April 2025: "\"classname" which ignores key before "classname"
+	
 	vector<string> Temp_Keys;
 	vector<string> Temp_Values;
 	string &C = Entity.content;
@@ -164,7 +166,7 @@ void entity::GetKeyValues()
 				cout << "   Key was empty, going to end of line!" <<endl << endl;
 				last = C.find("\n", end)+1;
 			}
-			if(last==-1||C[last]=='}'||C[last]=='{')
+			if(last==-1||C[last]=='}'||C[last]=='{'||C[last]=='/')
 			{
 				#if DEBUG > 0
 				if(dev) cout << " END of Entity Keyvalues at Pos " << last << " [" << C[last] << "]" << endl;
@@ -624,6 +626,20 @@ void entity::CreateBrushes()
 				//if (dev) cout << ", Total B-Faces: " << mGroup->Brushes[b].t_faces << endl;
 				#endif
 			}
+			
+			#if DEBUG > 0
+			//if(dev)ExportBrushToOBJDev((gFile->p_path+gFile->name+"_preRCON.obj"), Brush, 0);
+			if(dev) cout << " RECONSTRUTING BRUSH #" << b << " i " << i << endl; system("pause");
+			#endif
+			
+			// XXXXXXXXXXXXXXXX Reconstruct Brush - added as of v0.87 update to replace all further calls for reconstruction and thus end this dispute once and for all.
+			
+			if (!Brush.IsThisBrushMadeOfTrianglesEntirely()) // if yes, it's too cool to be reconstructed
+			Brush.Reconstruct2025(0);
+			
+			#if DEBUG > 0
+			//if(dev)ExportBrushToOBJDev((gFile->p_path+gFile->name+"_AFTER.map"), Brush);
+			#endif
 		}
 		
 		#if DEBUG > 0
@@ -634,9 +650,12 @@ void entity::CreateBrushes()
 
 void entity::RotateOrigin(float x, float y, float z, vertex nOrigin)
 {
-	bool dev = 0;
-	
 	Origin.rotateOrigin(x,y,z,nOrigin);
+}
+
+void entity::MirrorOrigin(int mode, vertex nOrigin)
+{
+	Origin.mirrorOrigin(mode, nOrigin);
 }
 
 void entity::RotateEntity(Euler RotAngles, bool UpdateEuler)
