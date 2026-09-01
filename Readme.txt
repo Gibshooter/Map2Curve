@@ -27,7 +27,7 @@ Relevant files:
 ====== RESOURCES ======
 
 - Euler Angles: https://www.geometrictools.com/Documentation/EulerAngles.pdf
-- WAD 3 format: http://www.j0e.io (offline)
+- WAD 3 format: https://web.archive.org/web/20230529061357/http://www.j0e.io/tutorials/wad3-format/
 
 ====== C++ Info ====== 
 
