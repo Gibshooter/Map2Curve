@@ -127,6 +127,8 @@ bool face::FaceIsValid(int CheckForID, bool CheckIsDraw, bool CheckIsNotNull, bo
 		(	(
 			Face.Texture != "NULL" &&
 			Face.Texture != "SOLIDHINT" &&
+			Face.Texture != "HINT" &&
+			Face.Texture != "SKIP" &&
 			Face.Texture != def_nulltex &&
 			CheckIsNotNullHintTex
 			) || !CheckIsNotNullHintTex
@@ -1409,6 +1411,8 @@ void face::CopyFace(face &Source, bool CopyVertices)
 	Rot 	= Source.Rot;
 	ScaleX 	= Source.ScaleX;
 	ScaleY 	= Source.ScaleY;
+	ScaleXO	= Source.ScaleXO;
+	ScaleYO	= Source.ScaleYO;
 	VecX 	= Source.VecX;
 	VecY 	= Source.VecY;
 	if (Source.VecY.IsHor)
@@ -2209,7 +2213,7 @@ void GetBaseShift(face &Face, int axis = 0, bool longEdge = 1, bool C = 0)
 			}
 			else
 			{
-						{BaseVertex =  Face.Vertices[Face.BaseListY[1]];  BaseVertex2 = Face.Vertices[Face.BaseListY[2]];}
+						{BaseVertex =  Face.Vertices[Face.BaseListY[2]];  BaseVertex2 = Face.Vertices[Face.BaseListY[1]];} // changed from 1 and 2 to 2 and 1 to fix issue with wrong baseshift when VecY is Hor and Negative (May 2026, v0.88 update)
 			}
 			Scale = &Face.ScaleY;
 			BaseShift = &Face.BaseShiftY;
@@ -2227,7 +2231,7 @@ void GetBaseShift(face &Face, int axis = 0, bool longEdge = 1, bool C = 0)
 			{
 				if (Vec.IsNeg) BVertex = BaseVertex; else BVertex = BaseVertex2;
 			}
-			else BVertex = BaseVertex; // ????????
+			else BVertex = BaseVertex; // ???????? 
 			
 			gvector Hypo = GetVector(Zero, BVertex);
 			

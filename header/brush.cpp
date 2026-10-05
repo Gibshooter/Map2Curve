@@ -821,6 +821,8 @@ void brush::Copy(brush &Source)
 		Face.Rot 		= OFace.Rot;
 		Face.ScaleX 	= OFace.ScaleX;
 		Face.ScaleY 	= OFace.ScaleY;
+		Face.ScaleXO 	= OFace.ScaleXO;
+		Face.ScaleYO 	= OFace.ScaleYO;
 		Face.VecX 		= OFace.VecX;
 		Face.VecY 		= OFace.VecY;
 		if (!Face.VecX.IsHor) {
@@ -916,6 +918,8 @@ void brush::CopySimple(brush &Source)
 		Face.Rot 		= OFace.Rot;
 		Face.ScaleX 	= OFace.ScaleX;
 		Face.ScaleY 	= OFace.ScaleY;
+		Face.ScaleXO	= OFace.ScaleXO;
+		Face.ScaleYO	= OFace.ScaleYO;
 		Face.VecX 		= OFace.VecX;
 		Face.VecY 		= OFace.VecY;
 		if (!Face.VecX.IsHor) {
@@ -1554,22 +1558,21 @@ void brush::GetTVecAligns()
 				}
 				
 				// get orientation of horizontal vectors for correct baseshift calculation
+				
 				if (Face.VecH->x<0) {
 					Face.VecH->IsNeg = 1;
-					//cout << "  Hor Vector " << *Face.VecH << " of Face " << f << " Brush " << b << " has negative X coord!" << endl;
 				} else
 					Face.VecH->IsNeg = 0;
-				//float PitchN = GetVecAlign(Face.Normal,1);
-				float PitchV = GetVecAlign(*Face.VecV,1);
-				//cout << " Face " << f << " Tex " << Face.Texture << " VecV" << *Face.VecV << endl;
-				//cout << "   PitchN " << PitchN << " PitchV " << PitchV;// << " PitchDiff " << PitchDiff;
-				if (/*Face.VecV->z>0|| ( Face.VecV->z==0 && Face.VecV->y>0 &&  ) */ /*PitchDiff<180*/ PitchV<=90||PitchV>270 ) {
+				
+				//float PitchV = GetVecAlign(*Face.VecV,1); 			// removed - May 18th 2026; version 0.88
+				gvector NegVeg(0,0,-1); 								// added
+				float Dot = GetDot(*Face.VecV, NegVeg);  				// added
+				
+				//if ( Face.VecV->z==-1 || PitchV<=90||PitchV>270 ) {  	// removed - May 18th 2026; version 0.88
+				if ( Face.VecV->z==-1 || Dot>0 ) {						// added
 					Face.VecV->IsNeg = 1;
-					//Face.Texture = "RED";
-					//cout << " V Vector is NEGATIVE!" << endl; 
-				} //else cout << " V Vector is Positive!" << endl;
+				}
 				else Face.VecV->IsNeg = 0;
-				//cout << endl;
 			}
 		}
 	}

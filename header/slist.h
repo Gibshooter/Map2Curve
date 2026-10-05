@@ -68,6 +68,8 @@ vector<string> slist
 	"mapcarve",
 	"mirror_src",
 	"mirror",
+	"hsunequalfix",
+	"hsunpropfix"
 };
 
 vector<int> slist_id; 
@@ -139,7 +141,9 @@ vector<int>slist_type
 	4,
 	1,
 	1,
-	1
+	1,
+	0,
+	4
 };
 
 //minimumvalues
@@ -205,6 +209,8 @@ vector<int>slist_min
 	0,
 	0,
 	-131072,
+	0,
+	0,
 	0,
 	0,
 	0,
@@ -279,6 +285,8 @@ vector<int>slist_max
 	30, // Why 30? Is there a point? why not 4096? XXXXXXXXXXXXXXXXXX
 	2,
 	7,
-	7
+	7,
+	1,
+	999999
 };
 

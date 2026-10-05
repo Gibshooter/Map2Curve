@@ -789,61 +789,130 @@ void ExportToMap()
 				{
 					brush &Brush = Group.Brushes[b];
 					int sec = Brush.SecID;
+					int seg = Brush.SegID;
 					
-					if (Brush.entID==e && Group.IsSecInRange(sec) && Brush.draw && Brush.valid && Brush.t_faces>=5)
+					if (  Brush.entID==e && Group.IsSecInRange(sec) && Brush.draw && Brush.valid && Brush.t_faces>=5  )
 					{
-						//cout << "Brush.SecID: " << Brush.SecID << ", range: " << range << endl;
-						if (Brush.Tri==nullptr)
+						// added in June 2026 - not finished yet - some exported brushes will be invalid for some reason
+						// based on MarkCombinableSegments()
+						
+						// export multiple Brushes as one Brush when marked as combinable  // attempt for a new update, but currently on hold
+						if(  Brush.IsWedge && Group.CombinableSegments[seg] && (cTable[g].type<=1)  )
 						{
-							mapfile << "{" << endl;
+							// write all primary faces with textures != NULL
+							// write only the top and bottom faces of the first section
+							// skip all head/base faces
 							
-							// Iterate Faces
-							for (int f = 0; f < Brush.t_faces; f++)
+							if (Brush.Tri==nullptr)
 							{
-								face &Face = Brush.Faces[f];
+								if(sec==0)
+								mapfile << "{" << endl;
 								
-								if (Face.draw)
-								WriteFaceMAP(mapfile, Face);
+								// Iterate Faces
+								for (int f = 0; f < Brush.t_faces; f++)
+								{
+									face &Face = Brush.Faces[f];
+									
+									if (Face.draw && Face.fID==2)
+									{
+										bool IsNullTex = !Face.FaceIsValid(-1,0,0,1);
+										Face.GetNormal();
+										
+										if( (!IsNullTex && ( Face.Orient==5 || ( Face.Orient==2&&Face.Normal.z!=1 ) || ( Face.Orient==3&&Face.Normal.z!=-1 ) ) ) || (
+										      IsNullTex && (Face.Normal.z==1||Face.Normal.z==-1) && sec==0) || (
+											  IsNullTex && Face.Orient==5)
+										)
+										{
+											/*
+											if( IsNullTex && Face.Normal.z>0.999 && sec==0)
+											cout << " entity " << e << " Top NULL"<<endl;
+											
+											if( IsNullTex && Face.Normal.z<-0.999 && sec==0)
+											cout << " entity " << e << " Bottom NULL" <<endl;
+
+											if( !IsNullTex && Face.Orient==5)
+											cout << " entity " << e << " Back TEX "<<endl;
+											
+											if( !IsNullTex && ( Face.Orient==2&&Face.Normal.z!=1 ))
+											cout << " entity " << e << " Sloped Top TEX "<<endl;
+
+											if( !IsNullTex && ( Face.Orient==3&&Face.Normal.z!=-1 ))
+											cout << " entity " << e << " Sloped Bottom TEX "<<endl;
+											
+											if(IsNullTex && Face.Orient==5)
+											cout << " entity " << e << " Back NULL"<<endl;
+											
+											if(seg == Group.segments)
+											cout << " ALL SEGMENTS WRITTEN!" << cout;
+											*/
+											
+											if(Face.draw)
+											WriteFaceMAP(mapfile, Face);
+										}
+									}
+								}
+								
+								// only finish this brush when all of its segments were processed
+								if(sec==Group.sections-1)
+								mapfile << "}" << endl;
 							}
-							
-							mapfile << "}" << endl;
 						}
 						else
 						{
-							for (int bt=0; bt<Brush.t_tri; bt++)
+							//cout << "Brush.SecID: " << Brush.SecID << ", range: " << range << endl;
+							if (Brush.Tri==nullptr)
 							{
-								brush &TriBrush = Brush.Tri[bt];
-								if (TriBrush.draw)
+								mapfile << "{" << endl;
+								
+								// Iterate Faces
+								for (int f = 0; f < Brush.t_faces; f++)
 								{
-									mapfile << "{" << endl;
+									face &Face = Brush.Faces[f];
 									
-									// Iterate Faces
-									for (int f = 0; f < TriBrush.t_faces; f++)
+									if (Face.draw)
+									WriteFaceMAP(mapfile, Face);
+								}
+								
+								mapfile << "}" << endl;
+							}
+							else
+							{
+								for (int bt=0; bt<Brush.t_tri; bt++)
+								{
+									brush &TriBrush = Brush.Tri[bt];
+									if (TriBrush.draw)
 									{
-										face &FaceTB = TriBrush.Faces[f];
+										mapfile << "{" << endl;
 										
-										if (FaceTB.draw)
-										WriteFaceMAP(mapfile, FaceTB);
+										
+										// Iterate Faces
+										for (int f = 0; f < TriBrush.t_faces; f++)
+										{
+											face &FaceTB = TriBrush.Faces[f];
+											
+											if (FaceTB.draw)
+											WriteFaceMAP(mapfile, FaceTB);
+										}
+										
+										mapfile << "}" << endl;
 									}
-									
-									mapfile << "}" << endl;
 								}
 							}
-						}
-						
-						// Gap of current Brush
-						if (cTable[g].gaps>0&&Brush.Gap!=nullptr)
-						{
-							brush &Gap = *Brush.Gap;
-							mapfile << "{" << endl;
-							for (int f = 0; f < Gap.t_faces; f++)
+							
+							// Gap of current Brush
+							if (cTable[g].gaps>0&&Brush.Gap!=nullptr)
 							{
-								face &GFace = Gap.Faces[f];
-								
-								if (GFace.draw)
-								WriteFaceMAP(mapfile, GFace);
+								brush &Gap = *Brush.Gap;
+								mapfile << "{" << endl;
+								for (int f = 0; f < Gap.t_faces; f++)
+								{
+									face &GFace = Gap.Faces[f];
+									
+									if (GFace.draw)
+									WriteFaceMAP(mapfile, GFace);
+								}
+								mapfile << "}" << endl;
 							}
-							mapfile << "}" << endl;
 						}
 					}
 				}
@@ -957,7 +1026,7 @@ void ExportToMap()
 			}
 		}
 	}
-
+	
 	// Bounding Boxes
 	for (int g = 0; g < mGroup->t_arcs; g++)
 	{

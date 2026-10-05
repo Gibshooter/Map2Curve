@@ -610,6 +610,7 @@ void ctable::FillUnset(ctable &Filler)
 	if (mapcarve<0)		mapcarve	= Filler.mapcarve;
 	if (mirror<0)		mirror		= Filler.mirror;
 	if (mirror_src<0)	mirror_src	= Filler.mirror_src;
+	if (hsunequalfix<0)	hsunequalfix	= Filler.hsunequalfix;
 	
 	if (!scale.IsSet)		scale		= Filler.scale;
 	if (!scale_src.IsSet)	scale_src	= Filler.scale_src;
@@ -622,6 +623,7 @@ void ctable::FillUnset(ctable &Filler)
 	if (!d_scale_rand.IsSet)d_scale_rand= Filler.d_scale_rand;
 	if (!p_scale.IsSet)		p_scale		= Filler.p_scale;
 	if (!gridsize.IsSet)	gridsize	= Filler.gridsize;
+	if (!hsunpropfix.IsSet)	hsunpropfix	= Filler.hsunpropfix;
 }
 
 void ctable::CopyAll(ctable &Source)
@@ -673,6 +675,7 @@ void ctable::CopyAll(ctable &Source)
 	hstretchamt	= Source.hstretchamt;
 	hshiftoffset= Source.hshiftoffset;
 	hshiftsrc	= Source.hshiftsrc;
+	hsunequalfix= Source.hsunequalfix;
 	
 	scale		= Source.scale;
 	scale_src	= Source.scale_src;
@@ -688,6 +691,7 @@ void ctable::CopyAll(ctable &Source)
 	p_scale		= Source.p_scale;
 	gridsize	= Source.gridsize;
 	mapcarve	= Source.mapcarve;
+	hsunpropfix	= Source.hsunpropfix;
 }
 void ctable::FillDefaults()
 {
@@ -741,9 +745,13 @@ void ctable::FillDefaults()
 	hstretchamt	= 0;
 	hshiftoffset= 0;
 	hshiftsrc	= 1;
+	hsunequalfix= 1;
 	gridsize.x	= 1.0;
 	gridsize.y	= 1.0;
 	gridsize.z	= 1.0;
+	hsunpropfix.x=1;
+	hsunpropfix.y=0.2;
+	hsunpropfix.z=5.0;
 	mapcarve	= 0;
 	mirror		= 0;
 	mirror_src	= 0;
@@ -819,6 +827,8 @@ void ctable::Print()
 	cout << "   hshiftsrc \t" << hshiftsrc << endl;
 	cout << "   gridsize \t" << gridsize << endl;
 	cout << "   mapcarve \t" << mapcarve << endl;
+	cout << "   hsunequalfix \t" << hsunequalfix << endl;
+	cout << "   hsunpropfix \t" << hsunpropfix << endl;
 }
 
 
@@ -862,43 +872,22 @@ ctable* createTableS(int CurveCount, vector<string> &SettingsList, bool IDOffset
 // calculate the resulting settings for each arc
 void createTableC()
 {
-	#if DEBUG > 0
-	bool dev = 0;
-	if (dev) cout << "Creating " << mGroup->t_arcs << " Construction Tables..." << endl;
-	#endif
-	
 	// Create construction Tables
 	int &t_arcs = mGroup->t_arcs;
 	if (cTable!=nullptr)
 	{
 		delete[] cTable;
-		
-		#if DEBUG > 0
-		if (dev) cout << " Deleting existing cTable, containing " << t_arcs << " objects and creating a new one..." << endl;
-		#endif
 	}
 	cTable = new ctable[t_arcs];
 	
 	// Fill Construction Tables with previously loaded Settings
-	#if DEBUG > 0
-	if (dev) cout << "   Filling " << t_arcs << " Construction Tables with previously loaded Settings..." << endl;
-	#endif
-	
 	for (int a = 0; a<t_arcs; a++) {
 		cTable[a] = sTable[a];
-
-		#if DEBUG > 0
-		if (dev) cout << "     Arc " << a << " rad: " << sTable[a].rad << "\t offset: " << sTable[a].offset << "\t type: " << sTable[a].type << "\t res: " << sTable[a].res << "\t shift: " << sTable[a].shift << "\t height: " << sTable[a].height << endl;
-		#endif
 	}
 	
 	// export settings
 	if (cTable[0].target!="UNSET") gFile->target = cTable[0].target; else gFile->target = dTable[0].target;
 	if (cTable[0].append!=-1) gFile->append = cTable[0].append; else gFile->append = dTable[0].append;
-	
-	#if DEBUG > 0
-	if (dev) cout << "   Evaluate settings..." << endl;
-	#endif
 	
 	// Evaluate settings
 	for (int a = 0; a<t_arcs; a++) // arc loop
@@ -970,12 +959,10 @@ void createTableC()
 		{
 			cTable[a].rad = (size/2) + cTable[a].offset;
 		}
-		//sGroup[a].SizeY = size;
 		
 		// original radius offset
 		cTable[a].offset_NO = ( cTable[a].rad - (size/2) ) - ( sGroup[a].Dimensions.yb - ( sGroup[a].SizeY/2 ) ); // 0.82 July 2024 changed from mGroup to sGroup[a]
 		
-		//if( sGroup[a].t_brushes == 0 ) cTable[a].offset_NO = ( cTable[a].rad - (size/2) ) - ( mDetailGroup->Dimensions.yb - ( mDetailGroup->SizeY / 2 ) ); // BAK before changing from mDetail to sDetailSet
 		if( sGroup[a].t_brushes == 0 && ( sDetailSet!=nullptr || mDetailGroup!=nullptr ) )
 		{
 			if		( sDetailSet!=nullptr )   cTable[a].offset_NO = ( cTable[a].rad - (size/2) ) - ( MaxY - ( sDetailSet[a].SizeY / 2 ) );
@@ -1036,27 +1023,14 @@ void createTableC()
 		}
 		else if (cTable[a].type==1) // grid Circle Type
 		{
-			#if DEBUG > 0
-			if(dev) cout << endl << "          curve#" << a << endl;	
-			#endif
-			
 			if (a==0&&cTable[a].res<=0)
 				cTable[a].res = 12;							// if first res is 0, set to minimum of 12
 
-			//else if (a>0&&cTable[a].res==-1) cTable[a].res = cTable[a-1].res;
-				
 			else if (a>0&&cTable[a].res<=0)					// if x-th res is 0, get res based on previous res
 			{
-				//float m = cTable[a].rad/cTable[a-1].rad;	// old method pre 15. Dec 2023
-				//int temp = ((m/2)*cTable[a-1].res);		// ^
 				float m = cTable[a].rad/cTable[a-1].rad;
 				int temp = (m*cTable[a-1].res)/4.0;
 				int temp2 = temp*4;
-				
-				#if DEBUG > 0
-				if(dev) cout << "          rad: " << cTable[a].rad <<endl << "          last rad:"<< cTable[a-1].rad <<endl << "          result m: " << m << endl;
-				if(dev) cout << "          temp: " << temp << endl;
-				#endif
 				
 				CheckFixRes(temp2, 2);
 				cTable[a].res = temp2;						// if x-th res is 0, set it to value based on the current and last radius+offset
@@ -1076,9 +1050,6 @@ void createTableC()
 			else if (cTable[a].res>=7&&cTable[a].res<=384)		// res 12..384
 				CheckFixRes(cTable[a].res, 2);
 		}
-		#if DEBUG > 0
-		if(dev) cout << "          final res: " << cTable[a].res << endl << endl;
-		#endif
 		
 		// heightmode
 		if 		(a==0&&cTable[0].heightmode<0) cTable[0].heightmode = dTable[0].heightmode;
@@ -1321,9 +1292,13 @@ void createTableC()
 		if 		(a==0&&!cTable[0].mirror<0) 		cTable[0].mirror = dTable[0].mirror;
 		else if (a>0&&!cTable[a].mirror<0) 			cTable[a].mirror = cTable[a-1].mirror;
 		
-		#if DEBUG > 0
-		if (dev) { cTable[a].Print(); system("pause"); }
-		#endif
+		// hsunequalfix new since v0.88 update May 2026
+		if 		(a==0&&cTable[0].hsunequalfix<0) 		cTable[0].hsunequalfix = dTable[0].hsunequalfix;
+		else if (a>0&&cTable[a].hsunequalfix<0) 		cTable[a].hsunequalfix = cTable[a-1].hsunequalfix;
+		
+		// hsunpropfix new since v0.88 update May 2026
+		if 		(a==0&&!cTable[0].hsunpropfix.IsSet) 		cTable[0].hsunpropfix = dTable[0].hsunpropfix;
+		else if (a>0&&!cTable[a].hsunpropfix.IsSet) 		cTable[a].hsunpropfix = cTable[a-1].hsunpropfix;
 	}
 }
 

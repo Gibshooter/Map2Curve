@@ -235,21 +235,10 @@ void file::createBounds(int g)
 
 void file::buildArcs(int g)
 {
-	#if DEBUG > 0
-	bool dev = 0;
-	if (dev)cout << "Constructing Arcs..."  << endl;
-	#endif
-	
 	// smooth ramps need special height table
-	#if DEBUG > 0
-	if (dev)cout << "  Creating Height table..."  << endl;
-	#endif
 	bGroup[g].CreateHeightTable();
 	
 	// build the curve object from previously created construction framework
-	#if DEBUG > 0
-	if (dev)cout << "  Building curve object from previously created construction framework..."  << endl;
-	#endif
 	bGroup[g].Build();
 	
 	group &Group = sGroup[g];
@@ -267,68 +256,27 @@ void file::buildArcs(int g)
 		}
 	}
 	
-	#if DEBUG > 0
-	if (dev)cout << "  Marking Head Vertices..."  << endl;
-	#endif
 	bGroup[g].GetHeadVertices();
 	
-	#if DEBUG > 0
-	if (dev)cout << "  Adding Simple Heights to Brushes..."  << endl;
-	#endif
 	bGroup[g].AddBrushHeights();
 	
-	
-	// for DEV PURPOSES write all coordinates into the faces texture name
-	/*for (int b = 0; b<bGroup[g].t_brushes; b++)
-	{
-		brush &Brush = bGroup[g].Brushes[b];
-		
-		for (int f = 0; f<Brush.t_faces; f++)
-		{
-			face &Face = Brush.Faces[f];
-			Face.Texture = "v0_x("+to_string(static_cast<int>(Face.Vertices[0].x))+")_y("+to_string(static_cast<int>(Face.Vertices[0].y))+")_";//+to_string(static_cast<int>(Face.Vertices[0].z))+"_";
-			Face.Texture += "v1_x("+to_string(static_cast<int>(Face.Vertices[1].x))+")_y("+to_string(static_cast<int>(Face.Vertices[1].y))+")_";//+to_string(static_cast<int>(Face.Vertices[1].z))+"_";
-			Face.Texture += "v2_x("+to_string(static_cast<int>(Face.Vertices[2].x))+")_y("+to_string(static_cast<int>(Face.Vertices[2].y))+")";//+to_string(static_cast<int>(Face.Vertices[2].z))+"_";
-		}
-	}*/
-	
-	#if DEBUG > 0
-	if (dev)cout << "  Getting Body Face Lengths..."  << endl;
-	#endif
 	bGroup[g].GetBrushBodyFaceLengths();
 	
 	// get exact centroid of all faces
-	#if DEBUG > 0
-	if(dev) cout << "  Getting Face Centroids..." << endl;
-	#endif
 	bGroup[g].GetBrushFaceCentroids();
 	
 	// Get Section Lengths and source faces for future horizontal texture shifts
-	#if DEBUG > 0
-	if (dev)cout << "  Getting Hor Lengths..."  << endl;
-	#endif
 	bGroup[g].GetHorLengths();
 	
 	// Create middle-sections between the existing curve sections for mapping purposes
-	#if DEBUG > 0
-	if(dev) cout << "  Creating Gaps..." << endl;
-	#endif
 	bGroup[g].CreateBrushGaps();
-	#if DEBUG > 0
-	if(dev) cout << "  Arranging Gaps..." << endl;
-	#endif
+
 	bGroup[g].ArrangeGaps();
 	
 	// Rotate the Texture Vectors of all Brush Faces
-	#if DEBUG > 0
-	if(dev) cout << "  Rotating Tex Vectors..." << endl;
-	#endif
 	bGroup[g].RotateVectors();
 	
 	// GetBaseEdges, Face Normals and Baseshift
-	#if DEBUG > 0
-	if(dev) cout << "  Getting Base Edges and Shifts..." << endl;
-	#endif
 	for (int b = 0; b < bGroup[g].t_brushes; b++)
 	{
 		brush &Brush = bGroup[g].Brushes[b];
@@ -342,10 +290,11 @@ void file::buildArcs(int g)
 	}
 	
 	// Rotate and Move Detail Group Objects
-	#if DEBUG > 0
-	if(dev) cout << "  Rotate and Move Detail Group Objects..." << endl;
-	#endif
 	TransformDetailObj(g);
+	
+
+	// new function but not yet included
+	bGroup[g].MarkCombinableSegments();
 }
 
 void file::GetInternalMapSettings()
@@ -2393,16 +2342,24 @@ void file::LoadMap_ConvertWorld2Face()
 					
 					if (Face.VecX.IsHor)
 					{
+						Face.ScaleYO = Face.ScaleY; // added May 2026 - v0.88 update
+						Face.ScaleXO = Face.ScaleX; // ^
 						Face.ScaleY /= m;
 						GetBaseShift(Face, 2, 1, 0);
 						Face.ShiftY = Face.BaseShiftY + Face.OffsetY;
 					}
 					else
 					{
+						Face.ScaleXO = Face.ScaleX; // added May 2026 - v0.88 update
+						Face.ScaleYO = Face.ScaleY; // ^
 						Face.ScaleX /= m;
 						GetBaseShift(Face, 1, 1, 0);
 						Face.ShiftX = Face.BaseShiftX + Face.OffsetX;
 					}
+					
+				} else {
+					Face.ScaleYO = Face.ScaleY; // added May 2026 - v0.88 update
+					Face.ScaleXO = Face.ScaleX; // ^
 				}
 			}
 		}

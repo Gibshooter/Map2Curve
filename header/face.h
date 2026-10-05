@@ -28,6 +28,8 @@ struct face
 	float Rot 		= 0.0;
 	float ScaleX 	= 1.0;
 	float ScaleY 	= 1.0;
+	float ScaleXO 	= 1.0; // old scales before World->Face correction; added May 2026 v0.8 update
+	float ScaleYO 	= 1.0;
 	vertex * Vertices = nullptr;
 	vertex * VerticesC = nullptr; // new calculated Vertices
 	bool draw = 1;
@@ -69,6 +71,7 @@ struct face
 	face *HSourceS = nullptr;
 	face *LHSourceL = nullptr;
 	face *LHSourceS = nullptr;
+	float msh = 0; // stored msh value; added may 20th 2026 for update v0.88
 	bool IsWedgeDown = 0;
 	bool HasWorldAlign = 0;
 	int EdgeIDs[6] = {0,0,0,0};

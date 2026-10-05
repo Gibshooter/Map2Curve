@@ -103,6 +103,8 @@ struct ctable {
 	int mapcarve = -1;
 	int mirror = -1; // 0=Off, 1=x, 2=y, 3=z, 4=xy, 5=xz, 6=yz, 7=xyz
 	int mirror_src = -1; // 0=Off, 1=x, 2=y, 3=z, 4=xy, 5=xz, 6=yz, 7=xyz
+	int hsunequalfix = -1;
+	tform hsunpropfix;
 	
 	void Print();
 	void FillUnset(ctable &Filler);
@@ -205,6 +207,7 @@ struct setting_list
 		if (Settings[49].IsSet)Table.c_enable 		= Settings[49].val_bool;
 		if (Settings[54].IsSet)Table.flatcircle		= Settings[54].val_bool;
 		if (Settings[57].IsSet)Table.hstretch		= Settings[57].val_bool; // new V0.8 Update
+		if (Settings[65].IsSet)Table.hsunequalfix	= Settings[65].val_bool; // new V0.88 Update
 				
 		// integers
 		if (Settings[22].IsSet)Table.bound 			= Settings[22].val_int;
@@ -254,6 +257,7 @@ struct setting_list
 		if (Settings[45].IsSet)Table.p_scale		= Settings[45].val_tform;
 		if (Settings[55].IsSet)Table.d_scale_rand	= Settings[55].val_tform;
 		if (Settings[61].IsSet)Table.gridsize 		= Settings[61].val_tform; // new V0.81 Update
+		if (Settings[66].IsSet)Table.hsunpropfix 	= Settings[66].val_tform; // new V0.88 Update
 	}
 	
 	void Print()

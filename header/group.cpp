@@ -1472,12 +1472,14 @@ void group::RotateVectors()
 void group::GroupTexturize()
 {
 	#if DEBUG > 0
-	bool dev = 0;
+	bool dev = 1;
 	#endif
 	
 	group &Group 		= *this;
 	int g 				= Group.gID;
 	bool UseLongEdge 	= cTable[g].hshiftsrc;
+	int rsecs 			= Group.range_end - Group.range_start;
+	bool hsUnequalFix	= cTable[g].hsunequalfix;
 	
 	#if DEBUG > 0
 	if(dev)system("pause");
@@ -1509,17 +1511,33 @@ void group::GroupTexturize()
 						GetBaseShift(Face,Axis,UseLongEdge,0);
 					}
 					#if DEBUG > 0
-					if (dev) {cout << " Brush " << b << "Face " << f << " Orient " << Face.Orient << " BaseShift " << setw(9) << Face.BaseShiftX << " Adress " << &Face << " HsourceL " << Face.HSourceL << " HsourceS " << Face.HSourceS; if (&Face==Face.HSourceL) cout << " XXX L "; else if(&Face==Face.HSourceS) cout << " XXX S "; cout << endl;}
+					cout << " brush " << b << "/"<< Group.t_brushes <<" \t " << setw(8)<< Face.BaseShiftX << "\t " << Face.BaseShiftY << " VecH is Neg?" << Face.VecH->IsNeg << endl;
+					if (dev) {cout << " Brush " << b << "/"<< Group.t_brushes <<" Face " << f << " Orient " << Face.Orient << " BaseShift " << setw(9) << Face.BaseShiftX << " Adress " << &Face << " HsourceL " << Face.HSourceL << " HsourceS " << Face.HSourceS; if (&Face==Face.HSourceL) cout << " XXX L "; else if(&Face==Face.HSourceS) cout << " XXX S "; cout << endl;}
 					#endif
 				}
 			}
 		}
 	}
 	
-	#if DEBUG > 0
-	if(dev)system("pause");
-	if (dev) cout << "Adding basic Texture Shifts" << endl;
-	#endif
+	// count total facegroups to be able to fix hor lengths later on - new Update v0.88 - May 2026
+	int tfg	= 0; // total face groups counter
+	if(hsUnequalFix && cTable[g].type==1)
+	{
+		for (int b=0; b<Group.t_brushes; b++)
+		{
+			brush &Brush 		= Group.Brushes[b];
+			int seg 			= Brush.SegID;
+			int sec 			= Brush.SecID;
+			//if (Group.IsSecInRange(sec))
+			for (int f = 0; f<Brush.t_faces; f++)
+			{
+				face &Face  = Brush.Faces[f];
+				if(Face.group>tfg) tfg = Face.group;
+			}
+		}
+	}
+	vector<float> FixedHLengths;
+	FixedHLengths.resize(tfg);
 	
 	// Fix Texture Scale and Shift for Body Faces that are smaller than before (happens on curve generation)
 	for (int b=0; b<Group.t_brushes; b++)
@@ -1527,13 +1545,12 @@ void group::GroupTexturize()
 		brush &Brush 		= Group.Brushes[b];
 		int seg 			= Brush.SegID;
 		int sec 			= Brush.SecID;
+		int tsecs 			= Group.sections;
+		int range_start		= Group.range_start;
+		int range_end   	= Group.range_end;
 		
 		if (Group.IsSecInRange(sec))
 		{
-			#if DEBUG > 0
-			if (dev) cout << endl << " #### BRUSH #" << b << " SECTION #" << sec << endl;
-			#endif
-			
 			// horizontal face scale calculation NEW as of v0.8 Dec 2023
 			for (int f = 0; f<Brush.t_faces; f++)
 			{
@@ -1558,6 +1575,9 @@ void group::GroupTexturize()
 				if (Face.VecX.IsHor)  	msh = msx;
 				else 					msh = msy;
 				
+				if(hsUnequalFix && cTable[g].type==1)
+				Face.msh = msh; // save this value per face to be able to fit textures to sections of different sizes (v0.88 Update - May 2026)
+				
 				// Compose Face Shift
 				Face.ShiftX = Face.BaseShiftX * mx;
 				Face.ShiftY = Face.BaseShiftY * my;
@@ -1569,7 +1589,7 @@ void group::GroupTexturize()
 				{
 					face *hFace = nullptr;
 					face *LhFace = nullptr;
-					float Temp_BaseShift = 0; 
+					float Temp_BaseShift = 0;
 					float Temp_EdgeLen = 0;
 	
 					if (cTable[g].shift==0)
@@ -1579,73 +1599,104 @@ void group::GroupTexturize()
 					}
 					else if (cTable[g].shift>0 && cTable[g].shift<6)
 					{
-						#if DEBUG > 0
-						if(dev&&Face.FaceIsValid(-1,1,1,1)) {
-						cout << " Brush " << setw(2) << b;
-						//cout << " BrushInside " << Brush.IsInside;
-						//cout << " SecInside " << Group.IsSecInside[sec];
-						cout << " Face " 		<< setw(2) 	<< f;
-						cout << " FG " 			<< setw(2) 	<< Face.group;
-						cout << " msh " 		<< setw(2) 	<< msh;
-						cout << " Orient " 		<< Face.Orient;
-						cout << " BaseShift " 	<< setw(5)<< setprecision(0) << Temp_BaseShift;
-						cout << " EdgeLen "  	<< setw(5)<< setprecision(0) << Temp_EdgeLen;
-						cout << " ShiftX " 	  	<< setw(5)<< setprecision(0) << Face.ShiftX;
-						cout << " FAdress " 	<< &Face;
-						cout << " hFace " 		<< hFace;
-						cout << " LhFace " 		<< LhFace;
-						cout << " Tex " 		<< Face.Texture<< endl;
-						}
-						#endif
-						
 						if (UseLongEdge)		hFace = Face.HSourceL;
 						else					hFace = Face.HSourceS;
 						
 						if(sec>0) {
 						if (UseLongEdge)		LhFace = Face.LHSourceL;
-						else					LhFace = Face.LHSourceS; }
+						else					LhFace = Face.LHSourceS;
+						}
 						
 						if (hFace->VecX.IsHor) 	Temp_BaseShift = hFace->BaseShiftX;
 						else 					Temp_BaseShift = hFace->BaseShiftY;
 						
-						if (sec>0) {
-						if (UseLongEdge)		Temp_EdgeLen = LhFace->HShiftL * msh;
-						else					Temp_EdgeLen = LhFace->HShiftS * msh; }
+						// changed from sec>0 to sec>range_start in May 2026 for v0.88 update
+						if ( sec>0 && sec>range_start )
+						{
+							// v0.88 may 2026 changed from "Temp_EdgeLen = LhFace->HShiftL * msh;"
+							if(hsUnequalFix && cTable[g].type==1)
+							{
+								if (UseLongEdge) {
+													Temp_EdgeLen = FixedHLengths[LhFace->group];
+									 FixedHLengths[hFace->group] = FixedHLengths[LhFace->group] + (LhFace->EdgeLenL * LhFace->msh);
+									
+								} else {
+													Temp_EdgeLen = FixedHLengths[LhFace->group];
+									 FixedHLengths[hFace->group] = FixedHLengths[LhFace->group] + (LhFace->EdgeLenS * LhFace->msh);
+								}
+							}
+							else // pre v0.88 update
+							{
+								if (UseLongEdge) {
+													Temp_EdgeLen = LhFace->HShiftL * msh;
+								} else {
+													Temp_EdgeLen = LhFace->HShiftS * msh;
+								}
+							}
+						}
+						else
+						{
+							if(hsUnequalFix && cTable[g].type==1)
+							{
+								if (UseLongEdge)
+									FixedHLengths[hFace->group] = hFace->EdgeLenL * hFace->msh;
+								else
+									FixedHLengths[hFace->group] = hFace->EdgeLenS * hFace->msh;
+							}
+						}
 						
 						if(G_DEV) {
 						if (UseLongEdge&& 		&Face==Group.hSourceFace[Face.group]) 	Face.Texture = "RED";
 						if (!UseLongEdge && 	&Face==Group.hSourceFace2[Face.group]) 	Face.Texture = "YELLOW"; }
 						
-						#if DEBUG > 0
-						/*if (sec>0 && Group.Brushes[b].IsGap && (&Face==Group.hSourceFace[Face.group] || &Face==Group.hSourceFace2[Face.group]) )
-						{
-							if(UseLongEdge) Face.Texture="RED";
-							else Face.Texture="YELLOW";
-							
-							if(Face.LHSourceL!=nullptr) {
-							Face.LHSourceL->Texture="{BLUE"; }
-							
-							if(Face.LHSourceS!=nullptr) {
-							Face.LHSourceS->Texture="{BLUE"; }
-						}*/
-						#endif
-						
+						// Step I of special case balancing (result of exhaustive trial and error and as long as it works I don't care)
 						if ( (!Face.VecH->IsNeg && hFace->VecH->IsNeg) || (Face.VecH->IsNeg && !hFace->VecH->IsNeg) )
 						{
 							Temp_BaseShift *= -1; // do this because positive hor tex vectors Baseshift is at wrong side (aligned R instead of L)
 							Temp_EdgeLen *= -1;
 						}
-						if (hFace->VecH->IsNeg) Temp_EdgeLen *= -1;
 						
-						if (sec>0&&cTable[g].shift!=4)
+						// Step II
+						if ( hFace->VecH->IsNeg) {
+							Temp_EdgeLen *= -1;
+						}
+						
+						// compose final Baseshift and Offset
+						if ( sec>range_start && cTable[g].shift!=4 ) // changed from sec>0 to sec>range_start in May 2026 for v0.88 update 
 							if (Face.VecX.IsHor) 	{ Face.ShiftX = Temp_BaseShift + Temp_EdgeLen; Face.OffsetX = Temp_EdgeLen; }
 							else 				 	{ Face.ShiftY = Temp_BaseShift + Temp_EdgeLen; Face.OffsetY = Temp_EdgeLen; }
 						else
 							if (Face.VecX.IsHor) 	{ Face.ShiftX = Temp_BaseShift; Face.OffsetX = 0; }
 							else 				 	{ Face.ShiftY = Temp_BaseShift; Face.OffsetY = 0; }
+
+
+						#if DEBUG > 0
+						if(dev&&Face.FaceIsValid(2,1,1,1)) {
+						cout << " Brush " << setw(2) << b;
+						//cout << " BrushInside " << Brush.IsInside;
+						//cout << " SecInside " << Group.IsSecInside[sec];
+						cout << " Face " 		<< setw(2) 	<< f;
+						//cout << " FG " 			<< setw(2) 	<< Face.group;
+						//cout << " mx " 		<< setw(8) 	<< mx;
+						//cout << " my " 		<< setw(8) 	<< my;
+						cout << " msh " 		<< setw(9) << msh;
+						//cout << " Orient " 		<< Face.Orient;
+						cout << " BaseShift " 	<< setw(7) << Temp_BaseShift;
+						cout << " EdgeLen *msh "<< setw(7) << Temp_EdgeLen;
+						cout << " EdgeLenL "    << setw(7) << hFace->EdgeLenL;
+						//cout << " EdgeLenS "<< setw(7)<< hFace->EdgeLenL;
+						cout << " ShiftX " 	  	<< setw(7)<< Face.ShiftX;
+						cout << " ScaleX " 	  	<< setw(7)<< Face.ScaleX;
+						//cout << " ShiftY " 	  	<< setw(7)<< Face.ShiftY;
+						//cout << " FAdress " 	<< &Face;
+						//cout << " hFace " 		<< hFace;
+						//cout << " LhFace " 		<< LhFace;
+						cout << " Tex " 		<< Face.Texture;
+						}
+						#endif
 					}
 				}
-				
+
 				// Add Offset to vertical body and head/base Face Shift
 				if (Face.fID==2) {
 					if (Face.VecX.IsHor) 	Face.ShiftY += Face.OffsetY;
@@ -1657,21 +1708,20 @@ void group::GroupTexturize()
 				
 				Face.MiniShift();
 			}
-			
-			#if DEBUG > 0
-			if(dev) cout << " - - - - - - - - - - - - - - - - - -" << endl<< endl;
-			#endif
 		}
 	}
 	
-	
 	if(G_DEV&&Group.t_brushes>0) {
-	cout << " +++++++++++++++++ FINAL TEXTURE SHIFTS +++++++++++++++++ " << endl;
-	for (int b=0; b<Group.t_brushes; b++)
-	{
-		brush &Brush = Group.Brushes[b];
-		CoutBrushFacesDevInfo(Brush, b, g, IsSecInRange(Brush.SecID) );
-	}}
+		cout << " +++++++++++++++++ FINAL TEXTURE SHIFTS +++++++++++++++++ " << endl;
+		for (int b=0; b<Group.t_brushes; b++)
+		{
+			brush &Brush = Group.Brushes[b];
+			if (Group.IsSecInRange(Brush.SecID))
+			{
+			CoutBrushFacesDevInfo(Brush, b, g, IsSecInRange(Brush.SecID) );
+			}
+		}
+	}
 	
 	// fix Gap Textures
 	if (cTable[g].gaps>0&&cTable[g].type<=1)
@@ -1689,66 +1739,25 @@ void group::GroupTexturize()
 			Face.ShiftX = Face.BaseShiftX + Face.OffsetX;
 			Face.ShiftY = Face.BaseShiftY + Face.OffsetY;
 			
-			/*if(Face.FaceIsValid(-1,1,1,1)&&cTable[g].type==1) // type 1 grid circle will lead to different section depths, therfor v-scales need to get fixed
-			{
-				//Face.RefreshEdges();
-				//GetFaceLen(OBrush.Faces[f]);
-				//GetFaceLen(Face);
-				
-				Face.LengthO = OBrush.Faces[f].GetLenVer(0); //GetFaceLen(OBrush.Faces[f]);
-				Face.LengthN = Face.GetLenVer(0);//GetFaceLen(Face);
-				
-				float mx = 1.0;
-				float my = 1.0;
-
-				if (Face.LengthO!=Face.LengthN)
-				{
-					float m = Face.LengthO/Face.LengthN;
-					if (Face.VecX.IsHor) 	my = m;
-					else 					mx = m;
-				}
-				
-				float msh = 1;
-				float msx = 1.0/(Face.ScaleX);
-				float msy = 1.0/(Face.ScaleY);
-				if (Face.VecX.IsHor)  	msh = msx;
-				else 					msh = msy;
-
-				cout << " Face #[" << f+1 << "/"<< Gap.t_faces << "]" << endl;
-				cout << " LenO " << Face.LengthO << " LenN "<< Face.LengthN << endl;
-				cout << " ScaleX-O " << Face.ScaleX << " ScaleY-O " << Face.ScaleY << endl;
-				
-				// Compose Face Shift
-				Face.ShiftX = Face.BaseShiftX * mx;
-				Face.ShiftY = Face.BaseShiftY * my;
-				Face.ScaleX /= mx;
-				Face.ScaleY /= my;
-
-				cout << " ScaleX-N " << Face.ScaleX << " ScaleY-N " << Face.ScaleY << endl;
-				system("pause");
-			}*/
-			
 			Face.MiniShift();
-			
-			#if DEBUG > 0
-			//cout << " Gap Face BaseShiftX " << Face.BaseShiftX << " + OffsetX " << Face.OffsetX << " = ShiftX " << Face.ShiftX << endl;
-			//cout << " Gap Face BaseShiftY " << Face.BaseShiftY << " + OffsetY " << Face.OffsetY << " = ShiftY " << Face.ShiftY << endl;
-			#endif
 		}
 	}
+
 }
 
 void group::GroupTexturizeHStretch()
 {
 	#if DEBUG > 0
 	bool dev = 0;
-	if (dev) cout << "Stretching textures of hor-sourcefaces horizontally..." << endl;
-	if (dev) system("pause");
 	#endif
 	
 	group &Group 		= *this;
 	int g 				= Group.gID;
 	bool UseLongEdge 	= cTable[g].hshiftsrc;
+	bool FixUnprop	= 0; if(cTable[g].hsunpropfix.x>0) FixUnprop = 1;
+	float &Unprop_Min	= cTable[g].hsunpropfix.y; // lower end
+	float &Unprop_Max	= cTable[g].hsunpropfix.z; // upper end
+	bool hsUnequalFix	= cTable[g].hsunequalfix;
 	
 	bool disto = false;
 	unsigned int distoCntr = 0;
@@ -1757,7 +1766,7 @@ void group::GroupTexturizeHStretch()
 		brush &Brush 		= Group.Brushes[b];
 		int sec 			= Brush.SecID;
 		int tsecs 			= Group.sections;
-		float l_hstretchamt 	= cTable[g].hstretchamt; //changed to float July 2024
+		float l_hstretchamt = cTable[g].hstretchamt; //changed to float July 2024
 		
 		// horizontal face scale calculation NEW as of v0.8 Dec 2023
 		if( Group.IsSecInRange(sec) )
@@ -1770,9 +1779,9 @@ void group::GroupTexturizeHStretch()
 			// hstretchamt>0 	Stretch X times to current export range, ignores custom scale, only uses tex-size
 			if ( Face.FaceIsValid(2,1,1,1) && ( ( &Face==Group.hSourceFace[Face.group] && UseLongEdge ) || ( &Face==Group.hSourceFace2[Face.group] && !UseLongEdge ) ) )
 			{
-				float horScale 			= 1.0; if (Face.VecX.IsHor) horScale = Face.ScaleX; else horScale = Face.ScaleY; 										// horizontal texture scale
-				float verScale 			= 1.0; if (Face.VecX.IsHor) verScale = Face.ScaleY; else verScale = Face.ScaleX;
-				if (horScale<0) horScale*=-1;
+				float horScale 			= 1.0; if (Face.VecX.IsHor) horScale = Face.ScaleXO; else horScale = Face.ScaleYO; 										// horizontal texture scale
+				float verScale 			= 1.0; if (Face.VecX.IsHor) verScale = Face.ScaleYO; else verScale = Face.ScaleXO;
+				//if (horScale<0) horScale*=-1;
 				float horSize  			= 128; if (Face.VecX.IsHor) horSize = gFile->tTable_width[Face.tID]; else horSize = gFile->tTable_height[Face.tID]; 	// horizontal texture size
 				int rsecs 				= Group.range_end - Group.range_start;
 				int secBrushEnd   		= ((ceil((b+1.0)/tsecs)*tsecs)-(tsecs-Group.range_end-1))-2;
@@ -1790,47 +1799,80 @@ void group::GroupTexturizeHStretch()
 				
 				int roundStretchAmt 	= 0;
 				float newHScale 		= 1.0;
+				
+				// rounded Amount of times the current texture can be tiled along the whole output range with the current scale
+				roundStretchAmt 		= currentMaxHRange / (horScale * horSize);
+				if (roundStretchAmt<=0) roundStretchAmt = 1;
+				
+				float hScaleAuto  		= currentMaxHRange / roundStretchAmt / horSize; // added May 2026 - v0.88 update
+				float hScaleFixed 		= currentMaxHRange / l_hstretchamt   / horSize;	// ^
+
+				// new horizontal texture scale based on either range and base scale or fixed custom amount
 				if (l_hstretchamt==0)
 				{
-					// rounded Amount of times the current texture can be tiled along the whole output range with the current scale
-					roundStretchAmt = currentMaxHRange / (horScale * horSize);
-					if (roundStretchAmt<=0) roundStretchAmt = 1;
-					newHScale = currentMaxHRange / roundStretchAmt / horSize; // new horizontal texture scale
+					newHScale = hScaleAuto;
 				}
 				else if (l_hstretchamt>0)
 				{
 					// new h scale based on a fixed amount of tiles along the whole output range
-					newHScale = currentMaxHRange / l_hstretchamt / horSize;
+					newHScale = hScaleFixed;
 				}
 				
-				if (Face.VecX.IsHor)
+				// compensate for unequal edge lengths when using the Grid Circle Framework; added May 16th 2026 for v0.88 update
+				float *ScaleH, *ScaleV;
+				float dfactor = 1.0; 			// distortion factor (added May 16th 2026; v0.88 update)
+				float mh = 1.0, mv = 1.0; 		// compensate negative scales
+				if (horScale<0)  mh = -1.0;
+				if (verScale<0)  mv = -1.0;
+				
+				if (Face.VecX.IsHor) {
+					ScaleH = &Face.ScaleX;
+					ScaleV = &Face.ScaleY;
+				}
+				else
 				{
-					float m = 1, mv = 1; // compensate negative scales
-					if(Face.ScaleX<0) m = -1;
-					if(Face.ScaleY<0) mv = -1;
+					ScaleH = &Face.ScaleY;
+					ScaleV = &Face.ScaleX;
+				}
+				
+				if (FixUnprop)
+				{
+					dfactor = newHScale / (verScale*mv);
 					
-					// v0.87 exception when horizontal compression factor is too extreme; July 27th 2025
-					if      (l_hstretchamt==0 && ( newHScale/(verScale*mv)>0.45 && newHScale/(verScale*mv)<2.5 )) { Face.ScaleX = newHScale * m; }
-					else if (l_hstretchamt>0  && ( newHScale/(verScale*mv)>0.3  && newHScale/(verScale*mv)<5   )) { Face.ScaleX = newHScale * m; }
+					if ( dfactor>Unprop_Min && dfactor<Unprop_Max )
+					{
+						*ScaleH = newHScale * mh;
+					}
 					else
 					{
+						// Auto-Scale used when FixUnprop active and scales are unproportional
+						dfactor = hScaleAuto / (verScale*mv);
+						
+						// check for unproportional scales one more time
+						if( dfactor>Unprop_Min && dfactor<Unprop_Max )
+						{
+							*ScaleH = hScaleAuto * mh; // added May 2026 - v0.88 update
+						}
+						
 						disto = 1;
 						distoCntr++;
 					}
 				}
 				else
 				{
-					float m = 1, mv = 1; // compensate negative scales
-					if(Face.ScaleX<0) m = -1;
-					if(Face.ScaleY<0) mv = -1;
+					*ScaleH = newHScale * mh;
+				}
+				
+				if (hsUnequalFix && cTable[g].type==1)
+				{
+					float rangePerSection = currentMaxHRange/rsecs;
+					float currentSectionLength;
+					float m = 1.0;
+					if(cTable[g].hshiftsrc) currentSectionLength = Face.HSourceL->EdgeLenL;
+					else 					currentSectionLength = Face.HSourceS->EdgeLenS;
+					m =  currentSectionLength / rangePerSection;
 					
-					// v0.87 exception when horizontal compression factor is too extreme; July 27th 2025
-					if      (l_hstretchamt==0 && ( newHScale/(horScale*mv)>0.45 && newHScale/(horScale*mv)<2.5 )) { Face.ScaleY = newHScale * m; }
-					else if (l_hstretchamt>0  && ( newHScale/(horScale*mv)>0.3  && newHScale/(horScale*mv)<5   )) { Face.ScaleY = newHScale * m; }
-					else {
-						disto = 1;
-						distoCntr++;
-					}
+					*ScaleH *= m;
 				}
 				
 				#if DEBUG > 0
@@ -1852,18 +1894,11 @@ void group::GroupTexturizeHStretch()
 					<< " newHScale: "<< newHScale <<endl;
 				}
 				#endif
-				
-				GetBaseShift(Face, 1, 1, 0);
 			}
 		}
 	}
 	if(disto) MESSENGER( MSG_INFO_HSTRETCH, vector<string>{}, vector<int>{g}, vector<float>{} );
 
-	
-	#if DEBUG > 0
-	if (dev) cout << "Copying stretched hor-sourceface base-shifts to their children..." << endl;
-	if(dev)system("pause");
-	#endif
 	
 	// Copying stretched hor-sourceface base-shifts to their children
 	for (int b=0; b<Group.t_brushes; b++)
@@ -2657,6 +2692,57 @@ void group::AddCustomShiftOffset()
 		}
 	}
 }
+
+// added in June 2026 - not finished yet - some exported brushes will be invalid for some reason
+void group::MarkCombinableSegments()
+{
+	group &Group = *this;
+	int &g = Group.gID;
+	
+	Group.CombinableSegments.resize(Group.segments);
+	
+	if ( Group.valid && Group.t_brushes>0 && cTable[g].range_start==0 && cTable[g].range_end==100 && cTable[g].height==0 && (cTable[g].type==0 || cTable[g].type==1) )
+	{
+		
+		for (int b = 0; b < Group.t_brushes; b++)
+		{
+			brush &Brush = Group.Brushes[b];
+			int &sec = Brush.SecID;
+			int &seg = Brush.SegID;
+			bool TopFace = 0, BtmFace = 0, TopSlopedFace = 0, BtmSlopedFace = 0;
+			
+			if(Brush.valid && sec==0 && Brush.IsWedge)
+			{
+				for (int f = 0; f<Brush.t_faces; f++)
+				{
+					face &Face = Brush.Faces[f];
+					
+					bool IsNullTex = !Face.FaceIsValid(-1,0,0,1);
+					
+					if ( Face.fID == 2 && Face.draw )
+					{
+						if(IsNullTex)
+						{
+							if(Face.Normal.z == 1  ) { TopFace = 1; }
+							if(Face.Normal.z == -1 ) { BtmFace = 1; }
+						} else {
+							if(Face.Normal.z != 1 && Face.Normal.z != -1)
+							{
+								if(Face.Orient == 2) { TopSlopedFace = 1; }
+								if(Face.Orient == 3) { BtmSlopedFace = 1; }
+							}
+						}
+					}
+				}
+			}
+			
+			if((TopFace&&BtmFace&&!TopSlopedFace&&!BtmSlopedFace) /*|| (TopSlopedFace&&BtmFace) || (TopFace&&BtmSlopedFace)*/) {
+				Group.CombinableSegments[seg] = 1;
+			}
+		}
+	}
+}
+
 
 void group::MarkInsideSecBrushes()
 {

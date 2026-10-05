@@ -50,6 +50,7 @@ struct group {
 	vector<float> heightTableSteps;
 	vector<gvector> SecIsect; // intersections for detail groups if d_carve is active
 	vector<bool> GapList;
+	vector<bool> CombinableSegments; // new v0.88 - these segments can be 
 	face **SecBaseFace = nullptr;
 	dimensions Dimensions; // bounding box
 	brush *Brushes = nullptr;
@@ -63,6 +64,7 @@ struct group {
 	string groupname = "";
 	vector<bool> IsSecInside; // list of inside sections; not used ATM!; meant to be used for proper texture shearing
 	bool HasOrigin = 0;
+	
 	
 	float d_pos = -1;
 	int d_autopitch = -1;
@@ -145,6 +147,7 @@ struct group {
 	void GroupTexturize();
 	void GroupTexturizeHStretch();
 	void AddCustomShiftOffset();
+	void MarkCombinableSegments(); // added in June 2026 - not finished yet - some exported brushes will be invalid for some reason
 
 	// DEVELOPER
 	void ExportGroupToMap(string p);

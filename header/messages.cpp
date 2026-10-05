@@ -47,9 +47,9 @@ void MESSENGER(MSG_ID i)
 		case MSG_INTRO_CREDITS:
 		{
 								tee << "++---------------------++" << endl;
-								tee << "||   Map2Curve v0.87   ||" << endl;
+								tee << "||   Map2Curve v0.88   ||" << endl;
 								tee << "||    by Gibshooter    ||" << endl;
-								tee << "||     October 2025    ||" << endl;
+								tee << "||       May 2026      ||" << endl;
 								tee << "++---------------------++" << endl << endl;
 		}
 		break;

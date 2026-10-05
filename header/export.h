@@ -28,6 +28,4 @@ void ExportGroupToObjDev(group &Group, string filename);
 
 
 
-
-
 #endif
